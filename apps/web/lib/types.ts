@@ -128,7 +128,7 @@ export interface SupportMessage {
   sender_name: string | null;
   sender_email: string | null;
   body: string;
-  attachments: Array<{ url: string; filename: string; size: number }> | null;
+  attachments: Array<{ path: string; filename: string; content_type: string; size: number }> | null;
   is_internal_note: boolean;
   created_at: string;
 }
