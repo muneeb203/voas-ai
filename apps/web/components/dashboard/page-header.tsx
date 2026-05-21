@@ -1,7 +1,7 @@
 interface PageHeaderProps {
   eyebrow?: string;
   title: string;
-  description?: string;
+  description?: React.ReactNode;
   action?: React.ReactNode;
 }
 
@@ -15,7 +15,7 @@ export function PageHeader({ eyebrow, title, description, action }: PageHeaderPr
           </p>
         )}
         <h1 className="mt-1 text-3xl font-semibold tracking-tight">{title}</h1>
-        {description && <p className="mt-2 text-muted-foreground">{description}</p>}
+        {description && <div className="mt-2 text-sm text-muted-foreground">{description}</div>}
       </div>
       {action && <div className="flex-shrink-0">{action}</div>}
     </header>
