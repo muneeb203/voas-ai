@@ -1,0 +1,29 @@
+{
+  "name": "voas-ai",
+  "version": "0.1.0",
+  "private": true,
+  "description": "VOAS AI — conversational front desk for businesses.",
+  "packageManager": "pnpm@9.10.0",
+  "engines": {
+    "node": ">=20.0.0",
+    "pnpm": ">=9.0.0"
+  },
+  "scripts": {
+    "dev": "pnpm --filter @voas/web dev",
+    "dev:api": "pnpm --filter @voas/api dev",
+    "build": "pnpm --filter @voas/web build",
+    "start": "pnpm --filter @voas/web start",
+    "lint": "pnpm --filter @voas/web lint",
+    "typecheck": "pnpm --filter @voas/web typecheck",
+    "format": "prettier --write \"**/*.{ts,tsx,js,json,md}\" --ignore-path .gitignore",
+    "format:check": "prettier --check \"**/*.{ts,tsx,js,json,md}\" --ignore-path .gitignore",
+    "supabase:start": "supabase start",
+    "supabase:stop": "supabase stop",
+    "supabase:reset": "supabase db reset",
+    "supabase:push": "supabase db push"
+  },
+  "devDependencies": {
+    "prettier": "^3.3.3",
+    "prettier-plugin-tailwindcss": "^0.6.6"
+  }
+}

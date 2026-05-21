@@ -1,0 +1,10 @@
+node_modules
+.next
+.venv
+dist
+build
+coverage
+pnpm-lock.yaml
+supabase/.branches
+supabase/.temp
+apps/api

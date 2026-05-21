@@ -1,0 +1,114 @@
+'use server';
+
+import { revalidatePath } from 'next/cache';
+import { redirect } from 'next/navigation';
+import { requireAdminSession } from '@/lib/auth/admin';
+import {
+  clearImpersonation,
+  readImpersonation,
+  setImpersonation,
+} from '@/lib/auth/impersonation';
+import {
+  adminDeleteWorkspace,
+  adminReply,
+  adminUpdateTicket,
+  endImpersonation as apiEndImpersonation,
+  restoreWorkspace,
+  startImpersonation as apiStartImpersonation,
+  suspendWorkspace,
+  updateContactSubmission,
+} from '@/lib/api/admin';
+import { isApiError, type TicketStatus } from '@/lib/types';
+
+// --- Impersonation ----------------------------------------------------------
+
+export async function startImpersonationAction(workspaceId: string) {
+  const session = await requireAdminSession(`/admin/workspaces/${workspaceId}`);
+  const res = await apiStartImpersonation(workspaceId);
+  if (isApiError(res)) return { error: res.error.message };
+
+  setImpersonation({
+    workspace_id: res.data.workspace_id,
+    workspace_name: res.data.workspace_name,
+    admin_id: session.user.id,
+    started_at: res.data.started_at,
+  });
+
+  redirect('/dashboard');
+}
+
+export async function exitImpersonationAction() {
+  await requireAdminSession('/admin/workspaces');
+  const state = readImpersonation();
+  await apiEndImpersonation(state?.workspace_id);
+  clearImpersonation();
+  redirect('/admin/workspaces');
+}
+
+// --- Workspace lifecycle ----------------------------------------------------
+
+export async function suspendWorkspaceAction(workspaceId: string) {
+  await requireAdminSession(`/admin/workspaces/${workspaceId}`);
+  const res = await suspendWorkspace(workspaceId);
+  if (isApiError(res)) return { error: res.error.message };
+  revalidatePath(`/admin/workspaces/${workspaceId}`);
+  revalidatePath('/admin/workspaces');
+  return { error: null };
+}
+
+export async function restoreWorkspaceAction(workspaceId: string) {
+  await requireAdminSession(`/admin/workspaces/${workspaceId}`);
+  const res = await restoreWorkspace(workspaceId);
+  if (isApiError(res)) return { error: res.error.message };
+  revalidatePath(`/admin/workspaces/${workspaceId}`);
+  revalidatePath('/admin/workspaces');
+  return { error: null };
+}
+
+export async function deleteWorkspaceAction(workspaceId: string) {
+  await requireAdminSession(`/admin/workspaces/${workspaceId}`);
+  const res = await adminDeleteWorkspace(workspaceId);
+  if (isApiError(res)) return { error: res.error.message };
+  revalidatePath('/admin/workspaces');
+  redirect('/admin/workspaces');
+}
+
+// --- Admin ticket actions ---------------------------------------------------
+
+export async function adminReplyAction(
+  ticketId: string,
+  body: string,
+  isInternalNote: boolean,
+) {
+  await requireAdminSession(`/admin/support/${ticketId}`);
+  const res = await adminReply(ticketId, body, isInternalNote);
+  if (isApiError(res)) return { error: res.error.message };
+  revalidatePath(`/admin/support/${ticketId}`);
+  revalidatePath('/admin/support');
+  return { error: null };
+}
+
+export async function adminTicketStatusAction(
+  ticketId: string,
+  status: TicketStatus,
+) {
+  await requireAdminSession(`/admin/support/${ticketId}`);
+  const res = await adminUpdateTicket(ticketId, { status });
+  if (isApiError(res)) return { error: res.error.message };
+  revalidatePath(`/admin/support/${ticketId}`);
+  revalidatePath('/admin/support');
+  return { error: null };
+}
+
+// --- Contact submission actions --------------------------------------------
+
+export async function adminUpdateContactStatusAction(
+  submissionId: string,
+  status: 'new' | 'contacted' | 'qualified' | 'closed',
+) {
+  await requireAdminSession('/admin/contact-submissions');
+  const res = await updateContactSubmission(submissionId, { status });
+  if (isApiError(res)) return { error: res.error.message };
+  revalidatePath('/admin/contact-submissions');
+  return { error: null };
+}

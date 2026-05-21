@@ -1,0 +1,362 @@
+import type { WorkspaceRole, Vertical, PlanId } from './constants';
+
+export interface Workspace {
+  id: string;
+  name: string;
+  slug: string;
+  plan: PlanId;
+  vertical: Vertical;
+  status: 'active' | 'suspended' | 'deleted';
+  created_at: string;
+  updated_at: string;
+}
+
+export interface WorkspaceMember {
+  id: string;
+  workspace_id: string;
+  user_id: string;
+  role: WorkspaceRole;
+  invited_by: string | null;
+  invited_at: string | null;
+  joined_at: string | null;
+  created_at: string;
+}
+
+export interface WorkspaceMembership {
+  workspace_id: string;
+  role: WorkspaceRole;
+  joined_at: string | null;
+  workspace: Workspace;
+}
+
+export interface CurrentUserProfile {
+  id: string;
+  email: string | null;
+  full_name: string | null;
+  memberships: WorkspaceMembership[];
+}
+
+export interface DayHours {
+  open: string;
+  close: string;
+}
+
+export type LocationHours = Record<string, DayHours | null>;
+
+export interface Location {
+  id: string;
+  workspace_id: string;
+  name: string;
+  address: string | null;
+  city: string | null;
+  state: string | null;
+  postal_code: string | null;
+  country: string;
+  phone: string | null;
+  timezone: string;
+  hours: LocationHours | null;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Member {
+  id: string;
+  workspace_id: string;
+  user_id: string;
+  role: WorkspaceRole;
+  email: string | null;
+  full_name: string | null;
+  invited_at: string | null;
+  joined_at: string | null;
+  created_at: string;
+}
+
+export interface Invitation {
+  id: string;
+  workspace_id: string;
+  email: string;
+  role: WorkspaceRole;
+  invited_by: string;
+  expires_at: string;
+  accepted_at: string | null;
+  created_at: string;
+}
+
+export interface InvitationWithUrl extends Invitation {
+  url: string;
+}
+
+export interface InvitationLookup {
+  id: string;
+  workspace_id: string;
+  workspace_name: string;
+  email: string;
+  role: WorkspaceRole;
+  expires_at: string;
+  accepted_at: string | null;
+}
+
+export type TicketStatus = 'open' | 'in_progress' | 'waiting_user' | 'resolved' | 'closed';
+export type TicketPriority = 'low' | 'normal' | 'high' | 'urgent';
+export type TicketCategory = 'billing' | 'integration' | 'bug' | 'feature_request' | 'other';
+export type TicketSenderType = 'user' | 'admin' | 'system';
+
+export interface SupportTicket {
+  id: string;
+  workspace_id: string;
+  created_by: string;
+  creator_name: string | null;
+  creator_email: string | null;
+  assigned_admin_id: string | null;
+  subject: string;
+  status: TicketStatus;
+  priority: TicketPriority;
+  category: TicketCategory | null;
+  message_count: number;
+  last_message_at: string | null;
+  created_at: string;
+  updated_at: string;
+  resolved_at: string | null;
+}
+
+export interface SupportMessage {
+  id: string;
+  ticket_id: string;
+  sender_type: TicketSenderType;
+  sender_id: string;
+  sender_name: string | null;
+  sender_email: string | null;
+  body: string;
+  attachments: Array<{ url: string; filename: string; size: number }> | null;
+  is_internal_note: boolean;
+  created_at: string;
+}
+
+export interface SupportTicketWithMessages extends SupportTicket {
+  messages: SupportMessage[];
+}
+
+// --- V2: conversations / customers / orders / menu ------------------------
+
+export type ConversationChannel = 'voice' | 'whatsapp' | 'chat' | 'sms';
+export type ConversationStatus = 'active' | 'ended' | 'abandoned' | 'escalated';
+export type ConversationOutcome =
+  | 'order_placed'
+  | 'question_answered'
+  | 'booking_made'
+  | 'escalated'
+  | 'no_resolution';
+export type ConversationMessageRole = 'customer' | 'agent' | 'system';
+
+export interface Customer {
+  id: string;
+  workspace_id: string;
+  phone: string | null;
+  name: string | null;
+  email: string | null;
+  total_orders: number;
+  total_spent_cents: number;
+  first_seen: string;
+  last_seen: string;
+  tags: string[] | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ConversationMessage {
+  id: string;
+  conversation_id: string;
+  role: ConversationMessageRole;
+  content: string;
+  audio_url: string | null;
+  created_at: string;
+}
+
+export interface Conversation {
+  id: string;
+  workspace_id: string;
+  location_id: string | null;
+  customer_id: string | null;
+  channel: ConversationChannel;
+  customer_phone: string | null;
+  customer_name: string | null;
+  started_at: string;
+  ended_at: string | null;
+  duration_seconds: number | null;
+  status: ConversationStatus;
+  sentiment: number | null;
+  summary: string | null;
+  recording_url: string | null;
+  outcome: ConversationOutcome | null;
+  metadata: Record<string, unknown> | null;
+  created_at: string;
+  updated_at: string;
+  message_count: number;
+}
+
+export interface ConversationDetail extends Conversation {
+  messages: ConversationMessage[];
+  customer: Customer | null;
+  order_id: string | null;
+}
+
+export type OrderStatus =
+  | 'pending'
+  | 'confirmed'
+  | 'preparing'
+  | 'ready'
+  | 'fulfilled'
+  | 'cancelled'
+  | 'refunded';
+export type PaymentStatus = 'unpaid' | 'paid' | 'partial_refund' | 'refunded' | 'failed';
+
+export interface OrderLineModifier {
+  name: string;
+  price_delta_cents: number;
+}
+
+export interface OrderLineItem {
+  item_id: string | null;
+  name: string;
+  quantity: number;
+  unit_price_cents: number;
+  modifiers: OrderLineModifier[];
+  notes: string | null;
+}
+
+export interface Order {
+  id: string;
+  workspace_id: string;
+  location_id: string | null;
+  conversation_id: string | null;
+  customer_id: string | null;
+  status: OrderStatus;
+  total_cents: number;
+  subtotal_cents: number;
+  tax_cents: number;
+  tip_cents: number;
+  items_json: OrderLineItem[];
+  customer_phone: string | null;
+  customer_name: string | null;
+  payment_status: PaymentStatus;
+  pos_order_id: string | null;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface MenuModifierOption {
+  id: string;
+  group_id: string;
+  name: string;
+  price_delta_cents: number;
+  is_default: boolean;
+  sort_order: number;
+}
+
+export interface MenuModifierGroup {
+  id: string;
+  item_id: string;
+  name: string;
+  min_select: number;
+  max_select: number;
+  required: boolean;
+  sort_order: number;
+  options: MenuModifierOption[];
+}
+
+export interface MenuItem {
+  id: string;
+  workspace_id: string;
+  category_id: string;
+  name: string;
+  description: string | null;
+  price_cents: number;
+  image_url: string | null;
+  is_active: boolean;
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
+  modifier_groups: MenuModifierGroup[];
+}
+
+export interface MenuCategory {
+  id: string;
+  workspace_id: string;
+  name: string;
+  description: string | null;
+  sort_order: number;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+  item_count: number;
+}
+
+// --- V2 Sprint 2: voice ---------------------------------------------------
+
+export interface VoiceSettings {
+  workspace_id: string;
+  vapi_assistant_id: string | null;
+  system_prompt: string;
+  greeting: string;
+  voice: string;
+  model: string;
+  end_call_phrases: string[] | null;
+  enabled: boolean;
+  last_synced_at: string | null;
+  created_at: string;
+  updated_at: string;
+  menu_dirty: boolean;
+  last_menu_update: string | null;
+}
+
+export interface LocationVoiceConfigSafe {
+  location_id: string;
+  workspace_id: string;
+  twilio_account_sid: string;
+  twilio_auth_token_masked: string;
+  twilio_phone_number: string;
+  vapi_phone_number_id: string | null;
+  enabled: boolean;
+  last_synced_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface VoiceCapabilities {
+  voices: Array<{ id: string; label: string }>;
+  models: Array<{ id: string; label: string }>;
+  vapi_configured: boolean;
+  vapi_public_key: string | null;
+}
+
+export interface ContactSubmission {
+  id: string;
+  name: string;
+  email: string;
+  company: string | null;
+  phone: string | null;
+  message: string;
+  source: string | null;
+  status: 'new' | 'contacted' | 'qualified' | 'closed';
+  created_at: string;
+}
+
+export interface ApiSuccess<T> {
+  data: T;
+}
+
+export interface ApiError {
+  error: {
+    code: string;
+    message: string;
+    details?: unknown;
+  };
+}
+
+export type ApiResponse<T> = ApiSuccess<T> | ApiError;
+
+export function isApiError<T>(res: ApiResponse<T>): res is ApiError {
+  return 'error' in res;
+}

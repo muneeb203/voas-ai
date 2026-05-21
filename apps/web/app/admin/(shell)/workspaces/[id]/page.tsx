@@ -1,0 +1,246 @@
+import type { Metadata } from 'next';
+import Link from 'next/link';
+import { notFound } from 'next/navigation';
+import { formatDistanceToNow } from 'date-fns';
+import { ArrowLeft } from 'lucide-react';
+import { requireAdminSession } from '@/lib/auth/admin';
+import { getAdminWorkspace, listAdminTickets, listAdminAuditLogs } from '@/lib/api/admin';
+import { isApiError } from '@/lib/types';
+import { Card, CardContent } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import { AdminPageHeader } from '@/components/admin/admin-page-header';
+import { WorkspaceActions } from '@/components/admin/workspace-actions';
+import {
+  StatusBadge,
+  PriorityBadge,
+} from '@/components/dashboard/ticket-badges';
+
+export const metadata: Metadata = {
+  title: 'Admin · Workspace',
+  robots: { index: false, follow: false },
+};
+
+export default async function AdminWorkspaceDetailPage({
+  params,
+}: {
+  params: { id: string };
+}) {
+  await requireAdminSession(`/admin/workspaces/${params.id}`);
+
+  const [detailRes, ticketsRes, auditRes] = await Promise.all([
+    getAdminWorkspace(params.id),
+    listAdminTickets({ workspaceId: params.id }),
+    listAdminAuditLogs({ workspace_id: params.id }),
+  ]);
+
+  if (isApiError(detailRes)) {
+    if (detailRes.error.code === 'NOT_FOUND') notFound();
+    throw new Error(detailRes.error.message);
+  }
+  const { workspace, members, locations } = detailRes.data;
+  const tickets = !isApiError(ticketsRes) ? ticketsRes.data : [];
+  const auditEntries = !isApiError(auditRes) ? auditRes.data : [];
+
+  return (
+    <div>
+      <Link
+        href="/admin/workspaces"
+        className="mb-4 inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
+      >
+        <ArrowLeft className="h-3.5 w-3.5" /> Back to workspaces
+      </Link>
+
+      <AdminPageHeader
+        eyebrow={`#${workspace.id.slice(0, 8)}`}
+        title={workspace.name}
+        description={`${workspace.slug} · ${workspace.vertical} · ${workspace.plan} plan`}
+        action={
+          <WorkspaceActions
+            workspaceId={workspace.id}
+            workspaceName={workspace.name}
+            status={workspace.status}
+          />
+        }
+      />
+
+      <Tabs defaultValue="overview" className="space-y-6">
+        <TabsList>
+          <TabsTrigger value="overview">Overview</TabsTrigger>
+          <TabsTrigger value="members">Members ({members.length})</TabsTrigger>
+          <TabsTrigger value="locations">Locations ({locations.length})</TabsTrigger>
+          <TabsTrigger value="tickets">Tickets ({tickets.length})</TabsTrigger>
+          <TabsTrigger value="audit">Audit</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="overview">
+          <Card>
+            <CardContent className="grid grid-cols-1 gap-4 p-6 sm:grid-cols-2">
+              <div>
+                <p className="text-xs uppercase tracking-wider text-muted-foreground">Status</p>
+                <p className="mt-1 text-sm font-medium capitalize">{workspace.status}</p>
+              </div>
+              <div>
+                <p className="text-xs uppercase tracking-wider text-muted-foreground">Vertical</p>
+                <p className="mt-1 text-sm font-medium capitalize">{workspace.vertical}</p>
+              </div>
+              <div>
+                <p className="text-xs uppercase tracking-wider text-muted-foreground">Plan</p>
+                <p className="mt-1 text-sm font-medium capitalize">{workspace.plan}</p>
+              </div>
+              <div>
+                <p className="text-xs uppercase tracking-wider text-muted-foreground">Created</p>
+                <p className="mt-1 text-sm font-medium">
+                  {formatDistanceToNow(new Date(workspace.created_at), { addSuffix: true })}
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="members">
+          <Card>
+            <CardContent className="p-0">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Name</TableHead>
+                    <TableHead>Email</TableHead>
+                    <TableHead>Role</TableHead>
+                    <TableHead>Joined</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {members.map((m) => (
+                    <TableRow key={m.id}>
+                      <TableCell className="font-medium">{m.full_name ?? '—'}</TableCell>
+                      <TableCell className="text-muted-foreground">{m.email ?? '—'}</TableCell>
+                      <TableCell>
+                        <Badge variant="secondary">{m.role}</Badge>
+                      </TableCell>
+                      <TableCell className="text-sm text-muted-foreground">
+                        {m.joined_at
+                          ? formatDistanceToNow(new Date(m.joined_at), { addSuffix: true })
+                          : '—'}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="locations">
+          <Card>
+            <CardContent className="p-0">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Name</TableHead>
+                    <TableHead>Address</TableHead>
+                    <TableHead>Phone</TableHead>
+                    <TableHead>Active</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {locations.map((l) => (
+                    <TableRow key={l.id}>
+                      <TableCell className="font-medium">{l.name}</TableCell>
+                      <TableCell className="text-muted-foreground">
+                        {[l.address, l.city, l.state].filter(Boolean).join(', ') || '—'}
+                      </TableCell>
+                      <TableCell className="text-muted-foreground">{l.phone ?? '—'}</TableCell>
+                      <TableCell>
+                        {l.is_active ? <Badge variant="success">Yes</Badge> : <Badge variant="secondary">No</Badge>}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="tickets">
+          <Card>
+            <CardContent className="p-0">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Subject</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Priority</TableHead>
+                    <TableHead>Updated</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {tickets.map((t) => (
+                    <TableRow key={t.id}>
+                      <TableCell className="font-medium">
+                        <Link href={`/admin/support/${t.id}`} className="hover:text-accent-700">
+                          {t.subject}
+                        </Link>
+                      </TableCell>
+                      <TableCell>
+                        <StatusBadge status={t.status} />
+                      </TableCell>
+                      <TableCell>
+                        <PriorityBadge priority={t.priority} />
+                      </TableCell>
+                      <TableCell className="text-sm text-muted-foreground">
+                        {formatDistanceToNow(new Date(t.updated_at), { addSuffix: true })}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="audit">
+          <Card>
+            <CardContent className="p-0">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>When</TableHead>
+                    <TableHead>Actor</TableHead>
+                    <TableHead>Action</TableHead>
+                    <TableHead>Resource</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {auditEntries.map((e) => (
+                    <TableRow key={e.id}>
+                      <TableCell className="text-xs text-muted-foreground">
+                        {formatDistanceToNow(new Date(e.created_at), { addSuffix: true })}
+                      </TableCell>
+                      <TableCell className="text-sm">
+                        {e.actor_name ?? e.actor_email ?? e.actor_id.slice(0, 8)}
+                        <p className="text-xs text-muted-foreground">{e.actor_type}</p>
+                      </TableCell>
+                      <TableCell className="font-mono text-xs">{e.action}</TableCell>
+                      <TableCell className="text-xs text-muted-foreground">
+                        {e.resource_type ? `${e.resource_type} · ${(e.resource_id ?? '').slice(0, 8)}` : '—'}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
+    </div>
+  );
+}

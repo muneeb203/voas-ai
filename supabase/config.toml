@@ -1,0 +1,58 @@
+# Supabase local dev configuration.
+# Run `supabase start` to boot the stack. Run `supabase db reset` to apply migrations + seed.
+# Docs: https://supabase.com/docs/guides/cli/local-development#configuration
+
+project_id = "voas-ai"
+
+[api]
+enabled = true
+port = 54321
+schemas = ["public", "storage", "graphql_public"]
+extra_search_path = ["public", "extensions"]
+max_rows = 1000
+
+[db]
+port = 54322
+shadow_port = 54320
+major_version = 15
+
+[studio]
+enabled = true
+port = 54323
+api_url = "http://localhost:54321"
+
+[inbucket]
+enabled = true
+port = 54324
+
+[storage]
+enabled = true
+file_size_limit = "50MiB"
+
+[auth]
+enabled = true
+site_url = "http://localhost:3001"
+additional_redirect_urls = ["http://localhost:3001/**"]
+jwt_expiry = 3600
+enable_signup = true
+enable_anonymous_sign_ins = false
+
+[auth.email]
+enable_signup = true
+double_confirm_changes = true
+enable_confirmations = true
+otp_expiry = 3600
+
+[auth.email.template.recovery]
+subject = "Reset your VOAS AI password"
+content_path = "./supabase/templates/recovery.html"
+
+[auth.external.google]
+enabled = false
+client_id = ""
+secret = ""
+redirect_uri = ""
+url = ""
+
+[experimental]
+orioledb_version = ""
