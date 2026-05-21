@@ -34,7 +34,6 @@ export function TestCallButton({ publicKey, assistantId, disabled }: TestCallBut
     setState('connecting');
     try {
       const { default: Vapi } = await import('@vapi-ai/web');
-      // @ts-expect-error — Vapi is imported dynamically with a stub type
       const vapi = new Vapi(publicKey);
       vapiRef.current = vapi;
 

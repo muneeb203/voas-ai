@@ -22,7 +22,7 @@ export function useActionState<State, Payload>(
   const [state, formAction] = useFormState(
     action as never,
     initialState as never,
-  ) as [State, (payload: Payload) => void];
+  ) as unknown as [State, (payload: Payload) => void];
   const [isPending, startTransition] = useTransition();
 
   function wrappedAction(payload: Payload) {
