@@ -10,9 +10,8 @@ const nextConfig = {
       },
     ],
   },
-  experimental: {
-    typedRoutes: true,
-  },
+  // typedRoutes disabled — we have intentional placeholder routes (/legal/*).
+  // Re-enable once those pages exist.
 };
 
 module.exports = nextConfig;
