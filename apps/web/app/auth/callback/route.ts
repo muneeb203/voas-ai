@@ -1,22 +1,33 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
+import { getPublicOrigin } from '@/lib/auth/public-origin';
+
+/** Only allow same-origin relative paths after OAuth (blocks open redirects). */
+function safeNextPath(raw: string | null): string {
+  const next = raw ?? '/dashboard';
+  if (!next.startsWith('/') || next.startsWith('//')) return '/dashboard';
+  return next;
+}
 
 /**
  * Supabase auth callback. Handles:
  *   - Email confirmation links (`?token_hash=...&type=signup`)
  *   - Password recovery links (`?token_hash=...&type=recovery`)
- *   - OAuth code exchange (`?code=...`) — wired up but not used in V1
+ *   - OAuth code exchange (`?code=...`) for Google sign-in
  *
  * After a successful exchange, redirect to `next` (defaults to /dashboard).
+ * Uses forwarded-header-aware origin so behind-proxy deploys (DO App Platform)
+ * never redirect to the internal localhost listener.
  */
 export async function GET(request: NextRequest) {
-  const { searchParams, origin } = new URL(request.url);
+  const { searchParams } = new URL(request.url);
+  const origin = getPublicOrigin(request);
   const supabase = createSupabaseServerClient();
 
   const code = searchParams.get('code');
   const tokenHash = searchParams.get('token_hash');
   const type = searchParams.get('type');
-  const next = searchParams.get('next') ?? '/dashboard';
+  const next = safeNextPath(searchParams.get('next'));
 
   if (tokenHash && type) {
     const { error } = await supabase.auth.verifyOtp({

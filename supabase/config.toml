@@ -14,7 +14,7 @@ max_rows = 1000
 [db]
 port = 54322
 shadow_port = 54320
-major_version = 15
+major_version = 17
 
 [studio]
 enabled = true
@@ -24,6 +24,10 @@ api_url = "http://localhost:54321"
 [inbucket]
 enabled = true
 port = 54324
+
+# Disable on Windows unless Docker exposes tcp://localhost:2375 (see docs/supabase-local-windows.md).
+[analytics]
+enabled = false
 
 [storage]
 enabled = true
@@ -47,12 +51,15 @@ otp_expiry = 3600
 subject = "Reset your VOAS AI password"
 content_path = "./supabase/templates/recovery.html"
 
+# Google OAuth — see docs/auth-google-setup.md
+# Secrets live in supabase/.env (copy from supabase/.env.example).
 [auth.external.google]
-enabled = false
-client_id = ""
-secret = ""
-redirect_uri = ""
+enabled = true
+client_id = "env(SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_ID)"
+secret = "env(SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_SECRET)"
+redirect_uri = "http://localhost:54321/auth/v1/callback"
 url = ""
+skip_nonce_check = false
 
 [experimental]
 orioledb_version = ""

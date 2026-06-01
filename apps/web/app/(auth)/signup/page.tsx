@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
+import { Suspense } from 'react';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 import { SignupForm } from '@/components/auth/signup-form';
 import { AlreadySignedIn } from '@/components/auth/already-signed-in';
@@ -27,7 +28,9 @@ export default async function SignupPage() {
       </p>
 
       <div className="mt-8">
-        <SignupForm />
+        <Suspense fallback={<p className="text-sm text-muted-foreground">Loading…</p>}>
+          <SignupForm />
+        </Suspense>
       </div>
 
       <p className="mt-6 text-center text-sm text-muted-foreground">

@@ -48,6 +48,8 @@ cd ../..
 # 3. Copy env files and fill in values
 cp apps/web/.env.local.example apps/web/.env.local
 cp apps/api/.env.example apps/api/.env
+cp supabase/.env.example supabase/.env
+# Google sign-in: fill supabase/.env — see docs/auth-google-setup.md
 
 # 4. Start local Supabase (Postgres + Auth + Storage)
 pnpm supabase:start
@@ -91,6 +93,8 @@ pnpm dev:api
 
 ## Where to read next
 
+- **Google login (local + prod)?** → [`docs/auth-google-setup.md`](./docs/auth-google-setup.md)
+- **Supabase won’t start on Windows?** → [`docs/supabase-local-windows.md`](./docs/supabase-local-windows.md)
 - **New to the project?** → [`CLAUDE.md`](./CLAUDE.md) (full context, ~30 min read)
 - **Picking up a sprint?** → [`SPRINTS.md`](./SPRINTS.md)
 - **Deploying?** → [`docs/deployment.md`](./docs/deployment.md)

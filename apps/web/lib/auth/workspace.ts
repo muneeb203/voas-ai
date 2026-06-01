@@ -114,9 +114,11 @@ export async function requireDashboardSession(
       redirect(`/login?next=${encodeURIComponent(redirectPathIfNoSession)}`);
     case 'no-workspace':
       redirect('/onboarding');
-    case 'backend-down':
+    case 'backend-down': {
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000';
       throw new Error(
-        `Could not load your account (${result.code}). Is the backend running on port 8000?`,
+        `Could not load your account (${result.code}). Tried API at ${apiUrl}.`,
       );
+    }
   }
 }
