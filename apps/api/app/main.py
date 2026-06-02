@@ -18,8 +18,10 @@ from app.core.exceptions import (
 from app.core.logging import configure_logging, get_logger
 from app.routers import (
     admin,
+    analytics,
     contact,
     conversations,
+    customers,
     health,
     locations,
     members,
@@ -28,6 +30,7 @@ from app.routers import (
     tickets,
     voice,
     webhooks,
+    whatsapp,
     workspaces,
 )
 
@@ -104,9 +107,12 @@ def create_app() -> FastAPI:
     app.include_router(members.public_router, prefix="/v1")
     app.include_router(tickets.router, prefix="/v1")
     app.include_router(conversations.router, prefix="/v1")
+    app.include_router(customers.router, prefix="/v1")
     app.include_router(orders.router, prefix="/v1")
     app.include_router(menu.router, prefix="/v1")
+    app.include_router(analytics.router, prefix="/v1")
     app.include_router(voice.router, prefix="/v1")
+    app.include_router(whatsapp.router, prefix="/v1")
     app.include_router(webhooks.router, prefix="/v1")
     app.include_router(admin.router, prefix="/v1")
 

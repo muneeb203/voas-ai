@@ -7,7 +7,6 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Field } from '@/components/ui/field';
-import { Switch } from '@/components/ui/switch';
 import {
   Select,
   SelectContent,
@@ -16,34 +15,41 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import {
-  updateVoiceSettingsAction,
+  updateWhatsAppSettingsAction,
   type FormResult,
-} from '@/app/actions/voice-action';
-import type { VoiceSettings, VoiceCapabilities } from '@/lib/types';
+} from '@/app/actions/whatsapp-action';
+import type { WhatsAppSettings, WhatsAppCapabilities } from '@/lib/types';
 
 const INITIAL: FormResult = { error: null };
 
-interface VoiceSettingsFormProps {
-  settings: VoiceSettings;
-  capabilities: VoiceCapabilities;
+const SESSION_WINDOWS = [
+  { value: '1', label: '1 hour' },
+  { value: '6', label: '6 hours' },
+  { value: '24', label: '24 hours' },
+];
+
+interface WhatsAppSettingsFormProps {
+  settings: WhatsAppSettings;
+  capabilities: WhatsAppCapabilities;
   disabled?: boolean;
 }
 
-export function VoiceSettingsForm({
+export function WhatsAppSettingsForm({
   settings,
   capabilities,
   disabled,
-}: VoiceSettingsFormProps) {
-  const [state, formAction, pending] = useActionState(updateVoiceSettingsAction, INITIAL);
+}: WhatsAppSettingsFormProps) {
+  const [state, formAction, pending] = useActionState(
+    updateWhatsAppSettingsAction,
+    INITIAL,
+  );
   const fieldErrors = state.fieldErrors;
   const wasPending = useRef(false);
 
   useEffect(() => {
-    // Fire a toast only on the transition from pending → not pending
-    // (i.e. the action just finished). This avoids the initial render firing.
     if (wasPending.current && !pending) {
       if (state.error && !state.fieldErrors) toast.error(state.error);
-      else if (!state.error) toast.success('Voice settings saved');
+      else if (!state.error) toast.success('WhatsApp settings saved');
     }
     wasPending.current = pending;
   }, [pending, state]);
@@ -65,7 +71,7 @@ export function VoiceSettingsForm({
         htmlFor="system_prompt"
         required
         error={fieldErrors?.system_prompt}
-        hint="What the agent should sound like and do. Your menu is appended automatically."
+        hint="How the agent should behave on WhatsApp. Your menu is appended automatically, and WhatsApp-specific formatting rules are added on top."
       >
         <Textarea
           id="system_prompt"
@@ -79,21 +85,6 @@ export function VoiceSettingsForm({
       </Field>
 
       <div className="grid gap-4 sm:grid-cols-2">
-        <Field label="Voice" htmlFor="voice" error={fieldErrors?.voice}>
-          <Select name="voice" defaultValue={settings.voice} disabled={disabled || pending}>
-            <SelectTrigger id="voice">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {capabilities.voices.map((v) => (
-                <SelectItem key={v.id} value={v.id}>
-                  {v.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </Field>
-
         <Field label="LLM" htmlFor="model" error={fieldErrors?.model}>
           <Select name="model" defaultValue={settings.model} disabled={disabled || pending}>
             <SelectTrigger id="model">
@@ -103,6 +94,30 @@ export function VoiceSettingsForm({
               {capabilities.models.map((m) => (
                 <SelectItem key={m.id} value={m.id}>
                   {m.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </Field>
+
+        <Field
+          label="Session window"
+          htmlFor="session_window_hours"
+          error={fieldErrors?.session_window_hours}
+          hint="How long a chat stays one conversation."
+        >
+          <Select
+            name="session_window_hours"
+            defaultValue={String(settings.session_window_hours)}
+            disabled={disabled || pending}
+          >
+            <SelectTrigger id="session_window_hours">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {SESSION_WINDOWS.map((w) => (
+                <SelectItem key={w.value} value={w.value}>
+                  {w.label}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -118,29 +133,17 @@ export function VoiceSettingsForm({
           className="h-4 w-4 rounded border-input"
           disabled={disabled || pending}
         />
-        Voice agent enabled (incoming calls answered)
+        WhatsApp agent enabled (incoming messages answered)
       </label>
 
-      <Field label="Order confirmations" htmlFor="send_order_confirmations">
-        <div className="flex items-center gap-3">
-          <Switch
-            id="send_order_confirmations"
-            name="send_order_confirmations"
-            defaultChecked={settings.send_order_confirmations}
-            disabled={disabled || pending}
-          />
-          <span className="text-sm text-muted-foreground">
-            Automatically send a WhatsApp/SMS confirmation after every order
-          </span>
-        </div>
-      </Field>
-
       <Button type="submit" disabled={disabled || pending}>
-        {pending ? 'Saving…' : 'Save & sync to Vapi'}
+        {pending ? 'Saving…' : 'Save settings'}
       </Button>
 
       {disabled && (
-        <p className="text-xs text-muted-foreground">Only workspace owners can edit voice settings.</p>
+        <p className="text-xs text-muted-foreground">
+          Only workspace owners can edit WhatsApp settings.
+        </p>
       )}
     </form>
   );

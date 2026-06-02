@@ -6,19 +6,38 @@ update the conversations / conversation_messages tables accordingly.
 Webhook event shapes are documented at https://docs.vapi.ai/server-url.
 """
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from fastapi import APIRouter, Header, Request, status
+from fastapi.responses import Response
 
 import json
 
 from app.core.exceptions import ForbiddenError
 from app.core.logging import get_logger
 from app.core.supabase import get_supabase_admin
-from app.integrations import vapi
-from app.services import customer_service, voice_order_service, voice_service
+from app.integrations import twilio_whatsapp, vapi
+from app.services import (
+    customer_service,
+    voice_order_service,
+    voice_service,
+    whatsapp_ai_service,
+    whatsapp_service,
+)
 from app.models.customer import CustomerUpsert
+
+_EMPTY_TWIML = "<?xml version=\"1.0\" encoding=\"UTF-8\"?><Response/>"
+
+
+def _twiml_ok() -> Response:
+    """Twilio only needs a 200 with valid (possibly empty) TwiML. We send our
+    reply proactively via the REST API, so the synchronous response is empty."""
+    return Response(content=_EMPTY_TWIML, media_type="application/xml", status_code=200)
+
+
+def _strip_whatsapp_prefix(value: str) -> str:
+    return value[len("whatsapp:"):] if value.startswith("whatsapp:") else value
 
 log = get_logger(__name__)
 
@@ -240,3 +259,204 @@ def _ensure_conversation(
         .execute()
     )
     return res.data[0]
+
+
+# ---------------------------------------------------------------------------
+# WhatsApp (Twilio) inbound messages
+# ---------------------------------------------------------------------------
+
+
+def _find_or_create_whatsapp_conversation(
+    *,
+    workspace_id: str,
+    location_id: str,
+    customer_phone: str,
+    customer_id: str | None,
+    customer_name: str | None,
+    session_window_hours: int,
+) -> dict[str, Any]:
+    """Reuse an active WhatsApp conversation within the session window, else
+    open a new one. Keyed by (workspace, phone, channel='whatsapp')."""
+    db = get_supabase_admin()
+    window_start = (
+        datetime.now(timezone.utc) - timedelta(hours=session_window_hours)
+    ).isoformat()
+
+    existing = (
+        db.table("conversations")
+        .select("*")
+        .eq("workspace_id", workspace_id)
+        .eq("customer_phone", customer_phone)
+        .eq("channel", "whatsapp")
+        .eq("status", "active")
+        .gte("started_at", window_start)
+        .order("started_at", desc=True)
+        .limit(1)
+        .execute()
+    )
+    if existing.data:
+        return existing.data[0]
+
+    res = (
+        db.table("conversations")
+        .insert(
+            {
+                "workspace_id": workspace_id,
+                "location_id": location_id,
+                "customer_id": customer_id,
+                "channel": "whatsapp",
+                "customer_phone": customer_phone,
+                "customer_name": customer_name,
+                "started_at": datetime.now(timezone.utc).isoformat(),
+                "status": "active",
+                "metadata": {"transport": "twilio_whatsapp"},
+            }
+        )
+        .execute()
+    )
+    return res.data[0]
+
+
+@router.post("/whatsapp")
+async def whatsapp_webhook(
+    request: Request,
+    x_twilio_signature: str | None = Header(default=None, alias="X-Twilio-Signature"),
+) -> Response:
+    """Inbound WhatsApp message from Twilio.
+
+    Twilio retries on any non-200, which would duplicate replies, so this
+    handler ALWAYS returns 200 with empty TwiML — every failure path is
+    logged and swallowed."""
+    try:
+        form = await request.form()
+        params = {k: str(v) for k, v in form.items()}
+    except Exception as exc:  # noqa: BLE001
+        log.error("whatsapp_webhook_bad_form", error=str(exc))
+        return _twiml_ok()
+
+    from_raw = params.get("From", "")
+    to_raw = params.get("To", "")
+    body = (params.get("Body") or "").strip()
+    message_sid = params.get("MessageSid")
+    profile_name = params.get("ProfileName") or None
+
+    from_number = _strip_whatsapp_prefix(from_raw)
+    to_number = _strip_whatsapp_prefix(to_raw)
+
+    if not from_number or not to_number:
+        log.warning("whatsapp_webhook_missing_numbers")
+        return _twiml_ok()
+
+    match = whatsapp_service.find_location_by_whatsapp_number(to_number)
+    if not match:
+        log.warning("whatsapp_webhook_unmatched_number", to=to_number)
+        return _twiml_ok()
+    workspace_id, location_id = match
+
+    config = whatsapp_service.get_location_config_internal(location_id)
+    if not config:
+        log.warning("whatsapp_webhook_no_config", location_id=location_id)
+        return _twiml_ok()
+
+    # Verify the Twilio signature against this location's auth token. In dev
+    # (no token) this logs-and-passes; in prod it enforces.
+    signature_ok = twilio_whatsapp.verify_twilio_signature(
+        url=str(request.url),
+        params=params,
+        signature=x_twilio_signature,
+        auth_token=config.twilio_auth_token,
+    )
+    if not signature_ok:
+        log.warning("whatsapp_webhook_bad_signature", location_id=location_id)
+        return _twiml_ok()
+
+    if not body:
+        # Media-only or empty message — nothing to reason about in V2 (text only).
+        return _twiml_ok()
+
+    settings_row = whatsapp_service.get_or_create_settings(workspace_id)
+
+    db = get_supabase_admin()
+    try:
+        customer = customer_service.upsert_by_phone(
+            workspace_id,
+            CustomerUpsert(phone=from_number, name=profile_name),
+        )
+        conversation = _find_or_create_whatsapp_conversation(
+            workspace_id=workspace_id,
+            location_id=location_id,
+            customer_phone=from_number,
+            customer_id=customer.id,
+            customer_name=profile_name,
+            session_window_hours=settings_row.session_window_hours,
+        )
+        conversation_id = conversation["id"]
+
+        # Dedup Twilio retries: skip if we already processed this MessageSid.
+        if message_sid and (conversation.get("metadata") or {}).get(
+            "last_message_sid"
+        ) == message_sid:
+            log.info("whatsapp_webhook_duplicate_skipped", message_sid=message_sid)
+            return _twiml_ok()
+
+        db.table("conversation_messages").insert(
+            {
+                "conversation_id": conversation_id,
+                "role": "customer",
+                "content": body,
+            }
+        ).execute()
+
+        result = whatsapp_ai_service.get_ai_reply(workspace_id, conversation_id, body)
+        reply_text = result.get("reply") or "Thanks for your message!"
+
+        db.table("conversation_messages").insert(
+            {
+                "conversation_id": conversation_id,
+                "role": "agent",
+                "content": reply_text,
+            }
+        ).execute()
+
+        # Record the processed sid for dedup on the conversation row.
+        merged_meta = {
+            **(conversation.get("metadata") or {}),
+            "last_message_sid": message_sid,
+        }
+        db.table("conversations").update({"metadata": merged_meta}).eq(
+            "id", conversation_id
+        ).execute()
+
+        twilio_whatsapp.send_whatsapp_message(
+            to=from_number,
+            from_=to_number,
+            body=reply_text,
+            account_sid=config.twilio_account_sid,
+            auth_token=config.twilio_auth_token,
+        )
+
+        log.info(
+            "whatsapp_webhook_handled",
+            workspace_id=workspace_id,
+            location_id=location_id,
+            conversation_id=conversation_id,
+            order_placed=result.get("order_placed"),
+        )
+    except Exception as exc:  # noqa: BLE001
+        log.error("whatsapp_webhook_processing_error", error=str(exc))
+        # Best-effort fallback so the customer isn't left hanging.
+        try:
+            twilio_whatsapp.send_whatsapp_message(
+                to=from_number,
+                from_=to_number,
+                body=(
+                    "Sorry, I'm having trouble right now. Please call us or try "
+                    "again in a moment."
+                ),
+                account_sid=config.twilio_account_sid,
+                auth_token=config.twilio_auth_token,
+            )
+        except Exception:  # noqa: BLE001
+            pass
+
+    return _twiml_ok()

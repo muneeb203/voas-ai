@@ -4,27 +4,28 @@ import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 import { requireDashboardSession } from '@/lib/auth/workspace';
 import {
-  disableLocationVoice,
-  updateVoiceSettings,
-  upsertLocationVoice,
-} from '@/lib/api/voice';
+  deleteLocationWhatsAppConfig,
+  updateWhatsAppSettings,
+  upsertLocationWhatsAppConfig,
+} from '@/lib/api/whatsapp';
 import { isApiError } from '@/lib/types';
 
 const SettingsSchema = z.object({
   system_prompt: z.string().min(20, 'Add a bit more detail to the prompt').max(8000),
-  greeting: z.string().min(5).max(500),
-  voice: z.string().min(1).max(80),
+  greeting: z.string().min(2).max(500),
   model: z.string().min(1).max(80),
   enabled: z.boolean(),
-  send_order_confirmations: z.boolean(),
+  session_window_hours: z.number().int().min(1).max(168),
 });
 
-const LocationVoiceSchema = z.object({
-  twilio_account_sid: z.string().regex(/^AC[a-zA-Z0-9]{30,}$/, 'SID looks like ACxxxxxxxxxxxxxxxx'),
-  twilio_auth_token: z.string().min(10).max(128),
-  twilio_phone_number: z
+const LocationWhatsAppSchema = z.object({
+  twilio_account_sid: z
     .string()
-    .regex(/^\+\d{8,15}$/, 'Use E.164 format (e.g. +14155551234)'),
+    .regex(/^AC[a-zA-Z0-9]{30,}$/, 'SID looks like ACxxxxxxxxxxxxxxxx'),
+  twilio_auth_token: z.string().min(10).max(128),
+  twilio_whatsapp_number: z
+    .string()
+    .regex(/^\+\d{8,15}$/, 'Use E.164 format (e.g. +14155238886)'),
   enabled: z.boolean(),
 });
 
@@ -42,25 +43,24 @@ function fieldErrorsFromZod(err: z.ZodError) {
 async function requireOwner(path: string) {
   const session = await requireDashboardSession(path);
   if (session.active.role !== 'owner') {
-    return { error: 'Only workspace owners can configure voice.' as const, session: null };
+    return { error: 'Only workspace owners can configure WhatsApp.' as const, session: null };
   }
   return { error: null as null, session };
 }
 
-export async function updateVoiceSettingsAction(
+export async function updateWhatsAppSettingsAction(
   _prev: FormResult,
   formData: FormData,
 ): Promise<FormResult> {
-  const { error, session } = await requireOwner('/integrations/voice');
+  const { error, session } = await requireOwner('/integrations/whatsapp');
   if (error) return { error };
 
   const parsed = SettingsSchema.safeParse({
     system_prompt: String(formData.get('system_prompt') ?? '').trim(),
     greeting: String(formData.get('greeting') ?? '').trim(),
-    voice: String(formData.get('voice') ?? 'rachel'),
     model: String(formData.get('model') ?? 'gpt-4o-mini'),
     enabled: formData.get('enabled') === 'on',
-    send_order_confirmations: formData.get('send_order_confirmations') === 'on',
+    session_window_hours: Number(formData.get('session_window_hours') ?? 24),
   });
   if (!parsed.success) {
     return {
@@ -69,27 +69,27 @@ export async function updateVoiceSettingsAction(
     };
   }
 
-  const res = await updateVoiceSettings(session.active.workspace_id, parsed.data);
+  const res = await updateWhatsAppSettings(session.active.workspace_id, parsed.data);
   if (isApiError(res)) return { error: res.error.message };
 
   revalidatePath('/integrations');
-  revalidatePath('/integrations/voice');
+  revalidatePath('/integrations/whatsapp');
   return { error: null };
 }
 
-export async function upsertLocationVoiceAction(
+export async function upsertLocationWhatsAppAction(
   locationId: string,
   payload: {
     twilio_account_sid: string;
     twilio_auth_token: string;
-    twilio_phone_number: string;
+    twilio_whatsapp_number: string;
     enabled: boolean;
   },
 ): Promise<FormResult> {
-  const { error, session } = await requireOwner(`/locations`);
+  const { error, session } = await requireOwner('/integrations/whatsapp');
   if (error) return { error };
 
-  const parsed = LocationVoiceSchema.safeParse(payload);
+  const parsed = LocationWhatsAppSchema.safeParse(payload);
   if (!parsed.success) {
     return {
       error: 'Please check the fields below.',
@@ -97,41 +97,28 @@ export async function upsertLocationVoiceAction(
     };
   }
 
-  const res = await upsertLocationVoice(
+  const res = await upsertLocationWhatsAppConfig(
     session.active.workspace_id,
     locationId,
     parsed.data,
   );
   if (isApiError(res)) return { error: res.error.message };
 
-  revalidatePath('/locations');
+  revalidatePath('/integrations/whatsapp');
   revalidatePath('/integrations');
   return { error: null };
 }
 
-export async function resyncMenuToVapiAction(): Promise<FormResult> {
-  const { error, session } = await requireOwner('/integrations/voice');
+export async function disableLocationWhatsAppAction(
+  locationId: string,
+): Promise<FormResult> {
+  const { error, session } = await requireOwner('/integrations/whatsapp');
   if (error) return { error };
 
-  // PATCH with no fields → backend re-pulls the current menu and patches
-  // the Vapi assistant. That's exactly what this button does.
-  const { updateVoiceSettings } = await import('@/lib/api/voice');
-  const res = await updateVoiceSettings(session.active.workspace_id, {});
+  const res = await deleteLocationWhatsAppConfig(session.active.workspace_id, locationId);
   if (isApiError(res)) return { error: res.error.message };
 
-  revalidatePath('/integrations/voice');
-  revalidatePath('/integrations');
-  return { error: null };
-}
-
-export async function disableLocationVoiceAction(locationId: string): Promise<FormResult> {
-  const { error, session } = await requireOwner('/locations');
-  if (error) return { error };
-
-  const res = await disableLocationVoice(session.active.workspace_id, locationId);
-  if (isApiError(res)) return { error: res.error.message };
-
-  revalidatePath('/locations');
+  revalidatePath('/integrations/whatsapp');
   revalidatePath('/integrations');
   return { error: null };
 }

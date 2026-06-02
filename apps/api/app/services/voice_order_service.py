@@ -187,6 +187,22 @@ def place_order_from_tool_call(
         total_cents=total_cents,
     )
 
+    # Send order confirmation to customer (best-effort — never blocks the return)
+    try:
+        from app.services import order_confirmation_service
+        order_confirmation_service.send_order_confirmation(
+            workspace_id=workspace_id,
+            location_id=location_id,
+            customer_phone=customer_phone,
+            customer_name=str(arguments.get("customer_name") or "").strip() or None,
+            order_id=order["id"],
+            items_json=items_json,
+            total_cents=total_cents,
+            fulfillment=fulfillment,
+        )
+    except Exception as exc:  # noqa: BLE001
+        log.error("order_confirmation_failed", order_id=order["id"], error=str(exc))
+
     return {
         "success": True,
         "order_id": order["id"],

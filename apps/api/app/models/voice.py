@@ -56,6 +56,7 @@ class VoiceSettings(BaseModel):
     model: str
     end_call_phrases: list[str] | None
     enabled: bool
+    send_order_confirmations: bool = True
     last_synced_at: datetime | None
     created_at: datetime
     updated_at: datetime
@@ -72,6 +73,7 @@ class VoiceSettingsUpdate(BaseModel):
     model: str | None = Field(default=None, max_length=80)
     end_call_phrases: list[str] | None = None
     enabled: bool | None = None
+    send_order_confirmations: bool | None = None
 
 
 class LocationVoiceConfig(BaseModel):

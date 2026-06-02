@@ -201,6 +201,11 @@ export interface ConversationDetail extends Conversation {
   order_id: string | null;
 }
 
+export interface CustomerDetail extends Customer {
+  recent_orders: Order[];
+  recent_conversations: Conversation[];
+}
+
 export type OrderStatus =
   | 'pending'
   | 'confirmed'
@@ -304,6 +309,7 @@ export interface VoiceSettings {
   model: string;
   end_call_phrases: string[] | null;
   enabled: boolean;
+  send_order_confirmations: boolean;
   last_synced_at: string | null;
   created_at: string;
   updated_at: string;
@@ -329,6 +335,89 @@ export interface VoiceCapabilities {
   models: Array<{ id: string; label: string }>;
   vapi_configured: boolean;
   vapi_public_key: string | null;
+}
+
+// --- V2 Sprint 3: WhatsApp -------------------------------------------------
+
+export interface WhatsAppSettings {
+  workspace_id: string;
+  system_prompt: string;
+  greeting: string;
+  model: string;
+  enabled: boolean;
+  session_window_hours: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface LocationWhatsAppConfigSafe {
+  location_id: string;
+  workspace_id: string;
+  twilio_account_sid: string;
+  twilio_auth_token_masked: string;
+  twilio_whatsapp_number: string;
+  enabled: boolean;
+  last_synced_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface WhatsAppCapabilities {
+  models: Array<{ id: string; label: string }>;
+  openai_configured: boolean;
+  twilio_configured: boolean;
+  sandbox_number: string;
+}
+
+// --- Analytics ------------------------------------------------------------
+
+export interface DailyCount {
+  date: string;
+  count: number;
+}
+
+export interface DailyRevenue {
+  date: string;
+  cents: number;
+}
+
+export interface TopItem {
+  name: string;
+  count: number;
+  revenue_cents: number;
+}
+
+export interface HourlyCount {
+  hour: number;
+  count: number;
+}
+
+export interface AnalyticsSummary {
+  total_conversations: number;
+  conversations_by_channel: Record<string, number>;
+  conversations_by_status: Record<string, number>;
+  conversations_by_outcome: Record<string, number>;
+  avg_duration_seconds: number | null;
+  avg_sentiment: number | null;
+  total_orders: number;
+  total_revenue_cents: number;
+  avg_order_value_cents: number | null;
+  orders_by_status: Record<string, number>;
+  total_customers: number;
+  new_customers: number;
+  returning_customers: number;
+  daily_conversations: DailyCount[];
+  daily_orders: DailyCount[];
+  daily_revenue_cents: DailyRevenue[];
+  top_menu_items: TopItem[];
+  conversations_by_hour: HourlyCount[];
+}
+
+export interface TodayStats {
+  conversations_today: number;
+  orders_today: number;
+  revenue_today_cents: number;
+  avg_sentiment_today: number | null;
 }
 
 export interface ContactSubmission {
