@@ -115,7 +115,10 @@ export async function requireDashboardSession(
     case 'no-workspace':
       redirect('/onboarding');
     case 'backend-down': {
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000';
+      const apiUrl = (process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000').replace(
+        /\/+$/,
+        '',
+      );
       throw new Error(
         `Could not load your account (${result.code}). Tried API at ${apiUrl}.`,
       );

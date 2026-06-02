@@ -1,6 +1,11 @@
 import type { ApiResponse } from './types';
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000';
+function normalizeApiBase(url: string | undefined): string {
+  const base = (url ?? 'http://localhost:8000').trim();
+  return base.replace(/\/+$/, '');
+}
+
+const API_BASE = normalizeApiBase(process.env.NEXT_PUBLIC_API_URL);
 
 interface ApiRequestInit extends Omit<RequestInit, 'body'> {
   body?: unknown;
