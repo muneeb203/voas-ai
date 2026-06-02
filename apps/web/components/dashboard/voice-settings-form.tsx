@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Field } from '@/components/ui/field';
+import { Switch } from '@/components/ui/switch';
 import {
   Select,
   SelectContent,
@@ -119,6 +120,20 @@ export function VoiceSettingsForm({
         />
         Voice agent enabled (incoming calls answered)
       </label>
+
+      <Field label="Order confirmations" htmlFor="send_order_confirmations">
+        <div className="flex items-center gap-3">
+          <Switch
+            id="send_order_confirmations"
+            name="send_order_confirmations"
+            defaultChecked={settings.send_order_confirmations}
+            disabled={disabled || pending}
+          />
+          <span className="text-sm text-muted-foreground">
+            Automatically send a WhatsApp/SMS confirmation after every order
+          </span>
+        </div>
+      </Field>
 
       <Button type="submit" disabled={disabled || pending}>
         {pending ? 'Saving…' : 'Save & sync to Vapi'}

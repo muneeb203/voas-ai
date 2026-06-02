@@ -6,6 +6,7 @@ import {
   LayoutDashboard,
   MessageSquare,
   ShoppingBag,
+  Users2,
   BookOpen,
   Plug,
   BarChart3,
@@ -31,6 +32,7 @@ const SECTIONS: { title: string; items: NavItem[] }[] = [
       { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
       { href: '/conversations', label: 'Conversations', icon: MessageSquare },
       { href: '/orders', label: 'Orders', icon: ShoppingBag },
+      { href: '/customers', label: 'Customers', icon: Users2 },
     ],
   },
   {

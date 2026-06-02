@@ -51,6 +51,7 @@ export const DASHBOARD_NAV = [
   { href: '/dashboard', label: 'Dashboard', icon: 'LayoutDashboard' },
   { href: '/conversations', label: 'Conversations', icon: 'MessageSquare' },
   { href: '/orders', label: 'Orders', icon: 'ShoppingBag' },
+  { href: '/customers', label: 'Customers', icon: 'Users2' },
   { href: '/knowledge-base', label: 'Knowledge Base', icon: 'BookOpen' },
   { href: '/integrations', label: 'Integrations', icon: 'Plug' },
   { href: '/analytics', label: 'Analytics', icon: 'BarChart3' },

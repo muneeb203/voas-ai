@@ -155,7 +155,7 @@ export default async function WhatsAppSettingsPage() {
                 key={loc.id}
                 locationId={loc.id}
                 locationName={loc.name}
-                existing={configByLocation[loc.id]}
+                existing={configByLocation[loc.id] ?? null}
                 sandboxNumber={caps.sandbox_number}
                 disabled={!isOwner}
               />

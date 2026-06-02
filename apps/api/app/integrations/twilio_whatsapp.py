@@ -87,6 +87,47 @@ def send_whatsapp_message(
         log.error("twilio_whatsapp_send_error", error=str(exc))
 
 
+def send_sms_message(
+    *,
+    to: str,
+    from_: str,
+    body: str,
+    account_sid: str,
+    auth_token: str,
+) -> None:
+    """POST a plain SMS via Twilio's Messages resource.
+
+    Identical to send_whatsapp_message but `to`/`from_` are plain E.164
+    numbers with no `whatsapp:` prefix. Stub-safe: logs when credentials or
+    sender are missing."""
+    if not account_sid or not auth_token or not from_:
+        log.info(
+            "twilio_sms_stub_send",
+            to=to,
+            from_=from_,
+            body_preview=body[:80],
+        )
+        return
+
+    url = f"{_TWILIO_API_BASE}/Accounts/{account_sid}/Messages.json"
+    form = {
+        "To": to.strip(),
+        "From": from_.strip(),
+        "Body": body,
+    }
+    try:
+        with httpx.Client(timeout=15.0) as client:
+            res = client.post(url, data=form, auth=(account_sid, auth_token))
+        if not res.is_success:
+            try:
+                detail = res.json()
+            except Exception:  # noqa: BLE001
+                detail = res.text
+            log.error("twilio_sms_send_failed", status=res.status_code, detail=detail)
+    except Exception as exc:  # noqa: BLE001
+        log.error("twilio_sms_send_error", error=str(exc))
+
+
 def verify_twilio_signature(
     *,
     url: str,

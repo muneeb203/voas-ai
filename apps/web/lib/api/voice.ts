@@ -24,6 +24,7 @@ export function updateVoiceSettings(
     voice: string;
     model: string;
     enabled: boolean;
+    send_order_confirmations: boolean;
   }>,
 ) {
   return apiCall<VoiceSettings>(`/v1/workspaces/${workspaceId}/voice/settings`, {
