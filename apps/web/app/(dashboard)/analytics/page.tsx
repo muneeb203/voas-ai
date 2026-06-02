@@ -81,10 +81,6 @@ export default async function AnalyticsPage({
     : 30;
 
   const res = await getAnalyticsSummary(session.active.workspace_id, days);
-  if (isApiError(res)) {
-    throw new Error(res.error.message);
-  }
-  const a: AnalyticsSummary = res.data;
 
   const header = (
     <PageHeader
@@ -94,6 +90,27 @@ export default async function AnalyticsPage({
       action={<DaysSelector selected={days} />}
     />
   );
+
+  if (isApiError(res)) {
+    return (
+      <div>
+        {header}
+        <Card>
+          <CardContent className="py-10 text-center">
+            <p className="text-sm text-error">
+              Couldn&apos;t load analytics: {res.error.message}
+            </p>
+            <p className="mt-2 text-xs text-muted-foreground">
+              If this persists, confirm the backend is deployed with the analytics API and that{' '}
+              <span className="font-mono">NEXT_PUBLIC_API_URL</span> points to it.
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  const a: AnalyticsSummary = res.data;
 
   if (a.total_conversations === 0) {
     return (
@@ -173,8 +190,8 @@ export default async function AnalyticsPage({
               data={a.daily_conversations.map((d) => ({
                 label: shortDate(d.date),
                 value: d.count,
+                formattedValue: `${d.count} conversation${d.count === 1 ? '' : 's'}`,
               }))}
-              formatValue={(v) => `${v} conversation${v === 1 ? '' : 's'}`}
             />
           </CardContent>
         </Card>
@@ -188,9 +205,9 @@ export default async function AnalyticsPage({
               data={a.daily_revenue_cents.map((d) => ({
                 label: shortDate(d.date),
                 value: d.cents / 100,
+                formattedValue: formatCurrency(d.cents),
               }))}
               color="bg-success"
-              formatValue={(v) => formatCurrency(Math.round(v * 100))}
             />
           </CardContent>
         </Card>
