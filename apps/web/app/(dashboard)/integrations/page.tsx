@@ -45,11 +45,10 @@ export default async function IntegrationsPage() {
           vapiConfigured={caps?.vapi_configured ?? false}
         />
 
-        <ComingSoonCard
+        <MaintenanceCard
           icon={MessageSquare}
           title="WhatsApp"
-          description="Inbound + outbound WhatsApp via Twilio."
-          arrivesIn="V2 Sprint 3"
+          description="AI answers WhatsApp messages via Twilio. Configuration is being finalized."
         />
         <ComingSoonCard
           icon={ShoppingBag}
@@ -128,6 +127,36 @@ function VoiceCard({
           <Link href="/integrations/voice">
             {assistantId ? 'Edit voice settings' : 'Configure voice'}
           </Link>
+        </Button>
+      </CardContent>
+    </Card>
+  );
+}
+
+function MaintenanceCard({
+  icon: Icon,
+  title,
+  description,
+}: {
+  icon: React.ComponentType<{ className?: string }>;
+  title: string;
+  description: string;
+}) {
+  return (
+    <Card className="opacity-70">
+      <CardContent className="space-y-3 p-5">
+        <div className="flex items-start justify-between">
+          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-warning/10">
+            <Icon className="h-5 w-5 text-warning" />
+          </div>
+          <Badge variant="warning">Under maintenance</Badge>
+        </div>
+        <div>
+          <h3 className="text-base font-semibold">{title}</h3>
+          <p className="mt-1 text-sm text-muted-foreground">{description}</p>
+        </div>
+        <Button variant="outline" className="w-full" disabled>
+          Coming back soon
         </Button>
       </CardContent>
     </Card>

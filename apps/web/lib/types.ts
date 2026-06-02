@@ -331,6 +331,38 @@ export interface VoiceCapabilities {
   vapi_public_key: string | null;
 }
 
+// --- V2 Sprint 3: WhatsApp -------------------------------------------------
+
+export interface WhatsAppSettings {
+  workspace_id: string;
+  system_prompt: string;
+  greeting: string;
+  model: string;
+  enabled: boolean;
+  session_window_hours: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface LocationWhatsAppConfigSafe {
+  location_id: string;
+  workspace_id: string;
+  twilio_account_sid: string;
+  twilio_auth_token_masked: string;
+  twilio_whatsapp_number: string;
+  enabled: boolean;
+  last_synced_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface WhatsAppCapabilities {
+  models: Array<{ id: string; label: string }>;
+  openai_configured: boolean;
+  twilio_configured: boolean;
+  sandbox_number: string;
+}
+
 export interface ContactSubmission {
   id: string;
   name: string;
