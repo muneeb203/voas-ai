@@ -95,6 +95,27 @@ def create_workspace(payload: WorkspaceCreate, user_id: str, user_email: str | N
     )
 
     log.info("workspace_created", workspace_id=workspace_id, slug=slug, owner=user_id)
+
+    if user_email:
+        try:
+            from app.services import email_service
+
+            full_name: str | None = None
+            auth_res = db.auth.admin.get_user_by_id(user_id)
+            if auth_res and auth_res.user:
+                meta = auth_res.user.user_metadata or {}
+                if isinstance(meta, dict):
+                    name = meta.get("full_name")
+                    full_name = name if isinstance(name, str) else None
+
+            email_service.send_welcome(
+                to=user_email,
+                full_name=full_name,
+                workspace_name=payload.name,
+            )
+        except Exception as exc:  # noqa: BLE001
+            log.error("welcome_email_failed", workspace_id=workspace_id, error=str(exc))
+
     return Workspace.model_validate(workspace)
 
 

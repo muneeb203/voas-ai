@@ -3,6 +3,7 @@ from datetime import datetime, timedelta, timezone
 
 from app.config import get_settings
 from app.core.exceptions import ConflictError, ForbiddenError, NotFoundError
+from app.core.logging import get_logger
 from app.core.supabase import get_supabase_admin
 from app.models.member import (
     Invitation,
@@ -13,6 +14,8 @@ from app.models.member import (
     MemberUpdate,
 )
 from app.services import audit_service, workspace_service
+
+log = get_logger(__name__)
 
 INVITE_TTL_DAYS = 7
 
@@ -222,6 +225,23 @@ def create_invitation(
         metadata={"email": normalized_email, "role": payload.role},
     )
 
+    invite_url = _build_invite_url(token)
+    try:
+        from app.services import email_service
+
+        ws_res = (
+            db.table("workspaces").select("name").eq("id", workspace_id).limit(1).execute()
+        )
+        workspace_name = ws_res.data[0]["name"] if ws_res.data else "your workspace"
+        email_service.send_team_invite(
+            to=normalized_email,
+            workspace_name=workspace_name,
+            accept_url=invite_url,
+            role=payload.role,
+        )
+    except Exception as exc:  # noqa: BLE001
+        log.error("invite_email_failed", invitation_id=row["id"], error=str(exc))
+
     return InvitationWithUrl(
         **{
             "id": row["id"],
@@ -232,7 +252,7 @@ def create_invitation(
             "expires_at": row["expires_at"],
             "accepted_at": row.get("accepted_at"),
             "created_at": row["created_at"],
-            "url": _build_invite_url(token),
+            "url": invite_url,
         }
     )
 
