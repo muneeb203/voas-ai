@@ -64,8 +64,7 @@ export function InviteMemberButton() {
         <DialogHeader>
           <DialogTitle>Invite a teammate</DialogTitle>
           <DialogDescription>
-            We'll generate a private link you can send them. In dev, no email is sent — just copy
-            the link from here.
+            We&apos;ll email an invite link to them. You can also copy the link below as a backup.
           </DialogDescription>
         </DialogHeader>
 
@@ -74,7 +73,8 @@ export function InviteMemberButton() {
             <div className="rounded-lg border border-accent/30 bg-accent/5 p-4">
               <p className="text-sm font-medium">Invite created for {state.email}</p>
               <p className="mt-1 text-xs text-muted-foreground">
-                Send this link to them. It expires in 7 days.
+                We&apos;ve emailed an invite to {state.email}. Copy the link below if they
+                don&apos;t receive it. It expires in 7 days.
               </p>
               <div className="mt-3 flex items-center gap-2">
                 <Input value={state.url} readOnly className="font-mono text-xs" />

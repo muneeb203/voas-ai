@@ -29,6 +29,10 @@ class Settings(BaseSettings):
 
     resend_api_key: str | None = None
     email_from: str = "no-reply@voas.ai"
+    smtp_host: str | None = None
+    smtp_port: int = 587
+    smtp_user: str | None = None
+    smtp_password: str | None = None
 
     rate_limit_global_per_hour: int = Field(default=1000, ge=1)
     rate_limit_writes_per_minute: int = Field(default=100, ge=1)
