@@ -55,7 +55,7 @@ class Settings(BaseSettings):
 
     # --- Dashboard help bot (Gemini). No-op without GEMINI_API_KEY. ---
     gemini_api_key: str | None = None
-    gemini_model: str = "gemini-2.0-flash"
+    gemini_model: str = "gemini-1.5-flash"
     gemini_base_url: str = "https://generativelanguage.googleapis.com/v1beta"
 
     @property

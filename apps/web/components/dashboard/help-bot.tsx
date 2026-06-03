@@ -38,7 +38,10 @@ export function HelpBot() {
     setInput('');
 
     startTransition(async () => {
-      const result = await helpChatAction(text, pathname, history.slice(0, -1));
+      const prior = history
+        .slice(0, -1)
+        .filter((m) => !(m.role === 'assistant' && m.content === GREETING));
+      const result = await helpChatAction(text, pathname, prior);
       if (result.error) {
         setMessages((prev) => [
           ...prev,
