@@ -1,5 +1,6 @@
 import { Sidebar } from '@/components/dashboard/sidebar';
 import { Topbar } from '@/components/dashboard/topbar';
+import { HelpBot } from '@/components/dashboard/help-bot';
 import { ImpersonationBanner } from '@/components/admin/impersonation-banner';
 import { requireDashboardSession } from '@/lib/auth/workspace';
 
@@ -24,6 +25,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
           <main className="flex-1">
             <div className="mx-auto max-w-7xl px-4 py-8 lg:px-8">{children}</div>
           </main>
+          <HelpBot />
         </div>
       </div>
     </div>

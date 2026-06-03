@@ -53,6 +53,11 @@ class Settings(BaseSettings):
     # Twilio's shared WhatsApp sandbox number — shown as a hint in the UI.
     twilio_whatsapp_sandbox_number: str = "+14155238886"
 
+    # --- Dashboard help bot (Gemini). No-op without GEMINI_API_KEY. ---
+    gemini_api_key: str | None = None
+    gemini_model: str = "gemini-2.0-flash"
+    gemini_base_url: str = "https://generativelanguage.googleapis.com/v1beta"
+
     @property
     def cors_origins_list(self) -> list[str]:
         return [o.strip() for o in self.cors_origins.split(",") if o.strip()]

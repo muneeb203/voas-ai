@@ -420,6 +420,15 @@ export interface TodayStats {
   avg_sentiment_today: number | null;
 }
 
+export interface HelpChatTurn {
+  role: 'user' | 'assistant';
+  content: string;
+}
+
+export interface HelpChatReply {
+  reply: string;
+}
+
 export interface ContactSubmission {
   id: string;
   name: string;
