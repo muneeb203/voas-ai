@@ -42,9 +42,9 @@ export default async function IntegrationsPage() {
   const waConfigResults = await Promise.all(
     locations.map((loc) => getLocationWhatsAppConfig(workspaceId, loc.id)),
   );
-  const waLocationConfigs = waConfigResults
-    .filter((r) => !isApiError(r) && r.data !== null)
-    .map((r) => r.data!);
+  const waLocationConfigs = waConfigResults.flatMap((r) =>
+    isApiError(r) || r.data === null ? [] : [r.data],
+  );
   const hasLiveWhatsAppLocation = waLocationConfigs.some((c) => c.enabled);
 
   return (
