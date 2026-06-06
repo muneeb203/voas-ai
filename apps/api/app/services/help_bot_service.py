@@ -14,7 +14,7 @@ from typing import Any
 
 import httpx
 
-from app.config import get_settings
+from app.config import Settings, get_settings
 from app.core.logging import get_logger
 from app.core.supabase import get_supabase_admin
 from app.models.help import HelpChatRequest, HelpChatReply, HelpChatTurn
@@ -57,9 +57,17 @@ def _rate_limit_ok(user_id: str) -> bool:
     return True
 
 
+def _server_capability_hints(settings: Settings) -> list[str]:
+    return [
+        f"Server Vapi configured: {'yes' if settings.vapi_api_key else 'no'}",
+        f"Server OpenAI configured (WhatsApp AI): {'yes' if settings.openai_api_key else 'no'}",
+    ]
+
+
 def _workspace_hints(workspace_id: str) -> str:
     db = get_supabase_admin()
-    hints: list[str] = []
+    settings = get_settings()
+    hints: list[str] = _server_capability_hints(settings)
 
     try:
         loc_res = (
@@ -68,7 +76,8 @@ def _workspace_hints(workspace_id: str) -> str:
             .eq("workspace_id", workspace_id)
             .execute()
         )
-        hints.append(f"Locations configured: {len(loc_res.data or [])}")
+        location_ids = [row["id"] for row in (loc_res.data or []) if row.get("id")]
+        hints.append(f"Locations configured: {len(location_ids)}")
 
         voice_res = (
             db.table("voice_settings")
@@ -80,8 +89,25 @@ def _workspace_hints(workspace_id: str) -> str:
         if voice_res.data:
             row = voice_res.data[0]
             hints.append(
-                f"Voice agent: {'enabled' if row.get('enabled') else 'disabled'}, "
-                f"Vapi synced: {'yes' if row.get('vapi_assistant_id') else 'no'}"
+                f"Voice workspace agent: {'enabled' if row.get('enabled') else 'disabled'}, "
+                f"Vapi assistant synced: {'yes' if row.get('vapi_assistant_id') else 'no'}"
+            )
+
+        if location_ids:
+            voice_loc_res = (
+                db.table("location_voice_config")
+                .select("enabled, vapi_phone_number_id")
+                .eq("workspace_id", workspace_id)
+                .execute()
+            )
+            voice_rows = voice_loc_res.data or []
+            voice_live = sum(
+                1
+                for r in voice_rows
+                if r.get("enabled") and r.get("vapi_phone_number_id")
+            )
+            hints.append(
+                f"Locations with live voice phone: {voice_live} of {len(location_ids)}"
             )
 
         try:
@@ -94,8 +120,17 @@ def _workspace_hints(workspace_id: str) -> str:
             )
             if wa_res.data:
                 hints.append(
-                    f"WhatsApp workspace setting enabled: {bool(wa_res.data[0].get('enabled'))}"
+                    f"WhatsApp workspace agent: "
+                    f"{'enabled' if wa_res.data[0].get('enabled') else 'disabled'}"
                 )
+            wa_loc_res = (
+                db.table("location_whatsapp_config")
+                .select("enabled")
+                .eq("workspace_id", workspace_id)
+                .execute()
+            )
+            wa_live = sum(1 for r in (wa_loc_res.data or []) if r.get("enabled"))
+            hints.append(f"Locations with WhatsApp enabled: {wa_live} of {len(location_ids)}")
         except Exception:  # noqa: BLE001
             hints.append("WhatsApp settings: not configured")
 
@@ -106,6 +141,22 @@ def _workspace_hints(workspace_id: str) -> str:
             .execute()
         )
         hints.append(f"Menu categories: {len(cat_res.data or [])}")
+
+        item_res = (
+            db.table("menu_items")
+            .select("id")
+            .eq("workspace_id", workspace_id)
+            .execute()
+        )
+        hints.append(f"Menu items: {len(item_res.data or [])}")
+
+        member_res = (
+            db.table("workspace_members")
+            .select("id")
+            .eq("workspace_id", workspace_id)
+            .execute()
+        )
+        hints.append(f"Team members: {len(member_res.data or [])}")
     except Exception as exc:  # noqa: BLE001
         log.warning("help_bot_hints_failed", workspace_id=workspace_id, error=str(exc))
         hints.append("Workspace context partially unavailable.")
@@ -113,13 +164,14 @@ def _workspace_hints(workspace_id: str) -> str:
     return "\n".join(hints)
 
 
-def _build_system_prompt(workspace_id: str, page_path: str) -> str:
+def _build_system_prompt(workspace_id: str, page_path: str, member_role: str) -> str:
     guide = _load_product_guide()
     hints = _workspace_hints(workspace_id)
     return (
         f"{guide}\n\n"
         f"---\n"
         f"Current page path: {page_path}\n"
+        f"Logged-in user role in this workspace: {member_role}\n"
         f"Workspace context:\n{hints}\n"
         f"Answer only about using VOAS AI. Be concise and actionable."
     )
@@ -170,12 +222,23 @@ def _call_gemini(system_prompt: str, contents: list[dict[str, Any]]) -> str | No
             if res.status_code == 404:
                 return (
                     "The configured Gemini model was not found. Ask your admin to set "
-                    "GEMINI_MODEL=gemini-1.5-flash on the backend."
+                    "GEMINI_MODEL=gemini-3.1-flash-lite on the API (older models are retired)."
+                )
+            if res.status_code == 429:
+                return (
+                    "The help assistant is temporarily unavailable (AI rate limit). "
+                    "Try again in a minute, or open Support from the sidebar."
                 )
             if isinstance(detail, dict):
                 msg = (detail.get("error") or {}).get("message")
                 if isinstance(msg, str) and msg:
-                    return f"Gemini error: {msg}"
+                    lowered = msg.lower()
+                    if "quota" in lowered or "rate" in lowered or "resource_exhausted" in lowered:
+                        return (
+                            "The help assistant is temporarily unavailable (AI quota). "
+                            "Try again later, or open Support from the sidebar."
+                        )
+                    log.error("help_bot_gemini_message", message=msg)
             return None
         data = res.json()
         candidates = data.get("candidates") or []
@@ -193,6 +256,7 @@ def _call_gemini(system_prompt: str, contents: list[dict[str, Any]]) -> str | No
 def chat(
     workspace_id: str,
     user_id: str,
+    member_role: str,
     payload: HelpChatRequest,
 ) -> HelpChatReply:
     try:
@@ -202,7 +266,9 @@ def chat(
             )
 
         system_prompt = _build_system_prompt(
-            workspace_id, payload.page_path.strip() or "/dashboard"
+            workspace_id,
+            payload.page_path.strip() or "/dashboard",
+            member_role,
         )
         contents = _to_gemini_contents(payload.history, payload.message.strip())
         reply = _call_gemini(system_prompt, contents)
