@@ -170,12 +170,23 @@ def _call_gemini(system_prompt: str, contents: list[dict[str, Any]]) -> str | No
             if res.status_code == 404:
                 return (
                     "The configured Gemini model was not found. Ask your admin to set "
-                    "GEMINI_MODEL=gemini-1.5-flash on the backend."
+                    "GEMINI_MODEL=gemini-3.1-flash-lite on the API (older models are retired)."
+                )
+            if res.status_code == 429:
+                return (
+                    "The help assistant is temporarily unavailable (AI rate limit). "
+                    "Try again in a minute, or open Support from the sidebar."
                 )
             if isinstance(detail, dict):
                 msg = (detail.get("error") or {}).get("message")
                 if isinstance(msg, str) and msg:
-                    return f"Gemini error: {msg}"
+                    lowered = msg.lower()
+                    if "quota" in lowered or "rate" in lowered or "resource_exhausted" in lowered:
+                        return (
+                            "The help assistant is temporarily unavailable (AI quota). "
+                            "Try again later, or open Support from the sidebar."
+                        )
+                    log.error("help_bot_gemini_message", message=msg)
             return None
         data = res.json()
         candidates = data.get("candidates") or []
