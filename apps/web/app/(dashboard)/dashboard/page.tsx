@@ -13,6 +13,7 @@ import { listLocations } from '@/lib/api/locations';
 import { listMembers } from '@/lib/api/members';
 import { getTodayStats } from '@/lib/api/analytics';
 import { getVoiceSettings } from '@/lib/api/voice';
+import { getWhatsAppSettings, getLocationWhatsAppConfig } from '@/lib/api/whatsapp';
 import { isApiError } from '@/lib/types';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -53,18 +54,31 @@ export default async function DashboardHome() {
   const session = await requireDashboardSession('/dashboard');
   const workspaceId = session.active.workspace_id;
 
-  const [locationsRes, membersRes, todayRes, voiceRes] = await Promise.all([
+  const [locationsRes, membersRes, todayRes, voiceRes, waSettingsRes] = await Promise.all([
     listLocations(workspaceId),
     listMembers(workspaceId),
     getTodayStats(workspaceId),
     getVoiceSettings(workspaceId),
+    getWhatsAppSettings(workspaceId),
   ]);
 
-  const hasLocation = !isApiError(locationsRes) && locationsRes.data.length > 0;
+  const locations = !isApiError(locationsRes) ? locationsRes.data : [];
+  const hasLocation = locations.length > 0;
   const hasInvitedTeam = !isApiError(membersRes) && membersRes.data.length > 1;
   const today = !isApiError(todayRes) ? todayRes.data : null;
   const voiceConfigured =
     !isApiError(voiceRes) && voiceRes.data.vapi_assistant_id !== null;
+
+  const waSettings = !isApiError(waSettingsRes) ? waSettingsRes.data : null;
+  const waConfigResults =
+    locations.length > 0
+      ? await Promise.all(
+          locations.map((loc) => getLocationWhatsAppConfig(workspaceId, loc.id)),
+        )
+      : [];
+  const whatsappConfigured =
+    (waSettings?.enabled ?? false) &&
+    waConfigResults.some((r) => !isApiError(r) && r.data?.enabled);
 
   const stats: StatCardData[] = [
     {
@@ -115,8 +129,8 @@ export default async function DashboardHome() {
       icon: MessageSquare,
       title: 'Configure WhatsApp',
       description: 'Answer WhatsApp messages with the same AI agent.',
-      href: '/integrations',
-      done: false,
+      href: '/integrations/whatsapp',
+      done: whatsappConfigured,
     },
   ];
 
