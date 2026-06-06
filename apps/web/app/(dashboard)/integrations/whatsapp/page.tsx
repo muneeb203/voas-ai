@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
-import { ArrowLeft, AlertCircle, MessageSquare, Wrench } from 'lucide-react';
+import { ArrowLeft, AlertCircle, MessageSquare } from 'lucide-react';
 import { requireDashboardSession } from '@/lib/auth/workspace';
 import {
   getWhatsAppCapabilities,
@@ -60,17 +60,6 @@ export default async function WhatsAppSettingsPage() {
         title="WhatsApp"
         description="Your AI agent answers WhatsApp messages via Twilio. Configure the agent here, then add a WhatsApp number per location."
       />
-
-      <div className="flex items-start gap-2 rounded-md border border-warning/40 bg-warning/10 p-3 text-sm">
-        <Wrench className="mt-0.5 h-4 w-4 flex-shrink-0 text-warning" />
-        <div>
-          <p className="font-medium">Under maintenance</p>
-          <p className="mt-1 text-muted-foreground">
-            WhatsApp is still being finalized and isn&apos;t live yet. Settings you save here
-            won&apos;t take effect until the integration is fully enabled.
-          </p>
-        </div>
-      </div>
 
       {!caps.openai_configured && (
         <div className="flex items-start gap-2 rounded-md border border-warning/40 bg-warning/10 p-3 text-sm">
