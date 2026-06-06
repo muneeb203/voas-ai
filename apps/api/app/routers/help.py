@@ -17,5 +17,5 @@ async def help_chat(
     payload: HelpChatRequest,
 ) -> DataResponse[HelpChatReply]:
     return ok(
-        help_bot_service.chat(ctx.workspace_id, ctx.user.id, payload),
+        help_bot_service.chat(ctx.workspace_id, ctx.user.id, ctx.role, payload),
     )
