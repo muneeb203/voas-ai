@@ -27,6 +27,7 @@ from app.routers import (
     locations,
     members,
     menu,
+    notifications,
     orders,
     tickets,
     voice,
@@ -113,6 +114,7 @@ def create_app() -> FastAPI:
     app.include_router(menu.router, prefix="/v1")
     app.include_router(analytics.router, prefix="/v1")
     app.include_router(help.router, prefix="/v1")
+    app.include_router(notifications.router, prefix="/v1")
     app.include_router(voice.router, prefix="/v1")
     app.include_router(whatsapp.router, prefix="/v1")
     app.include_router(webhooks.router, prefix="/v1")

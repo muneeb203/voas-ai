@@ -429,6 +429,37 @@ export interface HelpChatReply {
   reply: string;
 }
 
+export type NotificationType = 'order_placed' | 'product_update';
+
+export interface Notification {
+  id: string;
+  user_id: string;
+  workspace_id: string | null;
+  type: NotificationType;
+  title: string;
+  body: string | null;
+  link: string | null;
+  resource_type: string | null;
+  resource_id: string | null;
+  read_at: string | null;
+  created_at: string;
+}
+
+export interface NotificationList {
+  items: Notification[];
+  unread_count: number;
+}
+
+export interface Announcement {
+  id: string;
+  title: string;
+  body: string;
+  link: string | null;
+  created_by_admin_id: string | null;
+  published_at: string;
+  created_at: string;
+}
+
 export interface ContactSubmission {
   id: string;
   name: string;

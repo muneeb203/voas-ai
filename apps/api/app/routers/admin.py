@@ -16,6 +16,7 @@ from app.models.ticket import (
     TicketStatus,
     TicketWithMessages,
 )
+from app.models.notification import Announcement, AnnouncementCreate
 from app.models.workspace import Workspace
 from app.services import (
     admin_audit_service,
@@ -23,6 +24,7 @@ from app.services import (
     admin_ticket_service,
     admin_user_service,
     admin_workspace_service,
+    announcement_service,
     impersonation_service,
 )
 from app.utils.responses import DataResponse, ok
@@ -210,5 +212,31 @@ async def list_audit_logs(
     return ok(
         admin_audit_service.list_entries(
             actor_type=actor_type, action=action, workspace_id=workspace_id
+        )
+    )
+
+
+# ---------- Announcements ---------------------------------------------------
+
+
+@router.get("/announcements", response_model=DataResponse[list[Announcement]])
+async def list_announcements(_: AdminContextDep) -> DataResponse[list[Announcement]]:
+    return ok(announcement_service.list_announcements())
+
+
+@router.post(
+    "/announcements",
+    response_model=DataResponse[Announcement],
+    status_code=status.HTTP_201_CREATED,
+)
+async def publish_announcement(
+    payload: AnnouncementCreate,
+    ctx: AdminContextDep,
+) -> DataResponse[Announcement]:
+    return ok(
+        announcement_service.publish(
+            payload,
+            admin_id=ctx.admin_id,
+            admin_user_id=ctx.user.id,
         )
     )

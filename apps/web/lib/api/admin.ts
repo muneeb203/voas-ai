@@ -1,6 +1,7 @@
 import 'server-only';
 import { apiCall } from './client';
 import type {
+  Announcement,
   Location,
   Member,
   SupportTicket,
@@ -195,4 +196,22 @@ export function listAdminAuditLogs(params: {
   if (params.workspace_id) qs.set('workspace_id', params.workspace_id);
   const suffix = qs.toString() ? `?${qs}` : '';
   return apiCall<AdminAuditEntry[]>(`/v1/admin/audit-logs${suffix}`, { cache: 'no-store' });
+}
+
+export function listAnnouncements() {
+  return apiCall<Announcement[]>(`/v1/admin/announcements`, {
+    cache: 'no-store',
+  });
+}
+
+export function publishAnnouncement(payload: {
+  title: string;
+  body: string;
+  link?: string | null;
+}) {
+  return apiCall<Announcement>(`/v1/admin/announcements`, {
+    method: 'POST',
+    body: payload,
+    cache: 'no-store',
+  });
 }
