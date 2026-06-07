@@ -1,8 +1,9 @@
 'use client';
 
 import { useState } from 'react';
-import { Menu, X, Bell, ChevronDown, LogOut, Settings as SettingsIcon } from 'lucide-react';
 import Link from 'next/link';
+import { NotificationBell } from './notification-bell';
+import { Menu, X, ChevronDown, LogOut, Settings as SettingsIcon } from 'lucide-react';
 import { Sidebar } from './sidebar';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import {
@@ -62,13 +63,7 @@ export function Topbar({
         </div>
 
         <div className="flex items-center gap-2">
-          <button
-            type="button"
-            className="rounded-md p-2 text-muted-foreground hover:bg-muted hover:text-foreground"
-            aria-label="Notifications"
-          >
-            <Bell className="h-4 w-4" />
-          </button>
+          <NotificationBell />
 
           <DropdownMenu>
             <DropdownMenuTrigger asChild>

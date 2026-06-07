@@ -203,6 +203,22 @@ def place_order_from_tool_call(
     except Exception as exc:  # noqa: BLE001
         log.error("order_confirmation_failed", order_id=order["id"], error=str(exc))
 
+    try:
+        from app.services import notification_service
+
+        total_display = f"${total_cents / 100:.2f}"
+        notification_service.notify_workspace_order(
+            workspace_id=workspace_id,
+            order_id=order["id"],
+            title=f"New order · {total_display} {fulfillment}",
+            body=(
+                f"{sum(int(i['quantity']) for i in items_json)} items"
+                + (f" · {customer_phone}" if customer_phone else "")
+            ),
+        )
+    except Exception as exc:  # noqa: BLE001
+        log.error("order_notification_failed", order_id=order["id"], error=str(exc))
+
     return {
         "success": True,
         "order_id": order["id"],
