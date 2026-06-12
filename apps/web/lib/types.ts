@@ -1,5 +1,7 @@
 import type { WorkspaceRole, Vertical, PlanId } from './constants';
 
+export type { PlanId };
+
 export interface Workspace {
   id: string;
   name: string;
@@ -7,6 +9,7 @@ export interface Workspace {
   plan: PlanId;
   vertical: Vertical;
   status: 'active' | 'suspended' | 'deleted';
+  usage_enforcement_disabled?: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -429,7 +432,7 @@ export interface HelpChatReply {
   reply: string;
 }
 
-export type NotificationType = 'order_placed' | 'product_update';
+export type NotificationType = 'order_placed' | 'product_update' | 'usage_limit';
 
 export interface Notification {
   id: string;
@@ -458,6 +461,76 @@ export interface Announcement {
   created_by_admin_id: string | null;
   published_at: string;
   created_at: string;
+}
+
+export interface UsageMetric {
+  used: number;
+  plan_limit: number | null;
+  bonus_remaining: number;
+  effective_limit: number | null;
+  percent_used: number | null;
+}
+
+export interface TokenUsage {
+  openai_tokens: number;
+  gemini_tokens: number;
+  total_tokens: number;
+}
+
+export interface BillingPeriod {
+  start: string;
+  end: string;
+  days_remaining: number;
+}
+
+export interface BillingPlan {
+  slug: PlanId;
+  name: string;
+  price_cents_monthly: number;
+  voice_minutes_limit: number | null;
+  whatsapp_messages_limit: number | null;
+  help_bot_turns_limit: number | null;
+  allowed_channels: string[];
+}
+
+export interface UsageSummary {
+  plan: BillingPlan;
+  period: BillingPeriod;
+  voice_minutes: UsageMetric;
+  whatsapp_messages: UsageMetric;
+  help_bot_turns: UsageMetric;
+  tokens: TokenUsage;
+  usage_enforcement_disabled: boolean;
+  enforcement_active: boolean;
+}
+
+export type CreditType = 'voice_minutes' | 'whatsapp_messages' | 'help_bot_turns';
+
+export interface CreditGrant {
+  id: string;
+  workspace_id: string;
+  credit_type: CreditType;
+  amount_total: number;
+  amount_remaining: number;
+  reason: string | null;
+  granted_by_admin_id: string | null;
+  created_at: string;
+}
+
+export interface AdminWorkspaceUsageRow {
+  workspace_id: string;
+  workspace_name: string;
+  plan: PlanId;
+  status: string;
+  voice_used: number;
+  voice_limit: number | null;
+  whatsapp_used: number;
+  whatsapp_limit: number | null;
+  help_used: number;
+  help_limit: number | null;
+  total_tokens: number;
+  usage_enforcement_disabled: boolean;
+  period_end: string;
 }
 
 export interface ContactSubmission {

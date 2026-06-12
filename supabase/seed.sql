@@ -46,7 +46,7 @@ begin
 
   -- V1: Workspace, owner, location, ticket
   insert into public.workspaces (name, slug, plan, vertical)
-  values ('Pino''s Pizza', 'pinos-pizza', 'starter', 'restaurant')
+  values ('Pino''s Pizza', 'pinos-pizza', 'professional', 'restaurant')
   on conflict (slug) do update set updated_at = now()
   returning id into v_workspace_id;
 

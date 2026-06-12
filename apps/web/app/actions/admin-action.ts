@@ -112,3 +112,31 @@ export async function adminUpdateContactStatusAction(
   revalidatePath('/admin/contact-submissions');
   return { error: null };
 }
+
+// --- Billing / usage -------------------------------------------------------
+
+export async function grantWorkspaceCreditsAction(
+  workspaceId: string,
+  body: { credit_type: import('@/lib/types').CreditType; amount: number; reason?: string },
+) {
+  await requireAdminSession(`/admin/workspaces/${workspaceId}`);
+  const { grantWorkspaceCredits } = await import('@/lib/api/admin');
+  const res = await grantWorkspaceCredits(workspaceId, body);
+  if (isApiError(res)) return { error: res.error.message };
+  revalidatePath(`/admin/workspaces/${workspaceId}`);
+  revalidatePath('/admin/usage');
+  return { error: null };
+}
+
+export async function updateWorkspaceBillingAction(
+  workspaceId: string,
+  body: { plan?: import('@/lib/types').PlanId; usage_enforcement_disabled?: boolean },
+) {
+  await requireAdminSession(`/admin/workspaces/${workspaceId}`);
+  const { updateAdminWorkspaceBilling } = await import('@/lib/api/admin');
+  const res = await updateAdminWorkspaceBilling(workspaceId, body);
+  if (isApiError(res)) return { error: res.error.message };
+  revalidatePath(`/admin/workspaces/${workspaceId}`);
+  revalidatePath('/admin/usage');
+  return { error: null };
+}

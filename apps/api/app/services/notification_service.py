@@ -158,3 +158,44 @@ def notify_all_users_product_update(
         recipients=len(rows),
     )
     return len(rows)
+
+
+def notify_workspace_usage_limit(
+    *,
+    workspace_id: str,
+    title: str,
+    body: str | None = None,
+    link: str = "/settings?tab=billing",
+) -> None:
+    """Alert workspace owners and managers about usage thresholds."""
+    db = get_supabase_admin()
+    members_res = (
+        db.table("workspace_members")
+        .select("user_id")
+        .eq("workspace_id", workspace_id)
+        .in_("role", ["owner", "manager"])
+        .execute()
+    )
+    user_ids = list({str(r["user_id"]) for r in members_res.data or [] if r.get("user_id")})
+    if not user_ids:
+        return
+
+    rows = [
+        {
+            "user_id": uid,
+            "workspace_id": workspace_id,
+            "type": "usage_limit",
+            "title": title,
+            "body": body,
+            "link": link,
+            "resource_type": "workspace",
+            "resource_id": workspace_id,
+        }
+        for uid in user_ids
+    ]
+    _insert_batch(rows)
+    log.info(
+        "usage_limit_notifications_sent",
+        workspace_id=workspace_id,
+        recipients=len(rows),
+    )

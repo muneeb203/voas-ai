@@ -19,6 +19,7 @@ from app.core.logging import get_logger
 from app.core.supabase import get_supabase_admin
 from app.integrations import twilio_whatsapp, vapi
 from app.services import (
+    billing_service,
     customer_service,
     voice_order_service,
     voice_service,
@@ -110,6 +111,14 @@ async def vapi_webhook(
     if event_type == "status-update":
         status_val = message.get("status")
         if status_val == "in-progress" and call_id:
+            if not billing_service.check_allowed(
+                workspace_id, "voice_minutes", channel="voice"
+            ):
+                log.warning(
+                    "vapi_voice_limit_reached",
+                    workspace_id=workspace_id,
+                    call_id=call_id,
+                )
             _ensure_conversation(workspace_id, location_id, call, message)
         return {"status": "ok"}
 
@@ -134,6 +143,16 @@ async def vapi_webhook(
                 args = {}
 
             if name == "place_order":
+                if not billing_service.check_allowed(
+                    workspace_id, "voice_minutes", channel="voice"
+                ):
+                    results.append(
+                        {
+                            "toolCallId": tc_id,
+                            "result": billing_service.limit_reached_message("voice_minutes"),
+                        }
+                    )
+                    continue
                 order_result = voice_order_service.place_order_from_tool_call(
                     workspace_id=workspace_id,
                     location_id=location_id,
@@ -200,6 +219,14 @@ async def vapi_webhook(
                     "recording_url": recording_url,
                 }
             ).eq("id", conv["id"]).execute()
+
+            billing_service.record_voice_call_minutes(
+                workspace_id=workspace_id,
+                location_id=location_id,
+                conversation_id=conv["id"],
+                duration_seconds=duration,
+                vapi_call_id=call_id,
+            )
         return {"status": "ok"}
 
     return {"status": "ignored"}
@@ -376,6 +403,33 @@ async def whatsapp_webhook(
 
     settings_row = whatsapp_service.get_or_create_settings(workspace_id)
 
+    if not billing_service.channel_allowed(workspace_id, "whatsapp"):
+        log.warning("whatsapp_channel_not_in_plan", workspace_id=workspace_id)
+        twilio_whatsapp.send_whatsapp_message(
+            to=from_number,
+            from_=to_number,
+            body=(
+                "WhatsApp ordering isn't included in your current plan. "
+                "Please call us instead."
+            ),
+            account_sid=config.twilio_account_sid,
+            auth_token=config.twilio_auth_token,
+        )
+        return _twiml_ok()
+
+    if not billing_service.check_allowed(
+        workspace_id, "whatsapp_in", channel="whatsapp"
+    ):
+        log.warning("whatsapp_usage_limit", workspace_id=workspace_id)
+        twilio_whatsapp.send_whatsapp_message(
+            to=from_number,
+            from_=to_number,
+            body=billing_service.limit_reached_message("whatsapp_in"),
+            account_sid=config.twilio_account_sid,
+            auth_token=config.twilio_auth_token,
+        )
+        return _twiml_ok()
+
     db = get_supabase_admin()
     try:
         customer = customer_service.upsert_by_phone(
@@ -407,6 +461,14 @@ async def whatsapp_webhook(
             }
         ).execute()
 
+        billing_service.record_usage(
+            workspace_id=workspace_id,
+            event_type="whatsapp_in",
+            location_id=location_id,
+            conversation_id=conversation_id,
+            idempotency_key=f"wa-in:{message_sid}" if message_sid else None,
+        )
+
         result = whatsapp_ai_service.get_ai_reply(workspace_id, conversation_id, body)
         reply_text = result.get("reply") or "Thanks for your message!"
 
@@ -433,6 +495,19 @@ async def whatsapp_webhook(
             body=reply_text,
             account_sid=config.twilio_account_sid,
             auth_token=config.twilio_auth_token,
+        )
+
+        usage = result.get("usage") or {}
+        billing_service.record_usage(
+            workspace_id=workspace_id,
+            event_type="whatsapp_out",
+            location_id=location_id,
+            conversation_id=conversation_id,
+            idempotency_key=f"wa-out:{message_sid}" if message_sid else None,
+            prompt_tokens=usage.get("prompt_tokens"),
+            completion_tokens=usage.get("completion_tokens"),
+            total_tokens=usage.get("total_tokens"),
+            provider="openai" if usage.get("total_tokens") else None,
         )
 
         log.info(

@@ -21,25 +21,44 @@ export type Vertical = (typeof VERTICALS)[number]['value'];
 
 export const PLANS = [
   {
-    id: 'starter',
-    name: 'Starter',
+    id: 'essentials',
+    name: 'Essentials',
     priceMonthly: 149,
-    blurb: 'For single-location SMBs getting started.',
-    features: ['1 location', '500 conversations/mo', 'Voice + WhatsApp', 'Email support'],
+    blurb: 'Voice-only AI front desk for single locations.',
+    features: ['1 location', '300 voice minutes / period', 'Voice channel', 'Email support'],
   },
   {
-    id: 'growth',
-    name: 'Growth',
+    id: 'professional',
+    name: 'Professional',
     priceMonthly: 299,
-    blurb: 'For multi-location or higher-volume businesses.',
-    features: ['Up to 5 locations', '2,000 conversations/mo', 'All channels', 'Priority support'],
+    blurb: 'Voice + WhatsApp for growing restaurants.',
+    features: [
+      '1 location',
+      '500 voice minutes / period',
+      '2,000 WhatsApp messages / period',
+      'Voice + WhatsApp',
+      'Email support',
+    ],
   },
   {
-    id: 'scale',
-    name: 'Scale',
+    id: 'business',
+    name: 'Business',
     priceMonthly: 499,
-    blurb: 'For chains and franchises scaling fast.',
-    features: ['Up to 25 locations', 'Unlimited conversations', 'All channels', 'Dedicated CSM'],
+    blurb: 'Higher volume and multi-location teams.',
+    features: [
+      'Up to 5 locations',
+      '1,000 voice minutes / period',
+      '5,000 WhatsApp messages / period',
+      'All channels',
+      'Priority support',
+    ],
+  },
+  {
+    id: 'enterprise',
+    name: 'Enterprise',
+    priceMonthly: 0,
+    blurb: 'Custom limits for chains and franchises.',
+    features: ['Custom limits', 'Dedicated support', 'All channels'],
   },
 ] as const;
 export type PlanId = (typeof PLANS)[number]['id'];
@@ -66,5 +85,7 @@ export const ADMIN_NAV = [
   { href: '/admin/support', label: 'Support Inbox', icon: 'LifeBuoy' },
   { href: '/admin/audit-log', label: 'Audit Log', icon: 'ScrollText' },
   { href: '/admin/contact-submissions', label: 'Contact Forms', icon: 'Mail' },
+  { href: '/admin/announcements', label: 'Announcements', icon: 'Megaphone' },
+  { href: '/admin/usage', label: 'Usage & billing', icon: 'Gauge' },
   { href: '/admin/settings', label: 'Settings', icon: 'Settings' },
 ] as const;

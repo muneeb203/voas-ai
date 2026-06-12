@@ -4,11 +4,12 @@ import { notFound } from 'next/navigation';
 import { formatDistanceToNow } from 'date-fns';
 import { ArrowLeft } from 'lucide-react';
 import { requireAdminSession } from '@/lib/auth/admin';
-import { getAdminWorkspace, listAdminTickets, listAdminAuditLogs } from '@/lib/api/admin';
+import { getAdminWorkspace, listAdminTickets, listAdminAuditLogs, getAdminWorkspaceUsage, listAdminWorkspaceGrants } from '@/lib/api/admin';
 import { isApiError } from '@/lib/types';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { AdminWorkspaceBillingPanel } from '@/components/admin/admin-workspace-billing-panel';
 import {
   Table,
   TableBody,
@@ -31,15 +32,19 @@ export const metadata: Metadata = {
 
 export default async function AdminWorkspaceDetailPage({
   params,
+  searchParams,
 }: {
   params: { id: string };
+  searchParams: { tab?: string };
 }) {
   await requireAdminSession(`/admin/workspaces/${params.id}`);
 
-  const [detailRes, ticketsRes, auditRes] = await Promise.all([
+  const [detailRes, ticketsRes, auditRes, usageRes, grantsRes] = await Promise.all([
     getAdminWorkspace(params.id),
     listAdminTickets({ workspaceId: params.id }),
     listAdminAuditLogs({ workspace_id: params.id }),
+    getAdminWorkspaceUsage(params.id),
+    listAdminWorkspaceGrants(params.id),
   ]);
 
   if (isApiError(detailRes)) {
@@ -49,6 +54,7 @@ export default async function AdminWorkspaceDetailPage({
   const { workspace, members, locations } = detailRes.data;
   const tickets = !isApiError(ticketsRes) ? ticketsRes.data : [];
   const auditEntries = !isApiError(auditRes) ? auditRes.data : [];
+  const defaultTab = searchParams.tab === 'billing' ? 'billing' : 'overview';
 
   return (
     <div>
@@ -72,9 +78,10 @@ export default async function AdminWorkspaceDetailPage({
         }
       />
 
-      <Tabs defaultValue="overview" className="space-y-6">
+      <Tabs defaultValue={defaultTab} className="space-y-6">
         <TabsList>
           <TabsTrigger value="overview">Overview</TabsTrigger>
+          <TabsTrigger value="billing">Billing</TabsTrigger>
           <TabsTrigger value="members">Members ({members.length})</TabsTrigger>
           <TabsTrigger value="locations">Locations ({locations.length})</TabsTrigger>
           <TabsTrigger value="tickets">Tickets ({tickets.length})</TabsTrigger>
@@ -104,6 +111,22 @@ export default async function AdminWorkspaceDetailPage({
               </div>
             </CardContent>
           </Card>
+        </TabsContent>
+
+        <TabsContent value="billing">
+          {usageRes && !isApiError(usageRes) ? (
+            <AdminWorkspaceBillingPanel
+              workspaceId={workspace.id}
+              usage={usageRes.data}
+              grants={!isApiError(grantsRes) ? grantsRes.data : []}
+            />
+          ) : (
+            <Card>
+              <CardContent className="py-8 text-sm text-muted-foreground">
+                Could not load billing data for this workspace.
+              </CardContent>
+            </Card>
+          )}
         </TabsContent>
 
         <TabsContent value="members">

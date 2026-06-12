@@ -17,6 +17,13 @@ from app.models.ticket import (
     TicketWithMessages,
 )
 from app.models.notification import Announcement, AnnouncementCreate
+from app.models.billing import (
+    AdminBillingUpdate,
+    AdminWorkspaceUsageRow,
+    CreditGrant,
+    CreditGrantCreate,
+    UsageSummary,
+)
 from app.models.workspace import Workspace
 from app.services import (
     admin_audit_service,
@@ -25,6 +32,7 @@ from app.services import (
     admin_user_service,
     admin_workspace_service,
     announcement_service,
+    billing_service,
     impersonation_service,
 )
 from app.utils.responses import DataResponse, ok
@@ -240,3 +248,56 @@ async def publish_announcement(
             admin_user_id=ctx.user.id,
         )
     )
+
+
+# ---------- Billing / usage -------------------------------------------------
+
+
+@router.get("/usage", response_model=DataResponse[list[AdminWorkspaceUsageRow]])
+async def list_usage(_: AdminContextDep) -> DataResponse[list[AdminWorkspaceUsageRow]]:
+    return ok(billing_service.list_admin_usage())
+
+
+@router.get(
+    "/workspaces/{workspace_id}/billing/usage",
+    response_model=DataResponse[UsageSummary],
+)
+async def get_workspace_usage(
+    workspace_id: str, _: AdminContextDep
+) -> DataResponse[UsageSummary]:
+    return ok(billing_service.get_usage_summary(workspace_id))
+
+
+@router.get(
+    "/workspaces/{workspace_id}/billing/grants",
+    response_model=DataResponse[list[CreditGrant]],
+)
+async def list_workspace_grants(
+    workspace_id: str, _: AdminContextDep
+) -> DataResponse[list[CreditGrant]]:
+    return ok(billing_service.list_grants(workspace_id))
+
+
+@router.post(
+    "/workspaces/{workspace_id}/billing/grants",
+    response_model=DataResponse[CreditGrant],
+    status_code=status.HTTP_201_CREATED,
+)
+async def grant_workspace_credits(
+    workspace_id: str,
+    payload: CreditGrantCreate,
+    ctx: AdminContextDep,
+) -> DataResponse[CreditGrant]:
+    return ok(billing_service.grant_credits(workspace_id, payload, ctx.admin_id))
+
+
+@router.patch(
+    "/workspaces/{workspace_id}/billing",
+    response_model=DataResponse[UsageSummary],
+)
+async def update_workspace_billing(
+    workspace_id: str,
+    payload: AdminBillingUpdate,
+    ctx: AdminContextDep,
+) -> DataResponse[UsageSummary]:
+    return ok(billing_service.update_workspace_billing(workspace_id, payload, ctx.admin_id))

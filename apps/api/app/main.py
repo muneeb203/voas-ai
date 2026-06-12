@@ -19,6 +19,7 @@ from app.core.logging import configure_logging, get_logger
 from app.routers import (
     admin,
     analytics,
+    billing,
     contact,
     conversations,
     customers,
@@ -113,6 +114,7 @@ def create_app() -> FastAPI:
     app.include_router(orders.router, prefix="/v1")
     app.include_router(menu.router, prefix="/v1")
     app.include_router(analytics.router, prefix="/v1")
+    app.include_router(billing.router, prefix="/v1")
     app.include_router(help.router, prefix="/v1")
     app.include_router(notifications.router, prefix="/v1")
     app.include_router(voice.router, prefix="/v1")
