@@ -18,6 +18,7 @@ from app.config import Settings, get_settings
 from app.core.logging import get_logger
 from app.core.supabase import get_supabase_admin
 from app.models.help import HelpChatRequest, HelpChatReply, HelpChatTurn
+from app.services import billing_service
 
 log = get_logger(__name__)
 
@@ -191,11 +192,13 @@ def _to_gemini_contents(
     return contents
 
 
-def _call_gemini(system_prompt: str, contents: list[dict[str, Any]]) -> str | None:
+def _call_gemini(
+    system_prompt: str, contents: list[dict[str, Any]]
+) -> tuple[str | None, dict[str, int] | None]:
     settings = get_settings()
     if not settings.gemini_api_key:
         log.info("help_bot_gemini_stub")
-        return _STUB_REPLY
+        return _STUB_REPLY, None
 
     model = settings.gemini_model
     url = (
@@ -222,12 +225,14 @@ def _call_gemini(system_prompt: str, contents: list[dict[str, Any]]) -> str | No
             if res.status_code == 404:
                 return (
                     "The configured Gemini model was not found. Ask your admin to set "
-                    "GEMINI_MODEL=gemini-3.1-flash-lite on the API (older models are retired)."
+                    "GEMINI_MODEL=gemini-3.1-flash-lite on the API (older models are retired).",
+                    None,
                 )
             if res.status_code == 429:
                 return (
                     "The help assistant is temporarily unavailable (AI rate limit). "
-                    "Try again in a minute, or open Support from the sidebar."
+                    "Try again in a minute, or open Support from the sidebar.",
+                    None,
                 )
             if isinstance(detail, dict):
                 msg = (detail.get("error") or {}).get("message")
@@ -236,21 +241,33 @@ def _call_gemini(system_prompt: str, contents: list[dict[str, Any]]) -> str | No
                     if "quota" in lowered or "rate" in lowered or "resource_exhausted" in lowered:
                         return (
                             "The help assistant is temporarily unavailable (AI quota). "
-                            "Try again later, or open Support from the sidebar."
+                            "Try again later, or open Support from the sidebar.",
+                            None,
                         )
                     log.error("help_bot_gemini_message", message=msg)
-            return None
+            return None, None
         data = res.json()
         candidates = data.get("candidates") or []
         if not candidates:
-            return None
+            return None, None
         parts = (candidates[0].get("content") or {}).get("parts") or []
         texts = [p.get("text", "") for p in parts if isinstance(p, dict)]
         reply = "".join(texts).strip()
-        return reply or None
+        usage_raw = data.get("usageMetadata") or {}
+        usage: dict[str, int] | None = None
+        if usage_raw:
+            prompt = int(usage_raw.get("promptTokenCount") or 0)
+            completion = int(usage_raw.get("candidatesTokenCount") or 0)
+            total = int(usage_raw.get("totalTokenCount") or prompt + completion)
+            usage = {
+                "prompt_tokens": prompt,
+                "completion_tokens": completion,
+                "total_tokens": total,
+            }
+        return reply or None, usage
     except Exception as exc:  # noqa: BLE001
         log.error("help_bot_gemini_error", error=str(exc))
-        return None
+        return None, None
 
 
 def chat(
@@ -260,6 +277,15 @@ def chat(
     payload: HelpChatRequest,
 ) -> HelpChatReply:
     try:
+        if not billing_service.check_allowed(workspace_id, "help_bot_turn"):
+            return HelpChatReply(
+                reply=(
+                    "Your workspace has reached its help assistant limit for this "
+                    "billing period. Open Support from the sidebar or ask your owner "
+                    "to request additional credits."
+                )
+            )
+
         if not _rate_limit_ok(user_id):
             return HelpChatReply(
                 reply="You've sent a lot of messages — please wait a few minutes and try again."
@@ -271,9 +297,19 @@ def chat(
             member_role,
         )
         contents = _to_gemini_contents(payload.history, payload.message.strip())
-        reply = _call_gemini(system_prompt, contents)
+        reply, usage = _call_gemini(system_prompt, contents)
         if reply is None:
             reply = _FALLBACK_REPLY
+
+        billing_service.record_usage(
+            workspace_id=workspace_id,
+            event_type="help_bot_turn",
+            prompt_tokens=usage.get("prompt_tokens") if usage else None,
+            completion_tokens=usage.get("completion_tokens") if usage else None,
+            total_tokens=usage.get("total_tokens") if usage else None,
+            provider="gemini" if usage and usage.get("total_tokens") else None,
+            metadata={"user_id": user_id, "page_path": payload.page_path},
+        )
 
         log.info(
             "help_bot_reply",

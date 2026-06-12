@@ -54,7 +54,7 @@ def create_workspace(payload: WorkspaceCreate, user_id: str, user_email: str | N
 
     ws_res = (
         db.table("workspaces")
-        .insert({"name": payload.name, "slug": slug, "vertical": payload.vertical})
+        .insert({"name": payload.name, "slug": slug, "vertical": payload.vertical, "plan": "professional"})
         .execute()
     )
     if not ws_res.data:

@@ -104,6 +104,15 @@ def require_owner(ctx: WorkspaceContextDep) -> WorkspaceContext:
 OwnerContextDep = Annotated[WorkspaceContext, Depends(require_owner)]
 
 
+def require_manager_or_owner(ctx: WorkspaceContextDep) -> WorkspaceContext:
+    if ctx.role not in ("owner", "manager"):
+        raise ForbiddenError("Only workspace owners and managers can do this")
+    return ctx
+
+
+ManagerContextDep = Annotated[WorkspaceContext, Depends(require_manager_or_owner)]
+
+
 class AdminContext(BaseModel):
     user: CurrentUser
     admin_id: str

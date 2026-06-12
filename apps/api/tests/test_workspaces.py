@@ -17,7 +17,7 @@ def test_bootstrap_workspace_creates_workspace_and_owner(client: TestClient) -> 
         "id": "ws-1",
         "name": "Pino's Pizza",
         "slug": "pinos-pizza",
-        "plan": "starter",
+        "plan": "professional",
         "vertical": "restaurant",
         "status": "active",
         "created_at": "2026-05-20T12:00:00+00:00",

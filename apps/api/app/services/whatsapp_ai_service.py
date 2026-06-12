@@ -94,15 +94,17 @@ def _load_history(conversation_id: str) -> list[dict[str, str]]:
     return messages
 
 
-def _call_openai(model: str, messages: list[dict[str, str]]) -> str | None:
-    """Single OpenAI chat completion. Returns the assistant text, or None on
-    any failure (caller substitutes the fallback reply)."""
+def _call_openai(
+    model: str, messages: list[dict[str, str]]
+) -> tuple[str | None, dict[str, int] | None]:
+    """Single OpenAI chat completion. Returns (assistant text, token usage)."""
     settings = get_settings()
     if not settings.openai_api_key:
         log.info("whatsapp_openai_stub", model=model, turns=len(messages))
         return (
             "Thanks for your message! Our AI assistant isn't fully set up yet, "
-            "but someone from our team will follow up shortly."
+            "but someone from our team will follow up shortly.",
+            None,
         )
 
     url = f"{settings.openai_base_url}/chat/completions"
@@ -120,15 +122,24 @@ def _call_openai(model: str, messages: list[dict[str, str]]) -> str | None:
             except Exception:  # noqa: BLE001
                 detail = res.text
             log.error("whatsapp_openai_failed", status=res.status_code, detail=detail)
-            return None
+            return None, None
         data = res.json()
         choices = data.get("choices") or []
         if not choices:
-            return None
-        return (choices[0].get("message") or {}).get("content")
+            return None, None
+        text = (choices[0].get("message") or {}).get("content")
+        usage_raw = data.get("usage") or {}
+        usage: dict[str, int] | None = None
+        if usage_raw:
+            usage = {
+                "prompt_tokens": int(usage_raw.get("prompt_tokens") or 0),
+                "completion_tokens": int(usage_raw.get("completion_tokens") or 0),
+                "total_tokens": int(usage_raw.get("total_tokens") or 0),
+            }
+        return text, usage
     except Exception as exc:  # noqa: BLE001
         log.error("whatsapp_openai_error", error=str(exc))
-        return None
+        return None, None
 
 
 def get_ai_reply(
@@ -158,9 +169,9 @@ def get_ai_reply(
     messages.extend(_load_history(conversation_id))
     messages.append({"role": "user", "content": incoming_message})
 
-    raw_reply = _call_openai(settings_row.model, messages)
+    raw_reply, token_usage = _call_openai(settings_row.model, messages)
     if raw_reply is None:
-        return {"reply": _FALLBACK_REPLY, "order_placed": False, "order_id": None}
+        return {"reply": _FALLBACK_REPLY, "order_placed": False, "order_id": None, "usage": None}
 
     order_args = _extract_order(raw_reply)
     customer_reply = _strip_order_block(raw_reply) or "Got it!"
@@ -192,4 +203,9 @@ def get_ai_reply(
                 error=str(exc),
             )
 
-    return {"reply": customer_reply, "order_placed": order_placed, "order_id": order_id}
+    return {
+        "reply": customer_reply,
+        "order_placed": order_placed,
+        "order_id": order_id,
+        "usage": token_usage,
+    }
