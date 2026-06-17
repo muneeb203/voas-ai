@@ -52,6 +52,19 @@ export function VoiceSettingsForm({
   const [greeting, setGreeting] = useState<string>(settings.greeting);
   const [systemPrompt, setSystemPrompt] = useState<string>(settings.system_prompt);
 
+  // Voice selection: "custom" is a sentinel that reveals a freeform text
+  // input so owners can paste any ElevenLabs voice id directly.
+  const knownVoiceIds = new Set(capabilities.voices.map((v) => v.id));
+  const isKnownVoice = knownVoiceIds.has(settings.voice);
+  const [voiceSelect, setVoiceSelect] = useState<string>(
+    isKnownVoice ? settings.voice : 'custom',
+  );
+  const [customVoiceId, setCustomVoiceId] = useState<string>(
+    isKnownVoice ? '' : settings.voice,
+  );
+  // The actual value sent in the form submission.
+  const effectiveVoice = voiceSelect === 'custom' ? customVoiceId.trim() : voiceSelect;
+
   function handleLanguageChange(next: string) {
     const nextLang = next as VoiceLanguage;
     setLanguage(nextLang);
@@ -66,6 +79,15 @@ export function VoiceSettingsForm({
       setSystemPrompt(DEFAULT_SYSTEM_PROMPT_BY_LANG[nextLang]);
     }
   }
+
+  // Split voices into "recommended for this language" vs "also works"
+  const recommendedVoices = capabilities.voices.filter((v) =>
+    v.best_for.includes(language),
+  );
+  const otherVoices = capabilities.voices.filter(
+    (v) => !v.best_for.includes(language),
+  );
+  const isNonEnglishLang = language !== 'en';
 
   useEffect(() => {
     // Fire a toast only on the transition from pending → not pending
@@ -137,19 +159,88 @@ export function VoiceSettingsForm({
       </Field>
 
       <div className="grid gap-4 sm:grid-cols-2">
-        <Field label="Voice" htmlFor="voice" error={fieldErrors?.voice}>
-          <Select name="voice" defaultValue={settings.voice} disabled={disabled || pending}>
-            <SelectTrigger id="voice">
+        <Field
+          label="Voice"
+          htmlFor="voice-select"
+          error={fieldErrors?.voice}
+          hint={
+            isNonEnglishLang && voiceSelect !== 'custom'
+              ? recommendedVoices.some((v) => v.id === voiceSelect)
+                ? undefined
+                : 'This voice has a Western accent in Arabic/Urdu. Choose a multilingual voice for a more natural sound.'
+              : undefined
+          }
+        >
+          {/* Hidden input carries the real voice value for form submission */}
+          <input type="hidden" name="voice" value={effectiveVoice} />
+          <Select
+            value={voiceSelect}
+            onValueChange={setVoiceSelect}
+            disabled={disabled || pending}
+          >
+            <SelectTrigger id="voice-select">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              {capabilities.voices.map((v) => (
-                <SelectItem key={v.id} value={v.id}>
-                  {v.label}
-                </SelectItem>
-              ))}
+              {/* Recommended for the current language */}
+              {recommendedVoices.length > 0 && (
+                <>
+                  <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">
+                    {isNonEnglishLang ? '⭐ Recommended for this language' : 'Voices'}
+                  </div>
+                  {recommendedVoices.map((v) => (
+                    <SelectItem key={v.id} value={v.id}>
+                      {v.label}
+                    </SelectItem>
+                  ))}
+                </>
+              )}
+              {/* Other voices (still usable, just accent-flagged) */}
+              {otherVoices.length > 0 && (
+                <>
+                  {isNonEnglishLang && (
+                    <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">
+                      Also works (Western accent)
+                    </div>
+                  )}
+                  {otherVoices.map((v) => (
+                    <SelectItem key={v.id} value={v.id}>
+                      {v.label}
+                    </SelectItem>
+                  ))}
+                </>
+              )}
+              {/* Custom escape hatch */}
+              <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">
+                Advanced
+              </div>
+              <SelectItem value="custom">Custom ElevenLabs voice ID…</SelectItem>
             </SelectContent>
           </Select>
+          {/* Revealed when "Custom" is chosen */}
+          {voiceSelect === 'custom' && (
+            <div className="mt-2 space-y-1">
+              <Input
+                placeholder="e.g. 9BWtsMINqrJLrRacOk9x"
+                value={customVoiceId}
+                onChange={(e) => setCustomVoiceId(e.target.value)}
+                disabled={disabled || pending}
+                className="font-mono text-xs"
+              />
+              <p className="text-xs text-muted-foreground">
+                Paste any voice ID from{' '}
+                <a
+                  href="https://elevenlabs.io/voice-library"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="underline hover:text-foreground"
+                >
+                  ElevenLabs Voice Library
+                </a>
+                . Filter by Arabic or Urdu to find a native-accent voice.
+              </p>
+            </div>
+          )}
         </Field>
 
         <Field label="LLM" htmlFor="model" error={fieldErrors?.model}>

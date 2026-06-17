@@ -337,7 +337,7 @@ export interface LocationVoiceConfigSafe {
 }
 
 export interface VoiceCapabilities {
-  voices: Array<{ id: string; label: string }>;
+  voices: Array<{ id: string; label: string; best_for: VoiceLanguage[] }>;
   models: Array<{ id: string; label: string }>;
   languages: Array<{ id: VoiceLanguage; label: string }>;
   vapi_configured: boolean;
