@@ -6,10 +6,13 @@ from app.core.logging import get_logger
 from app.core.supabase import get_supabase_admin
 from app.integrations import vapi
 from app.models.voice import (
+    AVAILABLE_LANGUAGES,
     AVAILABLE_MODELS,
     AVAILABLE_VOICES,
     DEFAULT_GREETING,
+    DEFAULT_GREETING_BY_LANG,
     DEFAULT_SYSTEM_PROMPT,
+    DEFAULT_SYSTEM_PROMPT_BY_LANG,
     LocationVoiceConfig,
     LocationVoiceConfigSafe,
     LocationVoiceConfigUpsert,
@@ -33,6 +36,7 @@ def get_capabilities() -> VoiceCapabilities:
     return VoiceCapabilities(
         voices=AVAILABLE_VOICES,
         models=AVAILABLE_MODELS,
+        languages=AVAILABLE_LANGUAGES,
         vapi_configured=vapi.is_configured(),
         vapi_public_key=settings.vapi_public_key,
     )
@@ -174,6 +178,7 @@ def _sync_assistant(workspace_id: str, settings: VoiceSettings) -> str | None:
         model=settings.model,
         server_url=cfg.vapi_server_url,
         end_call_phrases=settings.end_call_phrases,
+        language=settings.language,
     )
 
     if settings.vapi_assistant_id:
@@ -190,6 +195,23 @@ def update_settings(
     db = get_supabase_admin()
 
     changes = payload.model_dump(exclude_none=True)
+
+    # If language is changing AND the user hasn't supplied a new
+    # prompt/greeting, AND their current ones are still the canned defaults
+    # from the previous language, auto-swap to the target language's
+    # defaults. This means "switch to Arabic" Just Works — the agent
+    # immediately speaks Arabic — without forcing the owner to translate
+    # the prompt by hand. If they've customized either string, we leave
+    # their version alone.
+    new_lang = changes.get("language")
+    if new_lang and new_lang != current.language:
+        defaults_for_old = DEFAULT_SYSTEM_PROMPT_BY_LANG.get(current.language, "")
+        greet_for_old = DEFAULT_GREETING_BY_LANG.get(current.language, "")
+        if "system_prompt" not in changes and current.system_prompt.strip() == defaults_for_old.strip():
+            changes["system_prompt"] = DEFAULT_SYSTEM_PROMPT_BY_LANG[new_lang]
+        if "greeting" not in changes and current.greeting.strip() == greet_for_old.strip():
+            changes["greeting"] = DEFAULT_GREETING_BY_LANG[new_lang]
+
     if changes:
         res = (
             db.table("voice_settings")

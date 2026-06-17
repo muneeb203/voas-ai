@@ -50,6 +50,30 @@ export function VoiceSettingsForm({
 
   return (
     <form action={formAction} className="space-y-5">
+      <Field
+        label="Language"
+        htmlFor="language"
+        error={fieldErrors?.language}
+        hint="Switching language auto-fills a fresh prompt and greeting in that language — unless you've customized them."
+      >
+        <Select
+          name="language"
+          defaultValue={settings.language}
+          disabled={disabled || pending}
+        >
+          <SelectTrigger id="language">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {capabilities.languages.map((l) => (
+              <SelectItem key={l.id} value={l.id}>
+                {l.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </Field>
+
       <Field label="Greeting" htmlFor="greeting" required error={fieldErrors?.greeting}>
         <Input
           id="greeting"
