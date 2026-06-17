@@ -506,6 +506,8 @@ export interface UsageSummary {
   tokens: TokenUsage;
   usage_enforcement_disabled: boolean;
   enforcement_active: boolean;
+  /** True when the workspace was auto-granted a free trial on signup. */
+  has_trial_grant: boolean;
 }
 
 export type CreditType = 'voice_minutes' | 'whatsapp_messages' | 'help_bot_turns';

@@ -10,6 +10,7 @@ import math
 from datetime import UTC, datetime, timedelta
 from typing import Any, Literal
 
+from app.config import get_settings
 from app.core.exceptions import NotFoundError
 from app.core.logging import get_logger
 from app.core.supabase import get_supabase_admin
@@ -233,6 +234,7 @@ def get_usage_summary(workspace_id: str) -> UsageSummary:
         ),
         usage_enforcement_disabled=enforcement_disabled,
         enforcement_active=not enforcement_disabled,
+        has_trial_grant=_has_trial_grant(workspace_id),
     )
 
 
@@ -488,6 +490,66 @@ def record_voice_call_minutes(
         idempotency_key=idem,
         metadata={"duration_seconds": duration_seconds, "vapi_call_id": vapi_call_id},
     )
+
+
+def _has_trial_grant(workspace_id: str) -> bool:
+    """Return True if the workspace was auto-granted a free trial on signup.
+
+    Stays True even when the trial minutes are fully consumed so the UI
+    can show "contact us to continue" instead of the generic reload CTA.
+    """
+    db = get_supabase_admin()
+    res = (
+        db.table("credit_grants")
+        .select("id")
+        .eq("workspace_id", workspace_id)
+        .is_("granted_by_admin_id", "null")
+        .eq("credit_type", "voice_minutes")
+        .limit(1)
+        .execute()
+    )
+    return bool(res.data)
+
+
+def grant_trial_credits(workspace_id: str) -> None:
+    """Auto-grant free trial voice minutes for a brand-new workspace.
+
+    Idempotent — skips silently if a trial grant already exists so it is
+    safe to call from a retry or a duplicate workspace-created event.
+    """
+    settings = get_settings()
+    amount = settings.free_trial_voice_minutes
+    if amount <= 0:
+        return
+
+    _get_workspace_row(workspace_id)
+    db = get_supabase_admin()
+
+    existing = (
+        db.table("credit_grants")
+        .select("id")
+        .eq("workspace_id", workspace_id)
+        .is_("granted_by_admin_id", "null")
+        .eq("credit_type", "voice_minutes")
+        .limit(1)
+        .execute()
+    )
+    if existing.data:
+        log.info("trial_grant_already_exists", workspace_id=workspace_id)
+        return
+
+    db.table("credit_grants").insert(
+        {
+            "workspace_id": workspace_id,
+            "credit_type": "voice_minutes",
+            "amount_total": amount,
+            "amount_remaining": amount,
+            "reason": "Free trial — auto-granted on signup",
+            "granted_by_admin_id": None,
+        }
+    ).execute()
+
+    log.info("trial_credits_granted", workspace_id=workspace_id, amount=amount)
 
 
 def list_grants(workspace_id: str) -> list[CreditGrant]:

@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { AlertTriangle, XCircle, Phone, RefreshCw } from 'lucide-react';
+import { AlertTriangle, XCircle, Phone, RefreshCw, Sparkles } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -15,7 +15,6 @@ function formatMinutes(mins: number): string {
 
 interface VoiceMinutesCardProps {
   usage: UsageSummary;
-  /** Workspace plan name shown in the header badge */
 }
 
 export function VoiceMinutesCard({ usage }: VoiceMinutesCardProps) {
@@ -24,6 +23,7 @@ export function VoiceMinutesCard({ usage }: VoiceMinutesCardProps) {
   const pct = unlimited ? 0 : Math.min(100, vm.percent_used ?? 0);
   const remaining = unlimited ? null : Math.max(0, vm.effective_limit! - vm.used);
   const daysLeft = usage.period.days_remaining;
+  const isTrial = usage.has_trial_grant;
 
   // Severity
   const isCritical = !unlimited && pct >= 100;
@@ -31,6 +31,21 @@ export function VoiceMinutesCard({ usage }: VoiceMinutesCardProps) {
 
   // Progress bar colour
   const barColor = isCritical ? 'bg-error' : isLow ? 'bg-warning' : 'bg-accent';
+
+  // Header badge: "Free trial" for trial workspaces, plan name otherwise
+  const headerBadge = isTrial ? (
+    <Badge
+      variant="secondary"
+      className={`gap-1 text-xs ${isCritical ? 'border-error/40 bg-error/10 text-error' : 'border-accent/30 bg-accent/10 text-accent'}`}
+    >
+      <Sparkles className="h-3 w-3" />
+      {isCritical ? 'Trial ended' : 'Free trial'}
+    </Badge>
+  ) : (
+    <Badge variant="secondary" className="text-xs">
+      {usage.plan.name}
+    </Badge>
+  );
 
   return (
     <Card className={isCritical ? 'border-error/50' : isLow ? 'border-warning/40' : ''}>
@@ -40,9 +55,7 @@ export function VoiceMinutesCard({ usage }: VoiceMinutesCardProps) {
             <Phone className="h-4 w-4 text-accent" />
             Voice minutes
           </CardTitle>
-          <Badge variant="secondary" className="text-xs">
-            {usage.plan.name}
-          </Badge>
+          {headerBadge}
         </div>
       </CardHeader>
 
@@ -52,11 +65,15 @@ export function VoiceMinutesCard({ usage }: VoiceMinutesCardProps) {
           {unlimited ? (
             <div>
               <p className="text-2xl font-semibold tracking-tight">Unlimited</p>
-              <p className="text-xs text-muted-foreground">{vm.used.toLocaleString()} min used this period</p>
+              <p className="text-xs text-muted-foreground">
+                {vm.used.toLocaleString()} min used this period
+              </p>
             </div>
           ) : (
             <div>
-              <p className={`text-2xl font-semibold tracking-tight ${isCritical ? 'text-error' : isLow ? 'text-warning' : ''}`}>
+              <p
+                className={`text-2xl font-semibold tracking-tight ${isCritical ? 'text-error' : isLow ? 'text-warning' : ''}`}
+              >
                 {formatMinutes(remaining!)} left
               </p>
               <p className="text-xs text-muted-foreground">
@@ -71,17 +88,14 @@ export function VoiceMinutesCard({ usage }: VoiceMinutesCardProps) {
         {!unlimited && (
           <div className="space-y-1.5">
             <div className="h-2.5 overflow-hidden rounded-full bg-muted">
-              <div
-                className={`h-full transition-all ${barColor}`}
-                style={{ width: `${pct}%` }}
-              />
+              <div className={`h-full transition-all ${barColor}`} style={{ width: `${pct}%` }} />
             </div>
             <p className="text-right text-xs text-muted-foreground">{Math.round(pct)}% used</p>
           </div>
         )}
 
-        {/* Bonus credits */}
-        {vm.bonus_remaining > 0 && (
+        {/* Bonus credits line (only shown for non-trial plan upgrades) */}
+        {!isTrial && vm.bonus_remaining > 0 && (
           <p className="text-xs text-accent">
             +{vm.bonus_remaining.toLocaleString()} bonus min included above
           </p>
@@ -94,20 +108,34 @@ export function VoiceMinutesCard({ usage }: VoiceMinutesCardProps) {
             <div className="flex items-start gap-2">
               <XCircle className="mt-0.5 h-4 w-4 shrink-0 text-error" />
               <div className="space-y-2">
-                <p className="text-sm font-medium text-error">Voice minutes depleted</p>
+                <p className="text-sm font-medium text-error">
+                  {isTrial ? 'Free trial ended' : 'Voice minutes depleted'}
+                </p>
                 <p className="text-xs text-muted-foreground">
-                  New calls may be blocked. Reload your credits or upgrade your plan to restore service.
+                  {isTrial
+                    ? 'Your 30 free trial minutes are used up. Calls are paused. Contact us to get a plan and keep your AI front desk running.'
+                    : 'New calls are blocked. Reload your credits or upgrade your plan to restore service.'}
                 </p>
                 <div className="flex flex-wrap gap-2 pt-1">
-                  <Button size="sm" asChild className="h-7 text-xs">
-                    <Link href="/support?subject=Voice+credits+reload">
-                      <RefreshCw className="mr-1.5 h-3 w-3" />
-                      Request credit reload
-                    </Link>
-                  </Button>
-                  <Button size="sm" variant="outline" asChild className="h-7 text-xs">
-                    <Link href="/settings?tab=billing">View billing</Link>
-                  </Button>
+                  {isTrial ? (
+                    <Button size="sm" asChild className="h-7 text-xs">
+                      <Link href="/support?subject=Ready+to+upgrade+from+free+trial">
+                        Contact us to continue
+                      </Link>
+                    </Button>
+                  ) : (
+                    <>
+                      <Button size="sm" asChild className="h-7 text-xs">
+                        <Link href="/support?subject=Voice+credits+reload">
+                          <RefreshCw className="mr-1.5 h-3 w-3" />
+                          Request credit reload
+                        </Link>
+                      </Button>
+                      <Button size="sm" variant="outline" asChild className="h-7 text-xs">
+                        <Link href="/settings?tab=billing">View billing</Link>
+                      </Button>
+                    </>
+                  )}
                 </div>
               </div>
             </div>
@@ -119,34 +147,63 @@ export function VoiceMinutesCard({ usage }: VoiceMinutesCardProps) {
             <div className="flex items-start gap-2">
               <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
               <div className="space-y-2">
-                <p className="text-sm font-medium">Running low on voice minutes</p>
+                <p className="text-sm font-medium">
+                  {isTrial ? 'Trial minutes running low' : 'Running low on voice minutes'}
+                </p>
                 <p className="text-xs text-muted-foreground">
-                  You have {formatMinutes(remaining!)} remaining — consider reloading now to avoid interruption.
+                  {isTrial
+                    ? `You have ${formatMinutes(remaining!)} of your free trial remaining. Contact us now to set up a plan so your AI front desk keeps running.`
+                    : `You have ${formatMinutes(remaining!)} remaining — consider reloading now to avoid interruption.`}
                 </p>
                 <div className="flex flex-wrap gap-2 pt-1">
-                  <Button size="sm" variant="outline" asChild className="h-7 text-xs">
-                    <Link href="/support?subject=Voice+credits+reload">
-                      <RefreshCw className="mr-1.5 h-3 w-3" />
-                      Request credit reload
-                    </Link>
-                  </Button>
-                  <Button size="sm" variant="ghost" asChild className="h-7 text-xs">
-                    <Link href="/settings?tab=billing">View billing</Link>
-                  </Button>
+                  {isTrial ? (
+                    <Button size="sm" asChild className="h-7 text-xs">
+                      <Link href="/support?subject=Ready+to+upgrade+from+free+trial">
+                        Talk to us about a plan
+                      </Link>
+                    </Button>
+                  ) : (
+                    <>
+                      <Button size="sm" variant="outline" asChild className="h-7 text-xs">
+                        <Link href="/support?subject=Voice+credits+reload">
+                          <RefreshCw className="mr-1.5 h-3 w-3" />
+                          Request credit reload
+                        </Link>
+                      </Button>
+                      <Button size="sm" variant="ghost" asChild className="h-7 text-xs">
+                        <Link href="/settings?tab=billing">View billing</Link>
+                      </Button>
+                    </>
+                  )}
                 </div>
               </div>
             </div>
           </div>
         )}
 
-        {/* Normal state — quiet link to billing */}
+        {/* Normal healthy state */}
         {!isCritical && !isLow && (
-          <Link
-            href="/settings?tab=billing"
-            className="block text-xs text-muted-foreground hover:text-foreground hover:underline"
-          >
-            View full usage →
-          </Link>
+          <p className="text-xs text-muted-foreground">
+            {isTrial ? (
+              <>
+                Enjoying your free trial.{' '}
+                <Link
+                  href="/support?subject=Ready+to+upgrade+from+free+trial"
+                  className="underline hover:text-foreground"
+                >
+                  Talk to us about a plan
+                </Link>{' '}
+                before the minutes run out.
+              </>
+            ) : (
+              <Link
+                href="/settings?tab=billing"
+                className="hover:text-foreground hover:underline"
+              >
+                View full usage →
+              </Link>
+            )}
+          </p>
         )}
       </CardContent>
     </Card>

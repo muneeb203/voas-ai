@@ -55,6 +55,10 @@ class Settings(BaseSettings):
     # Twilio's shared WhatsApp sandbox number — shown as a hint in the UI.
     twilio_whatsapp_sandbox_number: str = "+14155238886"
 
+    # --- Free trial credits granted automatically on workspace creation. ---
+    # Admin can raise/lower this per-workspace via the admin credit-grant panel.
+    free_trial_voice_minutes: int = Field(default=30, ge=0)
+
     # --- Dashboard help bot (Gemini). No-op without GEMINI_API_KEY. ---
     gemini_api_key: str | None = None
     gemini_model: str = "gemini-3.1-flash-lite"
