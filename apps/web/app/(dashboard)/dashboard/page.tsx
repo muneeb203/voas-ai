@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
+import { getTranslations } from 'next-intl/server';
 import {
   Phone,
   MessageSquare,
@@ -51,7 +52,11 @@ function sentimentEmoji(value: number | null): string {
 }
 
 export default async function DashboardHome() {
-  const session = await requireDashboardSession('/dashboard');
+  const [session, t, tc] = await Promise.all([
+    requireDashboardSession('/dashboard'),
+    getTranslations('dashboard'),
+    getTranslations('common'),
+  ]);
   const workspaceId = session.active.workspace_id;
 
   const [locationsRes, membersRes, todayRes, voiceRes, waSettingsRes] = await Promise.all([
@@ -82,53 +87,53 @@ export default async function DashboardHome() {
 
   const stats: StatCardData[] = [
     {
-      label: 'Conversations today',
+      label: t('stats.conversations'),
       value: today ? today.conversations_today.toLocaleString() : '—',
-      hint: 'Voice + WhatsApp since midnight',
+      hint: t('stats.conversationsHint'),
     },
     {
-      label: 'Orders today',
+      label: t('stats.orders'),
       value: today ? today.orders_today.toLocaleString() : '—',
-      hint: 'Across all channels',
+      hint: t('stats.ordersHint'),
     },
     {
-      label: 'Revenue today',
+      label: t('stats.revenue'),
       value: today ? formatCurrency(today.revenue_today_cents) : '—',
-      hint: 'Excludes cancelled & refunded',
+      hint: t('stats.revenueHint'),
     },
     {
-      label: 'Avg sentiment',
+      label: t('stats.sentiment'),
       value: today ? sentimentEmoji(today.avg_sentiment_today) : '—',
-      hint: 'Average across today’s calls',
+      hint: t('stats.sentimentHint'),
     },
   ];
 
   const checklist: ChecklistItem[] = [
     {
       icon: BookOpen,
-      title: 'Add your first location',
-      description: 'Locations are the unit of voice + WhatsApp routing.',
+      title: t('getStarted.addLocation'),
+      description: t('getStarted.addLocationDesc'),
       href: '/locations',
       done: hasLocation,
     },
     {
       icon: Users,
-      title: 'Invite your team',
-      description: 'Bring in managers and staff who should see conversations.',
+      title: t('getStarted.inviteTeam'),
+      description: t('getStarted.inviteTeamDesc'),
       href: '/team',
       done: hasInvitedTeam,
     },
     {
       icon: Phone,
-      title: 'Configure voice',
-      description: 'Set up your AI agent and assign a phone number per location.',
+      title: t('getStarted.configureVoice'),
+      description: t('getStarted.configureVoiceDesc'),
       href: '/integrations/voice',
       done: voiceConfigured,
     },
     {
       icon: MessageSquare,
-      title: 'Configure WhatsApp',
-      description: 'Answer WhatsApp messages with the same AI agent.',
+      title: t('getStarted.configureWhatsApp'),
+      description: t('getStarted.configureWhatsAppDesc'),
       href: '/integrations/whatsapp',
       done: whatsappConfigured,
     },
@@ -139,18 +144,21 @@ export default async function DashboardHome() {
   return (
     <div className="space-y-8">
       <header>
-        <p className="text-xs font-medium uppercase tracking-widest text-accent-700">Dashboard</p>
+        <p className="text-xs font-medium uppercase tracking-widest text-accent-700">
+          {t('eyebrow')}
+        </p>
         <h1 className="mt-1 text-3xl font-semibold tracking-tight">
-          Welcome{fullName ? `, ${fullName}` : ''} 👋
+          {t('welcome')}{fullName ? `, ${fullName}` : ''} 👋
         </h1>
         <p className="mt-1 text-muted-foreground">
-          Here's what's happening in <span className="font-medium text-foreground">{session.active.workspace.name}</span>.
+          {t('subtitle')}{' '}
+          <span className="font-medium text-foreground">{session.active.workspace.name}</span>.
         </p>
       </header>
 
       <section>
         <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-muted-foreground">
-          Today
+          {t('today')}
         </h2>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {stats.map((s) => (
@@ -168,10 +176,8 @@ export default async function DashboardHome() {
       <section>
         <Card>
           <CardHeader>
-            <CardTitle>Get started</CardTitle>
-            <p className="text-sm text-muted-foreground">
-              Four steps to a working VOAS agent.
-            </p>
+            <CardTitle>{t('getStarted.title')}</CardTitle>
+            <p className="text-sm text-muted-foreground">{t('getStarted.subtitle')}</p>
           </CardHeader>
           <CardContent className="space-y-3">
             {checklist.map((item) => {
@@ -194,8 +200,8 @@ export default async function DashboardHome() {
                   <div className="flex-1">
                     <div className="flex items-center gap-2">
                       <h3 className="text-sm font-semibold">{item.title}</h3>
-                      {item.done && <Badge variant="success">Done</Badge>}
-                      {item.comingSoon && <Badge variant="secondary">Soon</Badge>}
+                      {item.done && <Badge variant="success">{tc('done')}</Badge>}
+                      {item.comingSoon && <Badge variant="secondary">{tc('comingSoon')}</Badge>}
                     </div>
                     <p className="mt-1 text-sm text-muted-foreground">{item.description}</p>
                   </div>

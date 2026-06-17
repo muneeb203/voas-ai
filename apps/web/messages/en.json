@@ -1,0 +1,155 @@
+{
+  "common": {
+    "save": "Save",
+    "cancel": "Cancel",
+    "delete": "Delete",
+    "edit": "Edit",
+    "add": "Add",
+    "remove": "Remove",
+    "loading": "Loading…",
+    "error": "Error",
+    "success": "Success",
+    "comingSoon": "Soon",
+    "done": "Done",
+    "back": "Back",
+    "search": "Search",
+    "noResults": "No results found",
+    "retry": "Retry",
+    "signedIn": "Signed in"
+  },
+  "nav": {
+    "sections": {
+      "overview": "Overview",
+      "setup": "Setup",
+      "workspace": "Workspace"
+    },
+    "items": {
+      "dashboard": "Dashboard",
+      "conversations": "Conversations",
+      "orders": "Orders",
+      "customers": "Customers",
+      "knowledgeBase": "Knowledge Base",
+      "integrations": "Integrations",
+      "analytics": "Analytics",
+      "team": "Team",
+      "settings": "Settings",
+      "support": "Support"
+    },
+    "footer": "VOAS AI · V1 Sprint 3"
+  },
+  "topbar": {
+    "role": "Role",
+    "signOut": "Sign out",
+    "settings": "Settings",
+    "openMenu": "Open menu",
+    "closeMenu": "Close menu"
+  },
+  "languageSwitcher": {
+    "label": "Language",
+    "en": "English",
+    "ar": "العربية",
+    "ur": "اردو"
+  },
+  "dashboard": {
+    "eyebrow": "Dashboard",
+    "welcome": "Welcome",
+    "subtitle": "Here's what's happening in",
+    "today": "Today",
+    "stats": {
+      "conversations": "Conversations today",
+      "orders": "Orders today",
+      "revenue": "Revenue today",
+      "sentiment": "Avg sentiment",
+      "conversationsHint": "Voice + WhatsApp since midnight",
+      "ordersHint": "Across all channels",
+      "revenueHint": "Excludes cancelled & refunded",
+      "sentimentHint": "Average across today's calls"
+    },
+    "getStarted": {
+      "title": "Get started",
+      "subtitle": "Four steps to a working VOAS agent.",
+      "addLocation": "Add your first location",
+      "addLocationDesc": "Locations are the unit of voice + WhatsApp routing.",
+      "inviteTeam": "Invite your team",
+      "inviteTeamDesc": "Bring in managers and staff who should see conversations.",
+      "configureVoice": "Configure voice",
+      "configureVoiceDesc": "Set up your AI agent and assign a phone number per location.",
+      "configureWhatsApp": "Configure WhatsApp",
+      "configureWhatsAppDesc": "Answer WhatsApp messages with the same AI agent."
+    }
+  },
+  "settings": {
+    "eyebrow": "Settings",
+    "title": "Workspace settings",
+    "tabs": {
+      "workspace": "Workspace",
+      "profile": "Profile",
+      "billing": "Billing"
+    },
+    "workspace": {
+      "title": "Workspace details",
+      "description": "These appear across calls, messages, and your dashboard."
+    },
+    "profile": {
+      "title": "Your profile",
+      "description": "How your name shows up across the dashboard and team list."
+    }
+  },
+  "orders": {
+    "eyebrow": "Activity",
+    "title": "Orders",
+    "description": "AI-taken orders from every channel.",
+    "statuses": {
+      "all": "All",
+      "pending": "Pending",
+      "confirmed": "Confirmed",
+      "preparing": "Preparing",
+      "ready": "Ready",
+      "fulfilled": "Fulfilled",
+      "cancelled": "Cancelled"
+    }
+  },
+  "support": {
+    "eyebrow": "Workspace",
+    "title": "Support",
+    "description": "File tickets and track replies from the VOAS team.",
+    "filters": {
+      "all": "All",
+      "open": "Open",
+      "resolved": "Resolved"
+    },
+    "newTicket": "New ticket"
+  },
+  "locations": {
+    "eyebrow": "Setup",
+    "title": "Locations",
+    "description": "Each location gets its own voice number and WhatsApp line."
+  },
+  "team": {
+    "eyebrow": "Workspace",
+    "title": "Team",
+    "description": "Manage who has access to this workspace."
+  },
+  "conversations": {
+    "eyebrow": "Activity",
+    "title": "Conversations",
+    "description": "Every voice and WhatsApp conversation your agent handled."
+  },
+  "customers": {
+    "eyebrow": "Activity",
+    "title": "Customers",
+    "description": "Everyone who has interacted with your AI agent."
+  },
+  "analytics": {
+    "eyebrow": "Insights",
+    "title": "Analytics",
+    "description": "Deep-dive into what your customers are asking for."
+  },
+  "integrations": {
+    "eyebrow": "Setup",
+    "title": "Integrations",
+    "description": "Connect your tools to VOAS AI.",
+    "voice": "Voice",
+    "whatsapp": "WhatsApp"
+  }
+}

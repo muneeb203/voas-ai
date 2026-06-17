@@ -1,0 +1,155 @@
+{
+  "common": {
+    "save": "محفوظ کریں",
+    "cancel": "منسوخ",
+    "delete": "حذف کریں",
+    "edit": "ترمیم",
+    "add": "شامل کریں",
+    "remove": "ہٹائیں",
+    "loading": "لوڈ ہو رہا ہے…",
+    "error": "خطا",
+    "success": "کامیابی",
+    "comingSoon": "جلد",
+    "done": "مکمل",
+    "back": "واپس",
+    "search": "تلاش",
+    "noResults": "کوئی نتیجہ نہیں ملا",
+    "retry": "دوبارہ کوشش کریں",
+    "signedIn": "سائن اِن ہیں"
+  },
+  "nav": {
+    "sections": {
+      "overview": "جائزہ",
+      "setup": "سیٹ اپ",
+      "workspace": "ورک اسپیس"
+    },
+    "items": {
+      "dashboard": "ڈیش بورڈ",
+      "conversations": "گفتگو",
+      "orders": "آرڈرز",
+      "customers": "گاہک",
+      "knowledgeBase": "علمی مرکز",
+      "integrations": "انضمام",
+      "analytics": "تجزیات",
+      "team": "ٹیم",
+      "settings": "ترتیبات",
+      "support": "سپورٹ"
+    },
+    "footer": "VOAS AI · ورژن 1"
+  },
+  "topbar": {
+    "role": "کردار",
+    "signOut": "سائن آؤٹ",
+    "settings": "ترتیبات",
+    "openMenu": "مینو کھولیں",
+    "closeMenu": "مینو بند کریں"
+  },
+  "languageSwitcher": {
+    "label": "زبان",
+    "en": "English",
+    "ar": "العربية",
+    "ur": "اردو"
+  },
+  "dashboard": {
+    "eyebrow": "ڈیش بورڈ",
+    "welcome": "خوش آمدید",
+    "subtitle": "یہاں کیا ہو رہا ہے",
+    "today": "آج",
+    "stats": {
+      "conversations": "آج کی گفتگو",
+      "orders": "آج کے آرڈر",
+      "revenue": "آج کی آمدنی",
+      "sentiment": "اوسط احساس",
+      "conversationsHint": "آدھی رات سے آواز + واٹس ایپ",
+      "ordersHint": "تمام چینلز میں",
+      "revenueHint": "منسوخ اور واپس شدہ کے بغیر",
+      "sentimentHint": "آج کی کالوں کا اوسط"
+    },
+    "getStarted": {
+      "title": "شروع کریں",
+      "subtitle": "VOAS ایجنٹ کے لیے چار اقدامات۔",
+      "addLocation": "اپنی پہلی جگہ شامل کریں",
+      "addLocationDesc": "مقامات آواز + واٹس ایپ روٹنگ کی اکائی ہیں۔",
+      "inviteTeam": "اپنی ٹیم کو مدعو کریں",
+      "inviteTeamDesc": "مینیجرز اور عملے کو شامل کریں جنہیں گفتگو دیکھنی چاہیے۔",
+      "configureVoice": "آواز ترتیب دیں",
+      "configureVoiceDesc": "اپنا AI ایجنٹ ترتیب دیں اور ہر مقام کے لیے فون نمبر مختص کریں۔",
+      "configureWhatsApp": "واٹس ایپ ترتیب دیں",
+      "configureWhatsAppDesc": "اسی AI ایجنٹ سے واٹس ایپ پیغامات کا جواب دیں۔"
+    }
+  },
+  "settings": {
+    "eyebrow": "ترتیبات",
+    "title": "ورک اسپیس کی ترتیبات",
+    "tabs": {
+      "workspace": "ورک اسپیس",
+      "profile": "پروفائل",
+      "billing": "بلنگ"
+    },
+    "workspace": {
+      "title": "ورک اسپیس کی تفصیلات",
+      "description": "یہ کالوں، پیغامات اور ڈیش بورڈ میں ظاہر ہوتی ہیں۔"
+    },
+    "profile": {
+      "title": "آپ کی پروفائل",
+      "description": "آپ کا نام ڈیش بورڈ اور ٹیم کی فہرست میں کیسے ظاہر ہوتا ہے۔"
+    }
+  },
+  "orders": {
+    "eyebrow": "سرگرمی",
+    "title": "آرڈرز",
+    "description": "AI کی طرف سے تمام چینلز سے لیے گئے آرڈر۔",
+    "statuses": {
+      "all": "سب",
+      "pending": "زیر التواء",
+      "confirmed": "تصدیق شدہ",
+      "preparing": "تیاری جاری",
+      "ready": "تیار",
+      "fulfilled": "مکمل",
+      "cancelled": "منسوخ"
+    }
+  },
+  "support": {
+    "eyebrow": "ورک اسپیس",
+    "title": "سپورٹ",
+    "description": "ٹکٹ جمع کریں اور VOAS ٹیم کے جوابات ٹریک کریں۔",
+    "filters": {
+      "all": "سب",
+      "open": "کھلا",
+      "resolved": "حل شدہ"
+    },
+    "newTicket": "نیا ٹکٹ"
+  },
+  "locations": {
+    "eyebrow": "سیٹ اپ",
+    "title": "مقامات",
+    "description": "ہر مقام کو اپنا صوتی نمبر اور واٹس ایپ لائن ملتی ہے۔"
+  },
+  "team": {
+    "eyebrow": "ورک اسپیس",
+    "title": "ٹیم",
+    "description": "اس ورک اسپیس تک رسائی رکھنے والوں کا انتظام کریں۔"
+  },
+  "conversations": {
+    "eyebrow": "سرگرمی",
+    "title": "گفتگو",
+    "description": "آپ کے ایجنٹ کی تمام آواز اور واٹس ایپ گفتگو۔"
+  },
+  "customers": {
+    "eyebrow": "سرگرمی",
+    "title": "گاہک",
+    "description": "وہ سب جنہوں نے آپ کے AI ایجنٹ سے بات کی۔"
+  },
+  "analytics": {
+    "eyebrow": "بصیرت",
+    "title": "تجزیات",
+    "description": "گاہک کیا مانگ رہے ہیں اس کا گہرا جائزہ۔"
+  },
+  "integrations": {
+    "eyebrow": "سیٹ اپ",
+    "title": "انضمام",
+    "description": "اپنے ٹولز کو VOAS AI سے جوڑیں۔",
+    "voice": "آواز",
+    "whatsapp": "واٹس ایپ"
+  }
+}

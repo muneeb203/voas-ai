@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
+import { useTranslations } from 'next-intl';
 import { NotificationBell } from './notification-bell';
 import { Menu, X, ChevronDown, LogOut, Settings as SettingsIcon } from 'lucide-react';
 import { Sidebar } from './sidebar';
@@ -15,6 +16,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Badge } from '@/components/ui/badge';
+import { LanguageSwitcher } from '@/components/shared/language-switcher';
 
 interface TopbarProps {
   workspaceName: string;
@@ -40,6 +42,8 @@ export function Topbar({
   role,
 }: TopbarProps) {
   const [mobileOpen, setMobileOpen] = useState(false);
+  const t = useTranslations('topbar');
+  const tc = useTranslations('common');
 
   return (
     <>
@@ -49,7 +53,7 @@ export function Topbar({
             type="button"
             className="rounded-md p-2 text-muted-foreground hover:bg-muted hover:text-foreground lg:hidden"
             onClick={() => setMobileOpen(true)}
-            aria-label="Open menu"
+            aria-label={t('openMenu')}
           >
             <Menu className="h-5 w-5" />
           </button>
@@ -62,7 +66,10 @@ export function Topbar({
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1">
+          {/* Language switcher — always visible at top right */}
+          <LanguageSwitcher />
+
           <NotificationBell />
 
           <DropdownMenu>
@@ -78,25 +85,27 @@ export function Topbar({
               <DropdownMenuLabel>
                 <div>
                   <p className="text-sm font-medium text-foreground">
-                    {userName ?? userEmail ?? 'Signed in'}
+                    {userName ?? userEmail ?? tc('signedIn')}
                   </p>
                   {userEmail && userName && (
                     <p className="truncate text-xs text-muted-foreground">{userEmail}</p>
                   )}
-                  <p className="mt-1 text-xs text-muted-foreground">Role: {role}</p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {t('role')}: {role}
+                  </p>
                 </div>
               </DropdownMenuLabel>
               <DropdownMenuSeparator />
               <DropdownMenuItem asChild>
                 <Link href="/settings">
-                  <SettingsIcon className="h-4 w-4" /> Settings
+                  <SettingsIcon className="h-4 w-4" /> {t('settings')}
                 </Link>
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem asChild destructive>
                 <form action="/auth/signout" method="post" className="w-full">
                   <button type="submit" className="flex w-full items-center gap-2">
-                    <LogOut className="h-4 w-4" /> Sign out
+                    <LogOut className="h-4 w-4" /> {t('signOut')}
                   </button>
                 </form>
               </DropdownMenuItem>
@@ -119,7 +128,7 @@ export function Topbar({
                 type="button"
                 onClick={() => setMobileOpen(false)}
                 className="rounded-md p-2 text-muted-foreground hover:bg-muted hover:text-foreground"
-                aria-label="Close menu"
+                aria-label={t('closeMenu')}
               >
                 <X className="h-5 w-5" />
               </button>
