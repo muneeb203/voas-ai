@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { useActionState } from '@/lib/use-action-state';
 import { Button } from '@/components/ui/button';
@@ -19,7 +19,13 @@ import {
   updateVoiceSettingsAction,
   type FormResult,
 } from '@/app/actions/voice-action';
-import type { VoiceSettings, VoiceCapabilities } from '@/lib/types';
+import type { VoiceLanguage, VoiceSettings, VoiceCapabilities } from '@/lib/types';
+import {
+  DEFAULT_GREETING_BY_LANG,
+  DEFAULT_SYSTEM_PROMPT_BY_LANG,
+  isDefaultGreeting,
+  isDefaultPrompt,
+} from '@/lib/voice-language-defaults';
 
 const INITIAL: FormResult = { error: null };
 
@@ -37,6 +43,29 @@ export function VoiceSettingsForm({
   const [state, formAction, pending] = useActionState(updateVoiceSettingsAction, INITIAL);
   const fieldErrors = state.fieldErrors;
   const wasPending = useRef(false);
+
+  // Controlled inputs so we can swap their contents when the language
+  // dropdown changes. Greeting + prompt start as whatever the workspace
+  // saved last; on language change we auto-swap iff the current value is
+  // still a canned default (any language).
+  const [language, setLanguage] = useState<VoiceLanguage>(settings.language);
+  const [greeting, setGreeting] = useState<string>(settings.greeting);
+  const [systemPrompt, setSystemPrompt] = useState<string>(settings.system_prompt);
+
+  function handleLanguageChange(next: string) {
+    const nextLang = next as VoiceLanguage;
+    setLanguage(nextLang);
+
+    // Only swap the greeting/prompt if the owner hasn't customized them
+    // (i.e. they still match one of the canned defaults). If they've
+    // edited the text we leave it alone — owner intent wins.
+    if (isDefaultGreeting(greeting)) {
+      setGreeting(DEFAULT_GREETING_BY_LANG[nextLang]);
+    }
+    if (isDefaultPrompt(systemPrompt)) {
+      setSystemPrompt(DEFAULT_SYSTEM_PROMPT_BY_LANG[nextLang]);
+    }
+  }
 
   useEffect(() => {
     // Fire a toast only on the transition from pending → not pending
@@ -58,7 +87,8 @@ export function VoiceSettingsForm({
       >
         <Select
           name="language"
-          defaultValue={settings.language}
+          value={language}
+          onValueChange={handleLanguageChange}
           disabled={disabled || pending}
         >
           <SelectTrigger id="language">
@@ -78,9 +108,11 @@ export function VoiceSettingsForm({
         <Input
           id="greeting"
           name="greeting"
-          defaultValue={settings.greeting}
+          value={greeting}
+          onChange={(e) => setGreeting(e.target.value)}
           required
           disabled={disabled || pending}
+          dir="auto"
         />
       </Field>
 
@@ -95,10 +127,12 @@ export function VoiceSettingsForm({
           id="system_prompt"
           name="system_prompt"
           rows={10}
-          defaultValue={settings.system_prompt}
+          value={systemPrompt}
+          onChange={(e) => setSystemPrompt(e.target.value)}
           required
           disabled={disabled || pending}
           className="font-mono text-xs"
+          dir="auto"
         />
       </Field>
 

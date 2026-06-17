@@ -199,23 +199,28 @@ def update_settings(
 
     changes = payload.model_dump(exclude_none=True)
 
-    # If language is changing AND the user hasn't supplied a new
-    # prompt/greeting, AND their current ones are still the canned defaults
-    # from the previous language, auto-swap to the target language's
+    # If language is changing AND the prompt/greeting being submitted are
+    # still the canned defaults from the previous language (i.e. owner never
+    # customized them, just hit save), auto-swap to the target language's
     # defaults. This means "switch to Arabic" Just Works — the agent
     # immediately speaks Arabic — without forcing the owner to translate
     # the prompt by hand. If they've customized either string, we leave
     # their version alone.
+    #
+    # Important: the form always submits the textarea content, so we can't
+    # rely on `"system_prompt" not in changes`. We instead compare the
+    # SUBMITTED value (or current, if not submitted) against the old
+    # language's defaults.
     new_lang = changes.get("language")
     if new_lang and new_lang != current.language:
-        defaults_for_old = DEFAULT_SYSTEM_PROMPT_BY_LANG.get(current.language, "")
-        greet_for_old = DEFAULT_GREETING_BY_LANG.get(current.language, "")
-        if (
-            "system_prompt" not in changes
-            and current.system_prompt.strip() == defaults_for_old.strip()
-        ):
+        old_lang = current.language
+        defaults_for_old_prompt = DEFAULT_SYSTEM_PROMPT_BY_LANG.get(old_lang, "")
+        defaults_for_old_greet = DEFAULT_GREETING_BY_LANG.get(old_lang, "")
+        submitted_prompt = changes.get("system_prompt", current.system_prompt) or ""
+        submitted_greet = changes.get("greeting", current.greeting) or ""
+        if submitted_prompt.strip() == defaults_for_old_prompt.strip():
             changes["system_prompt"] = DEFAULT_SYSTEM_PROMPT_BY_LANG[new_lang]
-        if "greeting" not in changes and current.greeting.strip() == greet_for_old.strip():
+        if submitted_greet.strip() == defaults_for_old_greet.strip():
             changes["greeting"] = DEFAULT_GREETING_BY_LANG[new_lang]
 
     if changes:
