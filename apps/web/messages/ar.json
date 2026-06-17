@@ -1,0 +1,155 @@
+{
+  "common": {
+    "save": "حفظ",
+    "cancel": "إلغاء",
+    "delete": "حذف",
+    "edit": "تعديل",
+    "add": "إضافة",
+    "remove": "إزالة",
+    "loading": "جارٍ التحميل…",
+    "error": "خطأ",
+    "success": "نجاح",
+    "comingSoon": "قريباً",
+    "done": "تم",
+    "back": "رجوع",
+    "search": "بحث",
+    "noResults": "لا توجد نتائج",
+    "retry": "إعادة المحاولة",
+    "signedIn": "تم تسجيل الدخول"
+  },
+  "nav": {
+    "sections": {
+      "overview": "نظرة عامة",
+      "setup": "الإعداد",
+      "workspace": "مساحة العمل"
+    },
+    "items": {
+      "dashboard": "لوحة التحكم",
+      "conversations": "المحادثات",
+      "orders": "الطلبات",
+      "customers": "العملاء",
+      "knowledgeBase": "قاعدة المعرفة",
+      "integrations": "التكاملات",
+      "analytics": "التحليلات",
+      "team": "الفريق",
+      "settings": "الإعدادات",
+      "support": "الدعم"
+    },
+    "footer": "VOAS AI · الإصدار الأول"
+  },
+  "topbar": {
+    "role": "الدور",
+    "signOut": "تسجيل الخروج",
+    "settings": "الإعدادات",
+    "openMenu": "فتح القائمة",
+    "closeMenu": "إغلاق القائمة"
+  },
+  "languageSwitcher": {
+    "label": "اللغة",
+    "en": "English",
+    "ar": "العربية",
+    "ur": "اردو"
+  },
+  "dashboard": {
+    "eyebrow": "لوحة التحكم",
+    "welcome": "مرحباً",
+    "subtitle": "إليك ما يحدث في",
+    "today": "اليوم",
+    "stats": {
+      "conversations": "محادثات اليوم",
+      "orders": "طلبات اليوم",
+      "revenue": "إيرادات اليوم",
+      "sentiment": "متوسط الرأي",
+      "conversationsHint": "صوت + واتساب منذ منتصف الليل",
+      "ordersHint": "عبر جميع القنوات",
+      "revenueHint": "يستثني الملغي والمسترد",
+      "sentimentHint": "المتوسط عبر مكالمات اليوم"
+    },
+    "getStarted": {
+      "title": "ابدأ الآن",
+      "subtitle": "أربع خطوات لتشغيل وكيل VOAS.",
+      "addLocation": "أضف أول موقع لك",
+      "addLocationDesc": "المواقع هي وحدة توجيه الصوت وواتساب.",
+      "inviteTeam": "ادعُ فريقك",
+      "inviteTeamDesc": "أضف المديرين والموظفين الذين يجب أن يروا المحادثات.",
+      "configureVoice": "إعداد الصوت",
+      "configureVoiceDesc": "قم بإعداد وكيل الذكاء الاصطناعي وتعيين رقم هاتف لكل موقع.",
+      "configureWhatsApp": "إعداد واتساب",
+      "configureWhatsAppDesc": "الرد على رسائل واتساب بنفس وكيل الذكاء الاصطناعي."
+    }
+  },
+  "settings": {
+    "eyebrow": "الإعدادات",
+    "title": "إعدادات مساحة العمل",
+    "tabs": {
+      "workspace": "مساحة العمل",
+      "profile": "الملف الشخصي",
+      "billing": "الفواتير"
+    },
+    "workspace": {
+      "title": "تفاصيل مساحة العمل",
+      "description": "تظهر هذه المعلومات عبر المكالمات والرسائل ولوحة التحكم."
+    },
+    "profile": {
+      "title": "ملفك الشخصي",
+      "description": "كيف يظهر اسمك في لوحة التحكم وقائمة الفريق."
+    }
+  },
+  "orders": {
+    "eyebrow": "النشاط",
+    "title": "الطلبات",
+    "description": "الطلبات التي أخذها الذكاء الاصطناعي من جميع القنوات.",
+    "statuses": {
+      "all": "الكل",
+      "pending": "قيد الانتظار",
+      "confirmed": "مؤكد",
+      "preparing": "قيد التحضير",
+      "ready": "جاهز",
+      "fulfilled": "تم التسليم",
+      "cancelled": "ملغى"
+    }
+  },
+  "support": {
+    "eyebrow": "مساحة العمل",
+    "title": "الدعم",
+    "description": "أرسل تذاكر وتابع الردود من فريق VOAS.",
+    "filters": {
+      "all": "الكل",
+      "open": "مفتوح",
+      "resolved": "محلول"
+    },
+    "newTicket": "تذكرة جديدة"
+  },
+  "locations": {
+    "eyebrow": "الإعداد",
+    "title": "المواقع",
+    "description": "كل موقع يحصل على رقم صوتي وخط واتساب خاص به."
+  },
+  "team": {
+    "eyebrow": "مساحة العمل",
+    "title": "الفريق",
+    "description": "إدارة من يملك الوصول إلى مساحة العمل هذه."
+  },
+  "conversations": {
+    "eyebrow": "النشاط",
+    "title": "المحادثات",
+    "description": "كل محادثة صوتية وواتساب تعامل معها وكيلك."
+  },
+  "customers": {
+    "eyebrow": "النشاط",
+    "title": "العملاء",
+    "description": "كل من تفاعل مع وكيل الذكاء الاصطناعي الخاص بك."
+  },
+  "analytics": {
+    "eyebrow": "الرؤى",
+    "title": "التحليلات",
+    "description": "تعمق في ما يطلبه عملاؤك."
+  },
+  "integrations": {
+    "eyebrow": "الإعداد",
+    "title": "التكاملات",
+    "description": "ربط أدواتك بـ VOAS AI.",
+    "voice": "الصوت",
+    "whatsapp": "واتساب"
+  }
+}

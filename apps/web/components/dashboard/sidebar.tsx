@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { useTranslations } from 'next-intl';
 import {
   LayoutDashboard,
   MessageSquare,
@@ -20,35 +21,40 @@ import { Logo } from '@/components/shared/logo';
 
 interface NavItem {
   href: string;
-  label: string;
+  labelKey: string;
   icon: LucideIcon;
   comingSoon?: boolean;
 }
 
-const SECTIONS: { title: string; items: NavItem[] }[] = [
+interface NavSection {
+  titleKey: string;
+  items: NavItem[];
+}
+
+const SECTIONS: NavSection[] = [
   {
-    title: 'Overview',
+    titleKey: 'overview',
     items: [
-      { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-      { href: '/conversations', label: 'Conversations', icon: MessageSquare },
-      { href: '/orders', label: 'Orders', icon: ShoppingBag },
-      { href: '/customers', label: 'Customers', icon: Users2 },
+      { href: '/dashboard', labelKey: 'dashboard', icon: LayoutDashboard },
+      { href: '/conversations', labelKey: 'conversations', icon: MessageSquare },
+      { href: '/orders', labelKey: 'orders', icon: ShoppingBag },
+      { href: '/customers', labelKey: 'customers', icon: Users2 },
     ],
   },
   {
-    title: 'Setup',
+    titleKey: 'setup',
     items: [
-      { href: '/knowledge-base', label: 'Knowledge Base', icon: BookOpen },
-      { href: '/integrations', label: 'Integrations', icon: Plug, comingSoon: true },
-      { href: '/analytics', label: 'Analytics', icon: BarChart3, comingSoon: true },
+      { href: '/knowledge-base', labelKey: 'knowledgeBase', icon: BookOpen },
+      { href: '/integrations', labelKey: 'integrations', icon: Plug, comingSoon: true },
+      { href: '/analytics', labelKey: 'analytics', icon: BarChart3, comingSoon: true },
     ],
   },
   {
-    title: 'Workspace',
+    titleKey: 'workspace',
     items: [
-      { href: '/team', label: 'Team', icon: Users },
-      { href: '/settings', label: 'Settings', icon: Settings },
-      { href: '/support', label: 'Support', icon: LifeBuoy },
+      { href: '/team', labelKey: 'team', icon: Users },
+      { href: '/settings', labelKey: 'settings', icon: Settings },
+      { href: '/support', labelKey: 'support', icon: LifeBuoy },
     ],
   },
 ];
@@ -60,6 +66,8 @@ interface SidebarProps {
 
 export function Sidebar({ className, onNavigate }: SidebarProps) {
   const pathname = usePathname();
+  const t = useTranslations('nav');
+  const tc = useTranslations('common');
 
   return (
     <aside className={cn('flex h-full flex-col border-r border-border bg-background', className)}>
@@ -69,9 +77,9 @@ export function Sidebar({ className, onNavigate }: SidebarProps) {
 
       <nav className="flex-1 space-y-6 overflow-y-auto px-3 py-2" aria-label="Dashboard">
         {SECTIONS.map((section) => (
-          <div key={section.title}>
+          <div key={section.titleKey}>
             <h3 className="px-3 pb-1 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
-              {section.title}
+              {t(`sections.${section.titleKey}`)}
             </h3>
             <ul className="space-y-0.5">
               {section.items.map((item) => {
@@ -89,11 +97,11 @@ export function Sidebar({ className, onNavigate }: SidebarProps) {
                           : 'text-muted-foreground hover:bg-secondary/60 hover:text-foreground',
                       )}
                     >
-                      <Icon className="h-4 w-4" />
-                      <span className="flex-1">{item.label}</span>
+                      <Icon className="h-4 w-4 shrink-0" />
+                      <span className="flex-1">{t(`items.${item.labelKey}`)}</span>
                       {item.comingSoon && (
                         <span className="rounded-full bg-muted px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-wider text-muted-foreground">
-                          Soon
+                          {tc('comingSoon')}
                         </span>
                       )}
                     </Link>
@@ -106,7 +114,7 @@ export function Sidebar({ className, onNavigate }: SidebarProps) {
       </nav>
 
       <div className="border-t border-border p-4 text-xs text-muted-foreground">
-        VOAS AI · V1 Sprint 3
+        {t('footer')}
       </div>
     </aside>
   );
