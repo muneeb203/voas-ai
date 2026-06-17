@@ -3,32 +3,34 @@ import Link from 'next/link';
 import { ArrowLeft, AlertCircle } from 'lucide-react';
 import { requireDashboardSession } from '@/lib/auth/workspace';
 import { getVoiceCapabilities, getVoiceSettings } from '@/lib/api/voice';
+import { getBillingUsage } from '@/lib/api/billing';
 import { isApiError } from '@/lib/types';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { PageHeader } from '@/components/dashboard/page-header';
 import { VoiceSettingsForm } from '@/components/dashboard/voice-settings-form';
 import { TestCallButton } from '@/components/dashboard/test-call-button';
 import { MenuSyncCard } from '@/components/dashboard/menu-sync-card';
+import { VoiceMinutesCard } from '@/components/dashboard/voice-minutes-card';
 
 export const metadata: Metadata = { title: 'Voice settings' };
 
 export default async function VoiceSettingsPage() {
   const session = await requireDashboardSession('/integrations/voice');
   const isOwner = session.active.role === 'owner';
+  const workspaceId = session.active.workspace_id;
 
-  const [settingsRes, capsRes] = await Promise.all([
-    getVoiceSettings(session.active.workspace_id),
+  const [settingsRes, capsRes, billingRes] = await Promise.all([
+    getVoiceSettings(workspaceId),
     getVoiceCapabilities(),
+    getBillingUsage(workspaceId),
   ]);
 
-  if (isApiError(settingsRes)) {
-    throw new Error(settingsRes.error.message);
-  }
-  if (isApiError(capsRes)) {
-    throw new Error(capsRes.error.message);
-  }
+  if (isApiError(settingsRes)) throw new Error(settingsRes.error.message);
+  if (isApiError(capsRes)) throw new Error(capsRes.error.message);
+
   const settings = settingsRes.data;
   const caps = capsRes.data;
+  const billing = !isApiError(billingRes) ? billingRes.data : null;
 
   return (
     <div className="space-y-6">
@@ -81,6 +83,9 @@ export default async function VoiceSettingsPage() {
         </Card>
 
         <div className="space-y-4">
+          {/* Voice minutes — shown first so low-credit warnings are impossible to miss */}
+          {billing && <VoiceMinutesCard usage={billing} />}
+
           <MenuSyncCard
             menuDirty={settings.menu_dirty}
             lastSyncedAt={settings.last_synced_at}
