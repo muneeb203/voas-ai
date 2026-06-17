@@ -98,15 +98,42 @@ DEFAULT_GREETING_BY_LANG: dict[str, str] = {
     "ur": "السلام علیکم، کال کرنے کا شکریہ۔ میں آپ کی کیا مدد کر سکتا ہوں؟",
 }
 
-# Common Vapi 11labs voices. The full list is much larger; these are
-# the most popular for English restaurant use cases.
+# Voice roster. Each entry has:
+#   id        — ElevenLabs voice id (or a friendly alias resolved in vapi._VOICE_ID_MAP)
+#   label     — shown in the dashboard dropdown
+#   best_for  — list of language codes where this voice sounds most natural;
+#               voices tagged ["en"] still work for Arabic/Urdu via
+#               eleven_multilingual_v2 but will have a Western accent.
+#
+# Multilingual voice IDs are ElevenLabs built-in voice IDs. Verify / browse
+# more at https://elevenlabs.io/voice-library (filter by language).
 AVAILABLE_VOICES = [
-    {"id": "rachel", "label": "Rachel — friendly female (US)"},
-    {"id": "antoni", "label": "Antoni — warm male (US)"},
-    {"id": "bella", "label": "Bella — soft female (US)"},
-    {"id": "domi", "label": "Domi — confident female (US)"},
-    {"id": "elli", "label": "Elli — youthful female (US)"},
-    {"id": "josh", "label": "Josh — deep male (US)"},
+    # ── English-primary voices ───────────────────────────────────────────────
+    {"id": "rachel", "label": "Rachel — friendly female (EN)", "best_for": ["en"]},
+    {"id": "antoni", "label": "Antoni — warm male (EN)", "best_for": ["en"]},
+    {"id": "bella", "label": "Bella — soft female (EN)", "best_for": ["en"]},
+    {"id": "domi", "label": "Domi — confident female (EN)", "best_for": ["en"]},
+    {"id": "elli", "label": "Elli — youthful female (EN)", "best_for": ["en"]},
+    {"id": "josh", "label": "Josh — deep male (EN)", "best_for": ["en"]},
+    # ── Multilingual voices (natural accent in AR / UR / EN) ─────────────────
+    # These use eleven_multilingual_v2 and are optimised for cross-language
+    # naturalness. The IDs below are ElevenLabs built-in (pre-made) voices;
+    # they work directly without being in _VOICE_ID_MAP.
+    {
+        "id": "9BWtsMINqrJLrRacOk9x",
+        "label": "Aria — conversational female (multilingual)",
+        "best_for": ["en", "ar", "ur"],
+    },
+    {
+        "id": "CwhRBWXHgkmLlGpnJKNJ",
+        "label": "Roger — deep male (multilingual)",
+        "best_for": ["en", "ar", "ur"],
+    },
+    {
+        "id": "nPczCjzI2devNBz1zQrb",
+        "label": "Brian — professional male (multilingual)",
+        "best_for": ["en", "ar", "ur"],
+    },
 ]
 
 AVAILABLE_MODELS = [
