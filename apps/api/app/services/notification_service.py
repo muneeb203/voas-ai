@@ -62,16 +62,33 @@ def mark_read(notification_id: str, user_id: str) -> Notification:
 
 
 def mark_all_read(user_id: str) -> int:
+    """Mark every unread notification for this user as read.
+
+    We collect the unread IDs first instead of relying on
+    `update(...).execute().data` because supabase-py 2.x doesn't always
+    populate the returned rows for UPDATE (depends on the PostgREST
+    `Prefer: return=representation` header making it through), which would
+    make the count we report back to the frontend silently wrong."""
     db = get_supabase_admin()
-    now = datetime.now(timezone.utc).isoformat()
-    res = (
+
+    unread_res = (
         db.table("notifications")
-        .update({"read_at": now})
+        .select("id")
         .eq("user_id", user_id)
         .is_("read_at", "null")
         .execute()
     )
-    return len(res.data or [])
+    unread_ids = [r["id"] for r in unread_res.data or []]
+    if not unread_ids:
+        return 0
+
+    now = datetime.now(timezone.utc).isoformat()
+    db.table("notifications").update({"read_at": now}).in_(
+        "id", unread_ids
+    ).eq("user_id", user_id).execute()
+
+    log.info("notifications_mark_all_read", user_id=user_id, count=len(unread_ids))
+    return len(unread_ids)
 
 
 def _insert_batch(rows: list[dict[str, Any]]) -> None:

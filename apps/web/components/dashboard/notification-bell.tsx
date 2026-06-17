@@ -56,15 +56,43 @@ export function NotificationBell() {
   }, [open, refresh]);
 
   function handleMarkAllRead() {
+    // Snapshot in case we need to revert.
+    const previousItems = items;
+    const previousUnread = unreadCount;
+
+    // Optimistic: flip every item to read + zero the badge immediately so the
+    // user sees feedback without waiting for the round-trip. If the server
+    // call fails, we revert below.
+    const now = new Date().toISOString();
+    setItems((prev) => prev.map((n) => (n.read_at ? n : { ...n, read_at: now })));
+    setUnreadCount(0);
+
     startTransition(async () => {
-      await markAllNotificationsReadAction();
+      const result = await markAllNotificationsReadAction();
+      if (result.error) {
+        // Revert the optimistic update on failure.
+        setItems(previousItems);
+        setUnreadCount(previousUnread);
+        return;
+      }
+      // Re-fetch to reconcile (server has authoritative state).
       await refresh();
     });
   }
 
   function handleItemClick(notification: Notification) {
+    const wasUnread = !notification.read_at;
+    if (wasUnread) {
+      // Optimistic single-item read flip + badge decrement.
+      const now = new Date().toISOString();
+      setItems((prev) =>
+        prev.map((n) => (n.id === notification.id ? { ...n, read_at: now } : n)),
+      );
+      setUnreadCount((c) => Math.max(0, c - 1));
+    }
+
     startTransition(async () => {
-      if (!notification.read_at) {
+      if (wasUnread) {
         await markNotificationReadAction(notification.id);
       }
       await refresh();
