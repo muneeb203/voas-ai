@@ -191,7 +191,17 @@ def _sync_assistant(workspace_id: str, settings: VoiceSettings) -> str | None:
 def update_settings(
     workspace_id: str, payload: VoiceSettingsUpdate, actor_id: str
 ) -> VoiceSettings:
+    import time
+
+    t_start = time.monotonic()
+
+    def _ms() -> int:
+        return int((time.monotonic() - t_start) * 1000)
+
+    log.info("voice_update_begin", workspace_id=workspace_id)
     current = get_or_create_settings(workspace_id)
+    log.info("voice_update_step", step="get_or_create_settings", elapsed_ms=_ms())
+
     db = get_supabase_admin()
 
     changes = payload.model_dump(exclude_none=True)
@@ -222,12 +232,19 @@ def update_settings(
         if not res.data:
             raise NotFoundError("Voice settings not found")
         current = VoiceSettings.model_validate(res.data[0])
+        log.info("voice_update_step", step="db_update_changes", elapsed_ms=_ms())
 
     # Sync to Vapi every time settings change (or first-time create assistant).
     try:
         assistant_id = _sync_assistant(workspace_id, current)
+        log.info("voice_update_step", step="vapi_sync_assistant", elapsed_ms=_ms())
     except Exception as exc:  # noqa: BLE001
-        log.error("vapi_sync_failed", workspace_id=workspace_id, error=str(exc))
+        log.error(
+            "vapi_sync_failed",
+            workspace_id=workspace_id,
+            elapsed_ms=_ms(),
+            error=str(exc),
+        )
         raise AppError(f"Vapi rejected the assistant config: {exc}") from exc
     now_iso = datetime.now(timezone.utc).isoformat()
     if assistant_id and assistant_id != current.vapi_assistant_id:
@@ -259,6 +276,7 @@ def update_settings(
         resource_id=workspace_id,
         metadata={"changed_fields": list(changes.keys())},
     )
+    log.info("voice_update_done", workspace_id=workspace_id, total_ms=_ms())
     return current
 
 

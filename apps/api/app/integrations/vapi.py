@@ -232,8 +232,17 @@ def create_assistant(payload: dict[str, Any]) -> str:
     if not is_configured():
         log.info("vapi_stub_create_assistant", payload_keys=list(payload.keys()))
         return f"stub-assistant-{hash(payload['firstMessage']) % 10_000_000}"
+    import time
+
+    t0 = time.monotonic()
     with _client() as c:
         res = c.post("/assistant", json=payload)
+        log.info(
+            "vapi_http_call",
+            action="create_assistant",
+            status=res.status_code,
+            elapsed_ms=int((time.monotonic() - t0) * 1000),
+        )
         _raise_with_body(res, "create_assistant")
         return res.json()["id"]
 
@@ -243,8 +252,17 @@ def update_assistant(assistant_id: str, payload: dict[str, Any]) -> None:
     if not is_configured():
         log.info("vapi_stub_update_assistant", assistant_id=assistant_id)
         return
+    import time
+
+    t0 = time.monotonic()
     with _client() as c:
         res = c.patch(f"/assistant/{assistant_id}", json=payload)
+        log.info(
+            "vapi_http_call",
+            action="update_assistant",
+            status=res.status_code,
+            elapsed_ms=int((time.monotonic() - t0) * 1000),
+        )
         _raise_with_body(res, "update_assistant")
 
 
