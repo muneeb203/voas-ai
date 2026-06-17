@@ -58,6 +58,7 @@ async def upsert_location_voice(
 ) -> DataResponse[LocationVoiceConfigSafe]:
     # Look up the location's display name for nicer Vapi labels.
     from app.core.supabase import get_supabase_admin
+
     db = get_supabase_admin()
     loc = (
         db.table("locations")

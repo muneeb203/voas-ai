@@ -35,9 +35,7 @@ async def list_tickets(
     response_model=DataResponse[Ticket],
     status_code=status.HTTP_201_CREATED,
 )
-async def create_ticket(
-    payload: TicketCreate, ctx: WorkspaceContextDep
-) -> DataResponse[Ticket]:
+async def create_ticket(payload: TicketCreate, ctx: WorkspaceContextDep) -> DataResponse[Ticket]:
     ticket = ticket_service.create_ticket(ctx.workspace_id, ctx.user.id, payload)
     return ok(ticket)
 
@@ -46,9 +44,7 @@ async def create_ticket(
     "/workspaces/{workspace_id}/tickets/{ticket_id}",
     response_model=DataResponse[TicketWithMessages],
 )
-async def get_ticket(
-    ticket_id: str, ctx: WorkspaceContextDep
-) -> DataResponse[TicketWithMessages]:
+async def get_ticket(ticket_id: str, ctx: WorkspaceContextDep) -> DataResponse[TicketWithMessages]:
     ticket = ticket_service.get_ticket(ctx.workspace_id, ticket_id)
     return ok(ticket)
 
@@ -61,9 +57,7 @@ async def get_ticket(
 async def add_message(
     ticket_id: str, payload: TicketMessageCreate, ctx: WorkspaceContextDep
 ) -> DataResponse[TicketMessage]:
-    message = ticket_service.add_user_message(
-        ctx.workspace_id, ticket_id, ctx.user.id, payload
-    )
+    message = ticket_service.add_user_message(ctx.workspace_id, ticket_id, ctx.user.id, payload)
     return ok(message)
 
 
@@ -74,9 +68,7 @@ async def add_message(
 async def update_ticket_status(
     ticket_id: str, payload: TicketStatusUpdate, ctx: WorkspaceContextDep
 ) -> DataResponse[Ticket]:
-    ticket = ticket_service.update_status(
-        ctx.workspace_id, ticket_id, ctx.user.id, payload.status
-    )
+    ticket = ticket_service.update_status(ctx.workspace_id, ticket_id, ctx.user.id, payload.status)
     return ok(ticket)
 
 

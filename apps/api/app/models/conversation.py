@@ -58,6 +58,7 @@ class ConversationDetail(Conversation):
 
 class ConversationCreate(BaseModel):
     """Used by V2 Sprint 2+ webhooks and tests."""
+
     channel: ConversationChannel
     location_id: str | None = None
     customer_phone: str | None = Field(default=None, max_length=50)

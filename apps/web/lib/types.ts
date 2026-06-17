@@ -1,5 +1,7 @@
 import type { WorkspaceRole, Vertical, PlanId } from './constants';
 
+export type { PlanId };
+
 export interface Workspace {
   id: string;
   name: string;
@@ -7,6 +9,7 @@ export interface Workspace {
   plan: PlanId;
   vertical: Vertical;
   status: 'active' | 'suspended' | 'deleted';
+  usage_enforcement_disabled?: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -201,6 +204,11 @@ export interface ConversationDetail extends Conversation {
   order_id: string | null;
 }
 
+export interface CustomerDetail extends Customer {
+  recent_orders: Order[];
+  recent_conversations: Conversation[];
+}
+
 export type OrderStatus =
   | 'pending'
   | 'confirmed'
@@ -295,6 +303,8 @@ export interface MenuCategory {
 
 // --- V2 Sprint 2: voice ---------------------------------------------------
 
+export type VoiceLanguage = 'en' | 'ar' | 'ur';
+
 export interface VoiceSettings {
   workspace_id: string;
   vapi_assistant_id: string | null;
@@ -302,8 +312,10 @@ export interface VoiceSettings {
   greeting: string;
   voice: string;
   model: string;
+  language: VoiceLanguage;
   end_call_phrases: string[] | null;
   enabled: boolean;
+  send_order_confirmations: boolean;
   last_synced_at: string | null;
   created_at: string;
   updated_at: string;
@@ -327,8 +339,202 @@ export interface LocationVoiceConfigSafe {
 export interface VoiceCapabilities {
   voices: Array<{ id: string; label: string }>;
   models: Array<{ id: string; label: string }>;
+  languages: Array<{ id: VoiceLanguage; label: string }>;
   vapi_configured: boolean;
   vapi_public_key: string | null;
+}
+
+// --- V2 Sprint 3: WhatsApp -------------------------------------------------
+
+export interface WhatsAppSettings {
+  workspace_id: string;
+  system_prompt: string;
+  greeting: string;
+  model: string;
+  enabled: boolean;
+  session_window_hours: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface LocationWhatsAppConfigSafe {
+  location_id: string;
+  workspace_id: string;
+  twilio_account_sid: string;
+  twilio_auth_token_masked: string;
+  twilio_whatsapp_number: string;
+  enabled: boolean;
+  last_synced_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface WhatsAppCapabilities {
+  models: Array<{ id: string; label: string }>;
+  openai_configured: boolean;
+  twilio_configured: boolean;
+  sandbox_number: string;
+}
+
+// --- Analytics ------------------------------------------------------------
+
+export interface DailyCount {
+  date: string;
+  count: number;
+}
+
+export interface DailyRevenue {
+  date: string;
+  cents: number;
+}
+
+export interface TopItem {
+  name: string;
+  count: number;
+  revenue_cents: number;
+}
+
+export interface HourlyCount {
+  hour: number;
+  count: number;
+}
+
+export interface AnalyticsSummary {
+  total_conversations: number;
+  conversations_by_channel: Record<string, number>;
+  conversations_by_status: Record<string, number>;
+  conversations_by_outcome: Record<string, number>;
+  avg_duration_seconds: number | null;
+  avg_sentiment: number | null;
+  total_orders: number;
+  total_revenue_cents: number;
+  avg_order_value_cents: number | null;
+  orders_by_status: Record<string, number>;
+  total_customers: number;
+  new_customers: number;
+  returning_customers: number;
+  daily_conversations: DailyCount[];
+  daily_orders: DailyCount[];
+  daily_revenue_cents: DailyRevenue[];
+  top_menu_items: TopItem[];
+  conversations_by_hour: HourlyCount[];
+}
+
+export interface TodayStats {
+  conversations_today: number;
+  orders_today: number;
+  revenue_today_cents: number;
+  avg_sentiment_today: number | null;
+}
+
+export interface HelpChatTurn {
+  role: 'user' | 'assistant';
+  content: string;
+}
+
+export interface HelpChatReply {
+  reply: string;
+}
+
+export type NotificationType = 'order_placed' | 'product_update' | 'usage_limit';
+
+export interface Notification {
+  id: string;
+  user_id: string;
+  workspace_id: string | null;
+  type: NotificationType;
+  title: string;
+  body: string | null;
+  link: string | null;
+  resource_type: string | null;
+  resource_id: string | null;
+  read_at: string | null;
+  created_at: string;
+}
+
+export interface NotificationList {
+  items: Notification[];
+  unread_count: number;
+}
+
+export interface Announcement {
+  id: string;
+  title: string;
+  body: string;
+  link: string | null;
+  created_by_admin_id: string | null;
+  published_at: string;
+  created_at: string;
+}
+
+export interface UsageMetric {
+  used: number;
+  plan_limit: number | null;
+  bonus_remaining: number;
+  effective_limit: number | null;
+  percent_used: number | null;
+}
+
+export interface TokenUsage {
+  openai_tokens: number;
+  gemini_tokens: number;
+  total_tokens: number;
+}
+
+export interface BillingPeriod {
+  start: string;
+  end: string;
+  days_remaining: number;
+}
+
+export interface BillingPlan {
+  slug: PlanId;
+  name: string;
+  price_cents_monthly: number;
+  voice_minutes_limit: number | null;
+  whatsapp_messages_limit: number | null;
+  help_bot_turns_limit: number | null;
+  allowed_channels: string[];
+}
+
+export interface UsageSummary {
+  plan: BillingPlan;
+  period: BillingPeriod;
+  voice_minutes: UsageMetric;
+  whatsapp_messages: UsageMetric;
+  help_bot_turns: UsageMetric;
+  tokens: TokenUsage;
+  usage_enforcement_disabled: boolean;
+  enforcement_active: boolean;
+}
+
+export type CreditType = 'voice_minutes' | 'whatsapp_messages' | 'help_bot_turns';
+
+export interface CreditGrant {
+  id: string;
+  workspace_id: string;
+  credit_type: CreditType;
+  amount_total: number;
+  amount_remaining: number;
+  reason: string | null;
+  granted_by_admin_id: string | null;
+  created_at: string;
+}
+
+export interface AdminWorkspaceUsageRow {
+  workspace_id: string;
+  workspace_name: string;
+  plan: PlanId;
+  status: string;
+  voice_used: number;
+  voice_limit: number | null;
+  whatsapp_used: number;
+  whatsapp_limit: number | null;
+  help_used: number;
+  help_limit: number | null;
+  total_tokens: number;
+  usage_enforcement_disabled: boolean;
+  period_end: string;
 }
 
 export interface ContactSubmission {

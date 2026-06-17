@@ -32,12 +32,7 @@ def list_entries(
     workspace_ids = {r["workspace_id"] for r in rows if r.get("workspace_id")}
     workspace_names: dict[str, str] = {}
     if workspace_ids:
-        ws_res = (
-            db.table("workspaces")
-            .select("id, name")
-            .in_("id", list(workspace_ids))
-            .execute()
-        )
+        ws_res = db.table("workspaces").select("id, name").in_("id", list(workspace_ids)).execute()
         workspace_names = {w["id"]: w["name"] for w in ws_res.data or []}
 
     entries: list[AdminAuditEntry] = []
@@ -68,7 +63,9 @@ def list_entries(
                 actor_name=actor_name,
                 actor_email=actor_email,
                 workspace_id=row.get("workspace_id"),
-                workspace_name=workspace_names.get(row.get("workspace_id")) if row.get("workspace_id") else None,
+                workspace_name=workspace_names.get(row.get("workspace_id"))
+                if row.get("workspace_id")
+                else None,
                 action=row["action"],
                 resource_type=row.get("resource_type"),
                 resource_id=row.get("resource_id"),

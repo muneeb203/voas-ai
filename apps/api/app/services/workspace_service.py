@@ -1,5 +1,5 @@
 import re
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from app.core.exceptions import (
     AppError,
@@ -33,19 +33,21 @@ def _unique_slug(base: str) -> str:
     for i in range(25):
         candidate = base if i == 0 else f"{base}-{i + 1}"
         candidate = candidate[:60]
-        existing = (
-            db.table("workspaces").select("id").eq("slug", candidate).limit(1).execute()
-        )
+        existing = db.table("workspaces").select("id").eq("slug", candidate).limit(1).execute()
         if not existing.data:
             return candidate
-    return f"{base}-{int(datetime.now(timezone.utc).timestamp())}"
+    return f"{base}-{int(datetime.now(UTC).timestamp())}"
 
 
 def create_workspace(payload: WorkspaceCreate, user_id: str, user_email: str | None) -> Workspace:
     db = get_supabase_admin()
 
     existing_membership = (
-        db.table("workspace_members").select("workspace_id").eq("user_id", user_id).limit(1).execute()
+        db.table("workspace_members")
+        .select("workspace_id")
+        .eq("user_id", user_id)
+        .limit(1)
+        .execute()
     )
     if existing_membership.data:
         raise ConflictError("You already belong to a workspace")
@@ -54,7 +56,14 @@ def create_workspace(payload: WorkspaceCreate, user_id: str, user_email: str | N
 
     ws_res = (
         db.table("workspaces")
-        .insert({"name": payload.name, "slug": slug, "vertical": payload.vertical})
+        .insert(
+            {
+                "name": payload.name,
+                "slug": slug,
+                "vertical": payload.vertical,
+                "plan": "professional",
+            }
+        )
         .execute()
     )
     if not ws_res.data:
@@ -67,7 +76,7 @@ def create_workspace(payload: WorkspaceCreate, user_id: str, user_email: str | N
             "workspace_id": workspace_id,
             "user_id": user_id,
             "role": "owner",
-            "joined_at": datetime.now(timezone.utc).isoformat(),
+            "joined_at": datetime.now(UTC).isoformat(),
         }
     ).execute()
 
@@ -95,6 +104,27 @@ def create_workspace(payload: WorkspaceCreate, user_id: str, user_email: str | N
     )
 
     log.info("workspace_created", workspace_id=workspace_id, slug=slug, owner=user_id)
+
+    if user_email:
+        try:
+            from app.services import email_service
+
+            full_name: str | None = None
+            auth_res = db.auth.admin.get_user_by_id(user_id)
+            if auth_res and auth_res.user:
+                meta = auth_res.user.user_metadata or {}
+                if isinstance(meta, dict):
+                    name = meta.get("full_name")
+                    full_name = name if isinstance(name, str) else None
+
+            email_service.send_welcome(
+                to=user_email,
+                full_name=full_name,
+                workspace_name=payload.name,
+            )
+        except Exception as exc:
+            log.error("welcome_email_failed", workspace_id=workspace_id, error=str(exc))
+
     return Workspace.model_validate(workspace)
 
 
@@ -113,9 +143,7 @@ def update_workspace(workspace_id: str, payload: WorkspaceUpdate, actor_id: str)
     if not changes:
         return get_workspace(workspace_id)
 
-    res = (
-        db.table("workspaces").update(changes).eq("id", workspace_id).execute()
-    )
+    res = db.table("workspaces").update(changes).eq("id", workspace_id).execute()
     if not res.data:
         raise NotFoundError("Workspace not found")
 
@@ -134,12 +162,7 @@ def update_workspace(workspace_id: str, payload: WorkspaceUpdate, actor_id: str)
 
 def soft_delete_workspace(workspace_id: str, actor_id: str) -> None:
     db = get_supabase_admin()
-    res = (
-        db.table("workspaces")
-        .update({"status": "deleted"})
-        .eq("id", workspace_id)
-        .execute()
-    )
+    res = db.table("workspaces").update({"status": "deleted"}).eq("id", workspace_id).execute()
     if not res.data:
         raise NotFoundError("Workspace not found")
 

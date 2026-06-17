@@ -4,7 +4,9 @@ from app.models.admin import AdminContactSubmission, AdminContactUpdate
 from app.services import audit_service
 
 
-def list_submissions(*, status: str | None = None, limit: int = 100) -> list[AdminContactSubmission]:
+def list_submissions(
+    *, status: str | None = None, limit: int = 100
+) -> list[AdminContactSubmission]:
     db = get_supabase_admin()
     query = db.table("contact_submissions").select("*").order("created_at", desc=True).limit(limit)
     if status:
@@ -13,7 +15,9 @@ def list_submissions(*, status: str | None = None, limit: int = 100) -> list[Adm
     return [AdminContactSubmission.model_validate(row) for row in res.data or []]
 
 
-def update_submission(submission_id: str, payload: AdminContactUpdate, admin_id: str) -> AdminContactSubmission:
+def update_submission(
+    submission_id: str, payload: AdminContactUpdate, admin_id: str
+) -> AdminContactSubmission:
     db = get_supabase_admin()
     changes = payload.model_dump(exclude_none=True)
     if not changes:
@@ -35,9 +39,7 @@ def update_submission(submission_id: str, payload: AdminContactUpdate, admin_id:
             raise NotFoundError("Submission not found")
         return AdminContactSubmission.model_validate(existing.data[0])
 
-    res = (
-        db.table("contact_submissions").update(safe).eq("id", submission_id).execute()
-    )
+    res = db.table("contact_submissions").update(safe).eq("id", submission_id).execute()
     if not res.data:
         raise NotFoundError("Submission not found")
 

@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from app.core.exceptions import NotFoundError
 from app.core.supabase import get_supabase_admin
@@ -14,12 +14,14 @@ def start(workspace_id: str, admin_id: str) -> dict[str, str]:
     state in an HttpOnly cookie and re-validate the admin on every request.
     """
     db = get_supabase_admin()
-    res = db.table("workspaces").select("id, name, status").eq("id", workspace_id).limit(1).execute()
+    res = (
+        db.table("workspaces").select("id, name, status").eq("id", workspace_id).limit(1).execute()
+    )
     if not res.data:
         raise NotFoundError("Workspace not found")
     workspace = res.data[0]
 
-    started_at = datetime.now(timezone.utc).isoformat()
+    started_at = datetime.now(UTC).isoformat()
 
     audit_service.write(
         actor_type="admin",

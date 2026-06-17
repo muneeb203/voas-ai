@@ -1,5 +1,5 @@
+from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from typing import AsyncIterator
 
 from fastapi import FastAPI
 from fastapi.exceptions import RequestValidationError
@@ -18,16 +18,22 @@ from app.core.exceptions import (
 from app.core.logging import configure_logging, get_logger
 from app.routers import (
     admin,
+    analytics,
+    billing,
     contact,
     conversations,
+    customers,
     health,
+    help,
     locations,
     members,
     menu,
+    notifications,
     orders,
     tickets,
     voice,
     webhooks,
+    whatsapp,
     workspaces,
 )
 
@@ -49,7 +55,7 @@ def _init_sentry() -> bool:
             integrations=[FastApiIntegration(), StarletteIntegration()],
         )
         return True
-    except Exception:  # noqa: BLE001
+    except Exception:
         return False
 
 
@@ -104,9 +110,15 @@ def create_app() -> FastAPI:
     app.include_router(members.public_router, prefix="/v1")
     app.include_router(tickets.router, prefix="/v1")
     app.include_router(conversations.router, prefix="/v1")
+    app.include_router(customers.router, prefix="/v1")
     app.include_router(orders.router, prefix="/v1")
     app.include_router(menu.router, prefix="/v1")
+    app.include_router(analytics.router, prefix="/v1")
+    app.include_router(billing.router, prefix="/v1")
+    app.include_router(help.router, prefix="/v1")
+    app.include_router(notifications.router, prefix="/v1")
     app.include_router(voice.router, prefix="/v1")
+    app.include_router(whatsapp.router, prefix="/v1")
     app.include_router(webhooks.router, prefix="/v1")
     app.include_router(admin.router, prefix="/v1")
 

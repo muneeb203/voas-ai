@@ -3,6 +3,7 @@ import { apiCall } from './client';
 import type {
   LocationVoiceConfigSafe,
   VoiceCapabilities,
+  VoiceLanguage,
   VoiceSettings,
 } from '@/lib/types';
 
@@ -23,7 +24,9 @@ export function updateVoiceSettings(
     greeting: string;
     voice: string;
     model: string;
+    language: VoiceLanguage;
     enabled: boolean;
+    send_order_confirmations: boolean;
   }>,
 ) {
   return apiCall<VoiceSettings>(`/v1/workspaces/${workspaceId}/voice/settings`, {

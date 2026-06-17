@@ -66,7 +66,7 @@ const fetchSession = cache(async (): Promise<SessionFetchResult> => {
           slug: impersonation.workspace_name
             .toLowerCase()
             .replace(/[^a-z0-9]+/g, '-'),
-          plan: 'starter',
+          plan: 'professional',
           vertical: 'restaurant',
           status: 'active',
           created_at: impersonation.started_at,

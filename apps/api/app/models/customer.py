@@ -23,3 +23,9 @@ class CustomerUpsert(BaseModel):
     name: str | None = Field(default=None, max_length=200)
     email: EmailStr | None = None
     tags: list[str] | None = None
+
+
+class CustomerUpdate(BaseModel):
+    name: str | None = Field(default=None, max_length=200)
+    email: EmailStr | None = None
+    tags: list[str] | None = None

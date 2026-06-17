@@ -47,6 +47,17 @@ target-version = "py311"
 select = ["E", "F", "W", "I", "N", "UP", "B", "A", "C4", "SIM", "RUF"]
 ignore = ["E501"]
 
+[tool.ruff.lint.per-file-ignores]
+# RUF001: Arabic / Urdu "full stop" (۔ U+06D4) is the correct punctuation
+# for those languages — not a mistyped hyphen. Allow it in prompt fixtures.
+"app/models/voice.py" = ["RUF001"]
+# B008: FastAPI uses Depends() / Query() / Header() as function defaults
+# by design. That's the framework's documented idiom, not a mistake.
+"app/routers/*.py" = ["B008"]
+# N818: VapiNotConfigured is a public exception name already used in
+# imports. Renaming it would be churn for no real benefit.
+"app/integrations/vapi.py" = ["N818"]
+
 [tool.ruff.format]
 quote-style = "double"
 indent-style = "space"

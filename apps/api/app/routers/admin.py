@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Path, Query, status
+from fastapi import APIRouter, Query, status
 from pydantic import BaseModel, Field
 
 from app.deps import AdminContextDep
@@ -10,6 +10,14 @@ from app.models.admin import (
     AdminWorkspaceDetail,
     AdminWorkspaceListItem,
 )
+from app.models.billing import (
+    AdminBillingUpdate,
+    AdminWorkspaceUsageRow,
+    CreditGrant,
+    CreditGrantCreate,
+    UsageSummary,
+)
+from app.models.notification import Announcement, AnnouncementCreate
 from app.models.ticket import (
     Ticket,
     TicketMessage,
@@ -23,6 +31,8 @@ from app.services import (
     admin_ticket_service,
     admin_user_service,
     admin_workspace_service,
+    announcement_service,
+    billing_service,
     impersonation_service,
 )
 from app.utils.responses import DataResponse, ok
@@ -48,10 +58,10 @@ async def list_workspaces(
     return ok(workspaces)
 
 
-@router.get(
-    "/workspaces/{workspace_id}", response_model=DataResponse[AdminWorkspaceDetail]
-)
-async def get_workspace(workspace_id: str, _: AdminContextDep) -> DataResponse[AdminWorkspaceDetail]:
+@router.get("/workspaces/{workspace_id}", response_model=DataResponse[AdminWorkspaceDetail])
+async def get_workspace(
+    workspace_id: str, _: AdminContextDep
+) -> DataResponse[AdminWorkspaceDetail]:
     detail = admin_workspace_service.get_detail(workspace_id)
     return ok(detail)
 
@@ -68,9 +78,7 @@ async def restore_workspace(workspace_id: str, ctx: AdminContextDep) -> DataResp
     return ok(workspace)
 
 
-@router.delete(
-    "/workspaces/{workspace_id}", status_code=status.HTTP_204_NO_CONTENT
-)
+@router.delete("/workspaces/{workspace_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_workspace(workspace_id: str, ctx: AdminContextDep) -> None:
     admin_workspace_service.soft_delete(workspace_id, ctx.admin_id)
 
@@ -178,9 +186,7 @@ async def admin_update_ticket(
 # ---------- Contact submissions ---------------------------------------------
 
 
-@router.get(
-    "/contact-submissions", response_model=DataResponse[list[AdminContactSubmission]]
-)
+@router.get("/contact-submissions", response_model=DataResponse[list[AdminContactSubmission]])
 async def list_contact_submissions(
     _: AdminContextDep, status_filter: str | None = Query(default=None, alias="status")
 ) -> DataResponse[list[AdminContactSubmission]]:
@@ -212,3 +218,80 @@ async def list_audit_logs(
             actor_type=actor_type, action=action, workspace_id=workspace_id
         )
     )
+
+
+# ---------- Announcements ---------------------------------------------------
+
+
+@router.get("/announcements", response_model=DataResponse[list[Announcement]])
+async def list_announcements(_: AdminContextDep) -> DataResponse[list[Announcement]]:
+    return ok(announcement_service.list_announcements())
+
+
+@router.post(
+    "/announcements",
+    response_model=DataResponse[Announcement],
+    status_code=status.HTTP_201_CREATED,
+)
+async def publish_announcement(
+    payload: AnnouncementCreate,
+    ctx: AdminContextDep,
+) -> DataResponse[Announcement]:
+    return ok(
+        announcement_service.publish(
+            payload,
+            admin_id=ctx.admin_id,
+            admin_user_id=ctx.user.id,
+        )
+    )
+
+
+# ---------- Billing / usage -------------------------------------------------
+
+
+@router.get("/usage", response_model=DataResponse[list[AdminWorkspaceUsageRow]])
+async def list_usage(_: AdminContextDep) -> DataResponse[list[AdminWorkspaceUsageRow]]:
+    return ok(billing_service.list_admin_usage())
+
+
+@router.get(
+    "/workspaces/{workspace_id}/billing/usage",
+    response_model=DataResponse[UsageSummary],
+)
+async def get_workspace_usage(workspace_id: str, _: AdminContextDep) -> DataResponse[UsageSummary]:
+    return ok(billing_service.get_usage_summary(workspace_id))
+
+
+@router.get(
+    "/workspaces/{workspace_id}/billing/grants",
+    response_model=DataResponse[list[CreditGrant]],
+)
+async def list_workspace_grants(
+    workspace_id: str, _: AdminContextDep
+) -> DataResponse[list[CreditGrant]]:
+    return ok(billing_service.list_grants(workspace_id))
+
+
+@router.post(
+    "/workspaces/{workspace_id}/billing/grants",
+    response_model=DataResponse[CreditGrant],
+    status_code=status.HTTP_201_CREATED,
+)
+async def grant_workspace_credits(
+    workspace_id: str,
+    payload: CreditGrantCreate,
+    ctx: AdminContextDep,
+) -> DataResponse[CreditGrant]:
+    return ok(billing_service.grant_credits(workspace_id, payload, ctx.admin_id))
+
+
+@router.patch(
+    "/workspaces/{workspace_id}/billing",
+    response_model=DataResponse[UsageSummary],
+)
+async def update_workspace_billing(
+    workspace_id: str,
+    payload: AdminBillingUpdate,
+    ctx: AdminContextDep,
+) -> DataResponse[UsageSummary]:
+    return ok(billing_service.update_workspace_billing(workspace_id, payload, ctx.admin_id))

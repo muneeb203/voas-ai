@@ -1,6 +1,19 @@
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel, Field
+
+# Supported voice agent languages. Adding a new one requires (1) extending
+# this Literal + AVAILABLE_LANGUAGES, (2) extending the migration's CHECK
+# constraint, (3) adding entries to DEFAULT_SYSTEM_PROMPT_BY_LANG +
+# DEFAULT_GREETING_BY_LANG, (4) adding an entry to vapi.LANGUAGE_CONFIG.
+VoiceLanguage = Literal["en", "ar", "ur"]
+
+AVAILABLE_LANGUAGES = [
+    {"id": "en", "label": "English"},
+    {"id": "ar", "label": "العربية (Arabic)"},
+    {"id": "ur", "label": "اردو (Urdu)"},
+]
 
 # Default system prompt for new workspaces. Restaurant-tuned out of the
 # box; owners can rewrite the whole thing from the dashboard.
@@ -27,7 +40,63 @@ Tone: warm, efficient, and confident. Never make promises about timing
 or ingredients you aren't sure about. When unsure, say so and offer to
 get a human."""
 
+_AR_PROMPT = """أنت موظف الاستقبال الودود لمطعم.
+
+وظيفتك:
+- استقبل العميل بحرارة. استخدم اسمه إن قدّمه.
+- خذ الطلبات بدقة: الأصناف، الكميات، التعديلات، والطلبات الخاصة.
+- اذكر المجموع قبل التأكيد.
+- أكّد طريقة الاستلام (استلام/توصيل)، الوقت، ورقم الهاتف.
+- أجب على أسئلة القائمة وساعات العمل والموقع.
+- إن كان العميل منزعجاً، اعترف بذلك واعرض تحويله إلى المدير.
+
+التقاط الطلب (مهم):
+- استخدم فقط الأصناف من القائمة أدناه. إن طلب العميل صنفاً غير موجود
+  فاعتذر بأدب.
+- بعد تأكيد العميل لطلبه الكامل (الأصناف + الكميات + التعديلات + طريقة
+  الاستلام)، نادِ أداة `place_order` بالتفاصيل المُهيكلة. لا تستدعها قبل
+  أن يُنهي العميل طلبه.
+- احصل على اسم العميل ورقم هاتفه قبل تأكيد الطلب.
+- بعد عودة الأداة، اقرأ المجموع للعميل.
+
+النبرة: دافئة، فعّالة، وواثقة. لا تَعِد بأوقات أو مكوّنات لست متأكداً منها.
+عند الشك، قُل ذلك واعرض تحويل المكالمة لإنسان."""
+
+_UR_PROMPT = """آپ ایک ریسٹورنٹ کے دوستانہ فرنٹ ڈیسک ایجنٹ ہیں۔
+
+آپ کا کام:
+- گرم جوشی سے استقبال کریں۔ اگر گاہک اپنا نام بتائے تو استعمال کریں۔
+- آرڈر درست لیں: آئٹمز، مقدار، ترامیم، اور خصوصی درخواستیں۔
+- تصدیق سے پہلے کل قیمت بتائیں۔
+- پک اپ یا ڈلیوری، وقت، اور رابطہ نمبر کی تصدیق کریں۔
+- مینو، اوقاتِ کار، اور مقام سے متعلق سوالات کا جواب دیں۔
+- اگر گاہک پریشان ہو، تو اس کا اعتراف کریں اور مینیجر سے بات کرانے کی پیشکش کریں۔
+
+آرڈر لیتے وقت (اہم):
+- صرف نیچے دیے گئے مینو سے آئٹمز استعمال کریں۔ اگر گاہک ایسی چیز مانگے
+  جو مینو پر نہیں، تو شائستگی سے بتا دیں۔
+- جب گاہک پورے آرڈر کی تصدیق کرے (آئٹمز + مقدار + ترامیم + پک اپ/ڈلیوری)،
+  تو `place_order` ٹول کو منظم تفصیلات کے ساتھ کال کریں۔ گاہک کے مکمل
+  ہونے سے پہلے کال مت کریں۔
+- آرڈر دینے سے پہلے گاہک کا نام اور فون نمبر حاصل کریں۔
+- ٹول کے واپس آنے کے بعد، تصدیقی کل قیمت گاہک کو پڑھ کر سنائیں۔
+
+لہجہ: گرم، تیز، اور پراعتماد۔ ایسے اوقات یا اجزاء کا وعدہ نہ کریں جن کا
+آپ کو یقین نہیں۔ شک ہو تو بتا دیں اور انسان سے بات کروانے کی پیشکش کریں۔"""
+
+DEFAULT_SYSTEM_PROMPT_BY_LANG: dict[str, str] = {
+    "en": DEFAULT_SYSTEM_PROMPT,
+    "ar": _AR_PROMPT,
+    "ur": _UR_PROMPT,
+}
+
 DEFAULT_GREETING = "Hi, thanks for calling. How can I help you today?"
+
+DEFAULT_GREETING_BY_LANG: dict[str, str] = {
+    "en": DEFAULT_GREETING,
+    "ar": "مرحباً، شكراً لاتصالك. كيف يمكنني مساعدتك اليوم؟",
+    "ur": "السلام علیکم، کال کرنے کا شکریہ۔ میں آپ کی کیا مدد کر سکتا ہوں؟",
+}
 
 # Common Vapi 11labs voices. The full list is much larger; these are
 # the most popular for English restaurant use cases.
@@ -54,8 +123,10 @@ class VoiceSettings(BaseModel):
     greeting: str
     voice: str
     model: str
+    language: VoiceLanguage = "en"
     end_call_phrases: list[str] | None
     enabled: bool
+    send_order_confirmations: bool = True
     last_synced_at: datetime | None
     created_at: datetime
     updated_at: datetime
@@ -70,8 +141,10 @@ class VoiceSettingsUpdate(BaseModel):
     greeting: str | None = Field(default=None, max_length=500)
     voice: str | None = Field(default=None, max_length=80)
     model: str | None = Field(default=None, max_length=80)
+    language: VoiceLanguage | None = None
     end_call_phrases: list[str] | None = None
     enabled: bool | None = None
+    send_order_confirmations: bool | None = None
 
 
 class LocationVoiceConfig(BaseModel):
@@ -95,7 +168,7 @@ class LocationVoiceConfigSafe(BaseModel):
     location_id: str
     workspace_id: str
     twilio_account_sid: str
-    twilio_auth_token_masked: str            # 'AC1234…XXXX' style
+    twilio_auth_token_masked: str  # 'AC1234…XXXX' style
     twilio_phone_number: str
     vapi_phone_number_id: str | None
     enabled: bool
@@ -116,5 +189,6 @@ class VoiceCapabilities(BaseModel):
 
     voices: list[dict]
     models: list[dict]
+    languages: list[dict]
     vapi_configured: bool
     vapi_public_key: str | None

@@ -8,7 +8,7 @@ os.environ.setdefault("SUPABASE_SERVICE_ROLE_KEY", "test-service-role-key")
 os.environ.setdefault("SUPABASE_JWT_SECRET", "test-jwt-secret-please-rotate-in-prod")
 os.environ.setdefault("ENVIRONMENT", "development")
 
-from app.main import create_app  # noqa: E402
+from app.main import create_app
 
 
 @pytest.fixture

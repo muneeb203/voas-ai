@@ -1,9 +1,19 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
-import { Plug, Phone, BookOpen, Users, ArrowRight, type LucideIcon } from 'lucide-react';
+import {
+  Phone,
+  MessageSquare,
+  BookOpen,
+  Users,
+  ArrowRight,
+  type LucideIcon,
+} from 'lucide-react';
 import { requireDashboardSession } from '@/lib/auth/workspace';
 import { listLocations } from '@/lib/api/locations';
 import { listMembers } from '@/lib/api/members';
+import { getTodayStats } from '@/lib/api/analytics';
+import { getVoiceSettings } from '@/lib/api/voice';
+import { getWhatsAppSettings, getLocationWhatsAppConfig } from '@/lib/api/whatsapp';
 import { isApiError } from '@/lib/types';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -21,24 +31,77 @@ interface ChecklistItem {
   comingSoon?: boolean;
 }
 
-const STATS = [
-  { label: 'Calls today', hint: 'Voice channel launches in V2' },
-  { label: 'Orders today', hint: 'Connect a POS in V2' },
-  { label: 'Avg sentiment', hint: 'Conversation analytics in V2' },
-  { label: 'Missed calls recovered', hint: 'Win-back in V3' },
-] as const;
+interface StatCardData {
+  label: string;
+  value: string;
+  hint: string;
+}
+
+function formatCurrency(cents: number): string {
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: 'USD',
+  }).format(cents / 100);
+}
+
+function sentimentEmoji(value: number | null): string {
+  if (value === null) return '—';
+  const emoji = value > 0.3 ? '😊' : value < -0.3 ? '😞' : '😐';
+  return `${emoji} ${value.toFixed(1)}`;
+}
 
 export default async function DashboardHome() {
   const session = await requireDashboardSession('/dashboard');
   const workspaceId = session.active.workspace_id;
 
-  const [locationsRes, membersRes] = await Promise.all([
+  const [locationsRes, membersRes, todayRes, voiceRes, waSettingsRes] = await Promise.all([
     listLocations(workspaceId),
     listMembers(workspaceId),
+    getTodayStats(workspaceId),
+    getVoiceSettings(workspaceId),
+    getWhatsAppSettings(workspaceId),
   ]);
 
-  const hasLocation = !isApiError(locationsRes) && locationsRes.data.length > 0;
+  const locations = !isApiError(locationsRes) ? locationsRes.data : [];
+  const hasLocation = locations.length > 0;
   const hasInvitedTeam = !isApiError(membersRes) && membersRes.data.length > 1;
+  const today = !isApiError(todayRes) ? todayRes.data : null;
+  const voiceConfigured =
+    !isApiError(voiceRes) && voiceRes.data.vapi_assistant_id !== null;
+
+  const waSettings = !isApiError(waSettingsRes) ? waSettingsRes.data : null;
+  const waConfigResults =
+    locations.length > 0
+      ? await Promise.all(
+          locations.map((loc) => getLocationWhatsAppConfig(workspaceId, loc.id)),
+        )
+      : [];
+  const whatsappConfigured =
+    (waSettings?.enabled ?? false) &&
+    waConfigResults.some((r) => !isApiError(r) && r.data?.enabled);
+
+  const stats: StatCardData[] = [
+    {
+      label: 'Conversations today',
+      value: today ? today.conversations_today.toLocaleString() : '—',
+      hint: 'Voice + WhatsApp since midnight',
+    },
+    {
+      label: 'Orders today',
+      value: today ? today.orders_today.toLocaleString() : '—',
+      hint: 'Across all channels',
+    },
+    {
+      label: 'Revenue today',
+      value: today ? formatCurrency(today.revenue_today_cents) : '—',
+      hint: 'Excludes cancelled & refunded',
+    },
+    {
+      label: 'Avg sentiment',
+      value: today ? sentimentEmoji(today.avg_sentiment_today) : '—',
+      hint: 'Average across today’s calls',
+    },
+  ];
 
   const checklist: ChecklistItem[] = [
     {
@@ -56,20 +119,18 @@ export default async function DashboardHome() {
       done: hasInvitedTeam,
     },
     {
-      icon: Plug,
-      title: 'Connect your POS',
-      description: 'Toast and Square land in V2 — placeholder card for now.',
-      href: '/integrations',
-      done: false,
-      comingSoon: true,
+      icon: Phone,
+      title: 'Configure voice',
+      description: 'Set up your AI agent and assign a phone number per location.',
+      href: '/integrations/voice',
+      done: voiceConfigured,
     },
     {
-      icon: Phone,
-      title: 'Provision a phone number',
-      description: 'Voice channel arrives in V2 with Twilio / Vapi.',
-      href: '/integrations',
-      done: false,
-      comingSoon: true,
+      icon: MessageSquare,
+      title: 'Configure WhatsApp',
+      description: 'Answer WhatsApp messages with the same AI agent.',
+      href: '/integrations/whatsapp',
+      done: whatsappConfigured,
     },
   ];
 
@@ -92,16 +153,11 @@ export default async function DashboardHome() {
           Today
         </h2>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          {STATS.map((s) => (
+          {stats.map((s) => (
             <Card key={s.label}>
               <CardContent className="p-5">
-                <div className="flex items-start justify-between">
-                  <p className="text-sm font-medium text-muted-foreground">{s.label}</p>
-                  <Badge variant="secondary">Soon</Badge>
-                </div>
-                <p className="mt-3 text-3xl font-semibold tracking-tight text-muted-foreground/50">
-                  —
-                </p>
+                <p className="text-sm font-medium text-muted-foreground">{s.label}</p>
+                <p className="mt-3 text-3xl font-semibold tracking-tight">{s.value}</p>
                 <p className="mt-1 text-xs text-muted-foreground">{s.hint}</p>
               </CardContent>
             </Card>
@@ -114,7 +170,7 @@ export default async function DashboardHome() {
           <CardHeader>
             <CardTitle>Get started</CardTitle>
             <p className="text-sm text-muted-foreground">
-              Four steps to a working VOAS agent. Some land in V2 — clearly marked.
+              Four steps to a working VOAS agent.
             </p>
           </CardHeader>
           <CardContent className="space-y-3">

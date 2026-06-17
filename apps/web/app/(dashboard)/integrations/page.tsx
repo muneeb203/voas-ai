@@ -6,11 +6,12 @@ import {
   CreditCard,
   Calendar,
   ShoppingBag,
-  CheckCircle2,
   AlertCircle,
 } from 'lucide-react';
 import { requireDashboardSession } from '@/lib/auth/workspace';
 import { getVoiceCapabilities, getVoiceSettings } from '@/lib/api/voice';
+import { getWhatsAppCapabilities, getWhatsAppSettings, getLocationWhatsAppConfig } from '@/lib/api/whatsapp';
+import { listLocations } from '@/lib/api/locations';
 import { isApiError } from '@/lib/types';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -22,13 +23,29 @@ export const metadata: Metadata = { title: 'Integrations' };
 export default async function IntegrationsPage() {
   const session = await requireDashboardSession('/integrations');
 
-  const [settingsRes, capsRes] = await Promise.all([
-    getVoiceSettings(session.active.workspace_id),
+  const workspaceId = session.active.workspace_id;
+
+  const [settingsRes, capsRes, waSettingsRes, waCapsRes, locationsRes] = await Promise.all([
+    getVoiceSettings(workspaceId),
     getVoiceCapabilities(),
+    getWhatsAppSettings(workspaceId),
+    getWhatsAppCapabilities(),
+    listLocations(workspaceId),
   ]);
 
   const settings = !isApiError(settingsRes) ? settingsRes.data : null;
   const caps = !isApiError(capsRes) ? capsRes.data : null;
+  const waSettings = !isApiError(waSettingsRes) ? waSettingsRes.data : null;
+  const waCaps = !isApiError(waCapsRes) ? waCapsRes.data : null;
+  const locations = !isApiError(locationsRes) ? locationsRes.data : [];
+
+  const waConfigResults = await Promise.all(
+    locations.map((loc) => getLocationWhatsAppConfig(workspaceId, loc.id)),
+  );
+  const waLocationConfigs = waConfigResults.flatMap((r) =>
+    isApiError(r) || r.data === null ? [] : [r.data],
+  );
+  const hasLiveWhatsAppLocation = waLocationConfigs.some((c) => c.enabled);
 
   return (
     <div>
@@ -45,11 +62,11 @@ export default async function IntegrationsPage() {
           vapiConfigured={caps?.vapi_configured ?? false}
         />
 
-        <ComingSoonCard
-          icon={MessageSquare}
-          title="WhatsApp"
-          description="Inbound + outbound WhatsApp via Twilio."
-          arrivesIn="V2 Sprint 3"
+        <WhatsAppCard
+          enabled={waSettings?.enabled ?? false}
+          hasLocationConfig={waLocationConfigs.length > 0}
+          hasLiveLocation={hasLiveWhatsAppLocation}
+          openaiConfigured={waCaps?.openai_configured ?? false}
         />
         <ComingSoonCard
           icon={ShoppingBag}
@@ -127,6 +144,62 @@ function VoiceCard({
         <Button asChild variant={assistantId ? 'outline' : 'default'} className="w-full">
           <Link href="/integrations/voice">
             {assistantId ? 'Edit voice settings' : 'Configure voice'}
+          </Link>
+        </Button>
+      </CardContent>
+    </Card>
+  );
+}
+
+function WhatsAppCard({
+  enabled,
+  hasLocationConfig,
+  hasLiveLocation,
+  openaiConfigured,
+}: {
+  enabled: boolean;
+  hasLocationConfig: boolean;
+  hasLiveLocation: boolean;
+  openaiConfigured: boolean;
+}) {
+  const status =
+    enabled && hasLiveLocation
+      ? { label: 'Live', variant: 'success' as const }
+      : hasLocationConfig
+        ? { label: 'Configured · disabled', variant: 'warning' as const }
+        : { label: 'Not configured', variant: 'secondary' as const };
+
+  return (
+    <Card>
+      <CardContent className="space-y-3 p-5">
+        <div className="flex items-start justify-between">
+          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-accent/10">
+            <MessageSquare className="h-5 w-5 text-accent" />
+          </div>
+          <Badge variant={status.variant}>{status.label}</Badge>
+        </div>
+
+        <div>
+          <h3 className="text-base font-semibold">WhatsApp</h3>
+          <p className="mt-1 text-sm text-muted-foreground">
+            AI answers WhatsApp messages via Twilio. Configure your agent and assign a WhatsApp
+            number per location.
+          </p>
+        </div>
+
+        {!openaiConfigured && (
+          <div className="flex items-start gap-2 rounded-md border border-warning/40 bg-warning/10 p-3 text-xs">
+            <AlertCircle className="mt-0.5 h-3.5 w-3.5 flex-shrink-0 text-warning" />
+            <p>
+              OpenAI isn&apos;t set in the backend. Add <code className="font-mono">OPENAI_API_KEY</code>{' '}
+              to the API env for real replies.
+            </p>
+          </div>
+        )}
+
+        <Button asChild variant={hasLocationConfig ? 'outline' : 'default'} className="w-full">
+          <Link href="/integrations/whatsapp">
+            {hasLocationConfig ? 'Edit WhatsApp settings' : 'Configure WhatsApp'}
           </Link>
         </Button>
       </CardContent>

@@ -73,9 +73,10 @@ export default async function AdminWorkspacesPage({
           className="h-10 rounded-md border border-input bg-background px-3 text-sm"
         >
           <option value="">All plans</option>
-          <option value="starter">Starter</option>
-          <option value="growth">Growth</option>
-          <option value="scale">Scale</option>
+          <option value="essentials">Essentials</option>
+          <option value="professional">Professional</option>
+          <option value="business">Business</option>
+          <option value="enterprise">Enterprise</option>
           <option value="enterprise">Enterprise</option>
         </select>
         <button

@@ -25,7 +25,7 @@ ALLOWED_MIME = {
 def _sanitize_filename(filename: str) -> str:
     """Strip path separators / control chars. Keep extension."""
     name = filename.replace("\\", "/").split("/")[-1]
-    name = "".join(c for c in name if c.isprintable() and c not in "<>:\"|?*\x00")
+    name = "".join(c for c in name if c.isprintable() and c not in '<>:"|?*\x00')
     name = name.strip().strip(".")
     return (name or "file")[:200]
 

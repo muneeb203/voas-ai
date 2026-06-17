@@ -15,7 +15,9 @@ const SettingsSchema = z.object({
   greeting: z.string().min(5).max(500),
   voice: z.string().min(1).max(80),
   model: z.string().min(1).max(80),
+  language: z.enum(['en', 'ar', 'ur']),
   enabled: z.boolean(),
+  send_order_confirmations: z.boolean(),
 });
 
 const LocationVoiceSchema = z.object({
@@ -58,7 +60,9 @@ export async function updateVoiceSettingsAction(
     greeting: String(formData.get('greeting') ?? '').trim(),
     voice: String(formData.get('voice') ?? 'rachel'),
     model: String(formData.get('model') ?? 'gpt-4o-mini'),
+    language: String(formData.get('language') ?? 'en'),
     enabled: formData.get('enabled') === 'on',
+    send_order_confirmations: formData.get('send_order_confirmations') === 'on',
   });
   if (!parsed.success) {
     return {

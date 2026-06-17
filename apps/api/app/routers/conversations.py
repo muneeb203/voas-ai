@@ -68,9 +68,7 @@ async def append_message(
     payload: ConversationMessageCreate,
     ctx: WorkspaceContextDep,
 ) -> DataResponse[ConversationMessage]:
-    message = conversation_service.append_message(
-        ctx.workspace_id, conversation_id, payload
-    )
+    message = conversation_service.append_message(ctx.workspace_id, conversation_id, payload)
     return ok(message)
 
 

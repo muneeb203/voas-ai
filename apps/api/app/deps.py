@@ -62,13 +62,7 @@ async def get_workspace_context(
     on purpose — admin endpoints have their own surface under /v1/admin/*.
     """
     db = get_supabase_admin()
-    ws = (
-        db.table("workspaces")
-        .select("id, status")
-        .eq("id", workspace_id)
-        .limit(1)
-        .execute()
-    )
+    ws = db.table("workspaces").select("id, status").eq("id", workspace_id).limit(1).execute()
     if not ws.data:
         raise NotFoundError("Workspace not found")
     if ws.data[0]["status"] == "deleted":
@@ -102,6 +96,15 @@ def require_owner(ctx: WorkspaceContextDep) -> WorkspaceContext:
 
 
 OwnerContextDep = Annotated[WorkspaceContext, Depends(require_owner)]
+
+
+def require_manager_or_owner(ctx: WorkspaceContextDep) -> WorkspaceContext:
+    if ctx.role not in ("owner", "manager"):
+        raise ForbiddenError("Only workspace owners and managers can do this")
+    return ctx
+
+
+ManagerContextDep = Annotated[WorkspaceContext, Depends(require_manager_or_owner)]
 
 
 class AdminContext(BaseModel):

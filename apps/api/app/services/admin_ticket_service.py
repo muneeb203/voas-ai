@@ -1,5 +1,4 @@
-from datetime import datetime, timezone
-from typing import Literal
+from datetime import UTC, datetime
 
 from app.core.exceptions import AppError, NotFoundError
 from app.core.supabase import get_supabase_admin
@@ -23,12 +22,7 @@ def list_all_tickets(
     limit: int = 100,
 ) -> list[Ticket]:
     db = get_supabase_admin()
-    query = (
-        db.table("support_tickets")
-        .select("*")
-        .order("updated_at", desc=True)
-        .limit(limit)
-    )
+    query = db.table("support_tickets").select("*").order("updated_at", desc=True).limit(limit)
     if status:
         query = query.eq("status", status)
     if priority:
@@ -56,7 +50,9 @@ def list_all_tickets(
         tid = m["ticket_id"]
         counts[tid] = counts.get(tid, 0) + 1
         ts = m["created_at"]
-        ts_dt = ts if isinstance(ts, datetime) else datetime.fromisoformat(ts.replace("Z", "+00:00"))
+        ts_dt = (
+            ts if isinstance(ts, datetime) else datetime.fromisoformat(ts.replace("Z", "+00:00"))
+        )
         if tid not in latest or latest[tid] < ts_dt:
             latest[tid] = ts_dt
 
@@ -108,12 +104,10 @@ def reply(
     if not is_internal_note:
         # Status logic: if was 'open' or 'in_progress', move to 'waiting_user'.
         new_status = (
-            "waiting_user"
-            if ticket["status"] in {"open", "in_progress"}
-            else ticket["status"]
+            "waiting_user" if ticket["status"] in {"open", "in_progress"} else ticket["status"]
         )
         db.table("support_tickets").update(
-            {"status": new_status, "updated_at": datetime.now(timezone.utc).isoformat()}
+            {"status": new_status, "updated_at": datetime.now(UTC).isoformat()}
         ).eq("id", ticket_id).execute()
 
     audit_service.write(
@@ -143,9 +137,9 @@ def update_status(ticket_id: str, admin_id: str, status: TicketStatus) -> Ticket
         raise NotFoundError("Ticket not found")
     ticket = res.data[0]
 
-    update: dict = {"status": status, "updated_at": datetime.now(timezone.utc).isoformat()}
+    update: dict = {"status": status, "updated_at": datetime.now(UTC).isoformat()}
     if status == "resolved":
-        update["resolved_at"] = datetime.now(timezone.utc).isoformat()
+        update["resolved_at"] = datetime.now(UTC).isoformat()
 
     updated = db.table("support_tickets").update(update).eq("id", ticket_id).execute()
 
