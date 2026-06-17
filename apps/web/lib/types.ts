@@ -303,6 +303,8 @@ export interface MenuCategory {
 
 // --- V2 Sprint 2: voice ---------------------------------------------------
 
+export type VoiceLanguage = 'en' | 'ar' | 'ur';
+
 export interface VoiceSettings {
   workspace_id: string;
   vapi_assistant_id: string | null;
@@ -310,6 +312,7 @@ export interface VoiceSettings {
   greeting: string;
   voice: string;
   model: string;
+  language: VoiceLanguage;
   end_call_phrases: string[] | null;
   enabled: boolean;
   send_order_confirmations: boolean;
@@ -336,6 +339,7 @@ export interface LocationVoiceConfigSafe {
 export interface VoiceCapabilities {
   voices: Array<{ id: string; label: string }>;
   models: Array<{ id: string; label: string }>;
+  languages: Array<{ id: VoiceLanguage; label: string }>;
   vapi_configured: boolean;
   vapi_public_key: string | null;
 }

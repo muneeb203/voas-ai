@@ -57,6 +57,29 @@ _VOICE_ID_MAP = {
     "josh": "TxGEqnHWrfWFTfGW9XjX",
 }
 
+# How each supported language maps to Deepgram (STT) + ElevenLabs (TTS)
+# settings. Arabic + Urdu use ElevenLabs' multilingual model — the same voice
+# ids (Rachel, Antoni, etc.) work; ElevenLabs adapts pronunciation. Deepgram
+# "multi" mode handles Arabic/Urdu including English code-switching that's
+# common in Pakistani / Gulf markets.
+LANGUAGE_CONFIG: dict[str, dict[str, str]] = {
+    "en": {
+        "deepgram_language": "en",
+        "deepgram_model": "nova-2",
+        "elevenlabs_model": "eleven_turbo_v2_5",
+    },
+    "ar": {
+        "deepgram_language": "multi",
+        "deepgram_model": "nova-2",
+        "elevenlabs_model": "eleven_multilingual_v2",
+    },
+    "ur": {
+        "deepgram_language": "multi",
+        "deepgram_model": "nova-2",
+        "elevenlabs_model": "eleven_multilingual_v2",
+    },
+}
+
 
 PLACE_ORDER_TOOL: dict[str, Any] = {
     "type": "function",
@@ -127,9 +150,11 @@ def assistant_payload(
     model: str,
     server_url: str | None,
     end_call_phrases: list[str] | None = None,
+    language: str = "en",
 ) -> dict[str, Any]:
     """Shape the JSON Vapi expects for create/update of an assistant."""
     voice_id = _VOICE_ID_MAP.get(voice.lower(), voice)
+    lang_cfg = LANGUAGE_CONFIG.get(language, LANGUAGE_CONFIG["en"])
 
     payload: dict[str, Any] = {
         "name": "VOAS workspace agent",
@@ -140,9 +165,17 @@ def assistant_payload(
             "messages": [{"role": "system", "content": system_prompt}],
             "tools": [PLACE_ORDER_TOOL],
         },
-        "voice": {"provider": "11labs", "voiceId": voice_id},
+        "voice": {
+            "provider": "11labs",
+            "voiceId": voice_id,
+            "model": lang_cfg["elevenlabs_model"],
+        },
         # Vapi handles transcription + LLM + TTS in one round trip
-        "transcriber": {"provider": "deepgram", "model": "nova-2"},
+        "transcriber": {
+            "provider": "deepgram",
+            "model": lang_cfg["deepgram_model"],
+            "language": lang_cfg["deepgram_language"],
+        },
         # End-of-call analysis. Vapi puts sentiment via structuredData,
         # not a dedicated sentimentPrompt field.
         "analysisPlan": {
