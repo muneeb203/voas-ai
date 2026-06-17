@@ -9,7 +9,7 @@ Webhook event shapes are documented at https://docs.vapi.ai/server-url.
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
-from fastapi import APIRouter, Header, Request, status
+from fastapi import APIRouter, BackgroundTasks, Header, Request, status
 from fastapi.responses import Response
 
 import json
@@ -70,9 +70,10 @@ def _resolve_workspace(message: dict[str, Any]) -> tuple[str | None, str | None]
 @router.post("/vapi", status_code=status.HTTP_200_OK)
 async def vapi_webhook(
     request: Request,
+    background_tasks: BackgroundTasks,
     x_vapi_secret: str | None = Header(default=None, alias="x-vapi-secret"),
     x_vapi_signature: str | None = Header(default=None, alias="x-vapi-signature"),
-) -> dict[str, str]:
+) -> dict[str, Any]:
     body = await request.body()
     if not vapi.verify_webhook(
         body,
@@ -161,6 +162,21 @@ async def vapi_webhook(
                     customer_phone=(conv or {}).get("customer_phone"),
                     arguments=args if isinstance(args, dict) else {},
                 )
+                # Schedule SMS confirmation + push notification AFTER we respond
+                # to Vapi — see comment in voice_order_service for why this can
+                # not block the response.
+                if order_result.get("success"):
+                    background_tasks.add_task(
+                        voice_order_service.send_post_order_notifications,
+                        workspace_id=workspace_id,
+                        location_id=location_id,
+                        customer_phone=(conv or {}).get("customer_phone"),
+                        customer_name=order_result.get("customer_name"),
+                        order_id=order_result["order_id"],
+                        items_json=order_result["items_json"],
+                        total_cents=order_result["total_cents"],
+                        fulfillment=order_result["fulfillment"],
+                    )
                 results.append({"toolCallId": tc_id, "result": order_result["message"]})
             else:
                 log.warning("vapi_unknown_tool", name=name, args_preview=str(args)[:120])

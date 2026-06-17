@@ -187,21 +187,60 @@ def place_order_from_tool_call(
         total_cents=total_cents,
     )
 
-    # Send order confirmation to customer (best-effort — never blocks the return)
+    # IMPORTANT: do NOT run SMS / push notifications synchronously here.
+    # Vapi has an ~8s tool-call timeout. Order confirmation SMS via Twilio
+    # alone can take 3-5s; if we wait, the agent sees a timeout and tells
+    # the customer the order failed even though the row is already saved.
+    # The webhook caller is responsible for scheduling
+    # `send_post_order_notifications` as a FastAPI BackgroundTask so it runs
+    # after the response is sent.
+
+    return {
+        "success": True,
+        "order_id": order["id"],
+        "total_dollars": round(total_cents / 100, 2),
+        "items_count": sum(int(i["quantity"]) for i in items_json),
+        "customer_name": str(arguments.get("customer_name") or "").strip() or None,
+        "fulfillment": fulfillment,
+        "items_json": items_json,
+        "total_cents": total_cents,
+        "message": (
+            f"Order confirmed for {fulfillment}. "
+            f"{sum(int(i['quantity']) for i in items_json)} items, total "
+            f"${total_cents / 100:.2f}."
+        ),
+    }
+
+
+def send_post_order_notifications(
+    *,
+    workspace_id: str,
+    location_id: str | None,
+    customer_phone: str | None,
+    customer_name: str | None,
+    order_id: str,
+    items_json: list[dict[str, Any]],
+    total_cents: int,
+    fulfillment: str,
+) -> None:
+    """Fire SMS confirmation + workspace notification. Runs AFTER the
+    webhook responds to Vapi, so external HTTP latency doesn't push us
+    past the tool-call timeout."""
     try:
         from app.services import order_confirmation_service
+
         order_confirmation_service.send_order_confirmation(
             workspace_id=workspace_id,
             location_id=location_id,
             customer_phone=customer_phone,
-            customer_name=str(arguments.get("customer_name") or "").strip() or None,
-            order_id=order["id"],
+            customer_name=customer_name,
+            order_id=order_id,
             items_json=items_json,
             total_cents=total_cents,
             fulfillment=fulfillment,
         )
     except Exception as exc:  # noqa: BLE001
-        log.error("order_confirmation_failed", order_id=order["id"], error=str(exc))
+        log.error("order_confirmation_failed", order_id=order_id, error=str(exc))
 
     try:
         from app.services import notification_service
@@ -209,7 +248,7 @@ def place_order_from_tool_call(
         total_display = f"${total_cents / 100:.2f}"
         notification_service.notify_workspace_order(
             workspace_id=workspace_id,
-            order_id=order["id"],
+            order_id=order_id,
             title=f"New order · {total_display} {fulfillment}",
             body=(
                 f"{sum(int(i['quantity']) for i in items_json)} items"
@@ -217,16 +256,4 @@ def place_order_from_tool_call(
             ),
         )
     except Exception as exc:  # noqa: BLE001
-        log.error("order_notification_failed", order_id=order["id"], error=str(exc))
-
-    return {
-        "success": True,
-        "order_id": order["id"],
-        "total_dollars": round(total_cents / 100, 2),
-        "items_count": sum(int(i["quantity"]) for i in items_json),
-        "message": (
-            f"Order confirmed for {fulfillment}. "
-            f"{sum(int(i['quantity']) for i in items_json)} items, total "
-            f"${total_cents / 100:.2f}."
-        ),
-    }
+        log.error("order_notification_failed", order_id=order_id, error=str(exc))

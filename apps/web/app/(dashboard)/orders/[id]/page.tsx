@@ -2,17 +2,14 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { format, formatDistanceToNow } from 'date-fns';
-import { ArrowLeft, ExternalLink } from 'lucide-react';
+import { ArrowLeft, ExternalLink, Printer } from 'lucide-react';
 import { requireDashboardSession } from '@/lib/auth/workspace';
 import { getOrder } from '@/lib/api/orders';
 import { isApiError } from '@/lib/types';
 import { Card, CardContent } from '@/components/ui/card';
 import { PageHeader } from '@/components/dashboard/page-header';
-import {
-  OrderStatusBadge,
-  PaymentStatusBadge,
-  formatCents,
-} from '@/components/dashboard/order-badges';
+import { PaymentStatusBadge, formatCents } from '@/components/dashboard/order-badges';
+import { OrderStatusSelector } from '@/components/dashboard/order-status-selector';
 
 export const metadata: Metadata = { title: 'Order' };
 
@@ -40,12 +37,29 @@ export default async function OrderDetailPage({ params }: { params: { id: string
         title={`${formatCents(order.total_cents)} order`}
         description={
           <span className="flex items-center gap-2">
-            <OrderStatusBadge status={order.status} />
             <PaymentStatusBadge status={order.payment_status} />
             <span className="text-xs text-muted-foreground">
               · Placed {formatDistanceToNow(new Date(order.created_at), { addSuffix: true })}
             </span>
           </span>
+        }
+        action={
+          <div className="flex items-center gap-2">
+            <Link
+              href={`/orders/${order.id}/receipt`}
+              target="_blank"
+              rel="noopener"
+              className="inline-flex items-center gap-2 rounded-md border border-border bg-background px-3 py-1.5 text-sm font-medium transition-colors hover:bg-muted"
+            >
+              <Printer className="h-3.5 w-3.5" />
+              Print receipt
+            </Link>
+            <OrderStatusSelector
+              orderId={order.id}
+              current={order.status}
+              disabled={session.active.role === 'staff'}
+            />
+          </div>
         }
       />
 
