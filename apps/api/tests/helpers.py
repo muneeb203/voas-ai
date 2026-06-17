@@ -1,6 +1,6 @@
 """Test helpers for forging Supabase-compatible JWTs in tests."""
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from jose import jwt
 
@@ -14,7 +14,7 @@ def make_token(
     *, user_id: str = TEST_USER_ID, email: str = TEST_USER_EMAIL, is_admin: bool = False
 ) -> str:
     settings = get_settings()
-    exp = datetime.now(timezone.utc) + timedelta(hours=1)
+    exp = datetime.now(UTC) + timedelta(hours=1)
     payload = {
         "sub": user_id,
         "email": email,

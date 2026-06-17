@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from app.config import get_settings
 from app.core.exceptions import AppError, NotFoundError
@@ -13,7 +13,6 @@ from app.models.voice import (
     DEFAULT_GREETING_BY_LANG,
     DEFAULT_SYSTEM_PROMPT,
     DEFAULT_SYSTEM_PROMPT_BY_LANG,
-    LocationVoiceConfig,
     LocationVoiceConfigSafe,
     LocationVoiceConfigUpsert,
     VoiceCapabilities,
@@ -99,13 +98,7 @@ def _hydrate_settings(row: dict, workspace_id: str) -> VoiceSettings:
 
 def get_or_create_settings(workspace_id: str) -> VoiceSettings:
     db = get_supabase_admin()
-    res = (
-        db.table("voice_settings")
-        .select("*")
-        .eq("workspace_id", workspace_id)
-        .limit(1)
-        .execute()
-    )
+    res = db.table("voice_settings").select("*").eq("workspace_id", workspace_id).limit(1).execute()
     if res.data:
         return _hydrate_settings(res.data[0], workspace_id)
 
@@ -217,18 +210,16 @@ def update_settings(
     if new_lang and new_lang != current.language:
         defaults_for_old = DEFAULT_SYSTEM_PROMPT_BY_LANG.get(current.language, "")
         greet_for_old = DEFAULT_GREETING_BY_LANG.get(current.language, "")
-        if "system_prompt" not in changes and current.system_prompt.strip() == defaults_for_old.strip():
+        if (
+            "system_prompt" not in changes
+            and current.system_prompt.strip() == defaults_for_old.strip()
+        ):
             changes["system_prompt"] = DEFAULT_SYSTEM_PROMPT_BY_LANG[new_lang]
         if "greeting" not in changes and current.greeting.strip() == greet_for_old.strip():
             changes["greeting"] = DEFAULT_GREETING_BY_LANG[new_lang]
 
     if changes:
-        res = (
-            db.table("voice_settings")
-            .update(changes)
-            .eq("workspace_id", workspace_id)
-            .execute()
-        )
+        res = db.table("voice_settings").update(changes).eq("workspace_id", workspace_id).execute()
         if not res.data:
             raise NotFoundError("Voice settings not found")
         current = VoiceSettings.model_validate(res.data[0])
@@ -238,7 +229,7 @@ def update_settings(
     try:
         assistant_id = _sync_assistant(workspace_id, current)
         log.info("voice_update_step", step="vapi_sync_assistant", elapsed_ms=_ms())
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         log.error(
             "vapi_sync_failed",
             workspace_id=workspace_id,
@@ -246,13 +237,11 @@ def update_settings(
             error=str(exc),
         )
         raise AppError(f"Vapi rejected the assistant config: {exc}") from exc
-    now_iso = datetime.now(timezone.utc).isoformat()
+    now_iso = datetime.now(UTC).isoformat()
     if assistant_id and assistant_id != current.vapi_assistant_id:
         update = (
             db.table("voice_settings")
-            .update(
-                {"vapi_assistant_id": assistant_id, "last_synced_at": now_iso}
-            )
+            .update({"vapi_assistant_id": assistant_id, "last_synced_at": now_iso})
             .eq("workspace_id", workspace_id)
             .execute()
         )
@@ -361,16 +350,11 @@ def upsert_location_config(
         "twilio_phone_number": payload.twilio_phone_number,
         "vapi_phone_number_id": vapi_phone_id,
         "enabled": payload.enabled,
-        "last_synced_at": datetime.now(timezone.utc).isoformat(),
+        "last_synced_at": datetime.now(UTC).isoformat(),
     }
 
     if existing.data:
-        res = (
-            db.table("location_voice_config")
-            .update(row)
-            .eq("location_id", location_id)
-            .execute()
-        )
+        res = db.table("location_voice_config").update(row).eq("location_id", location_id).execute()
     else:
         res = db.table("location_voice_config").insert(row).execute()
     if not res.data:
@@ -404,7 +388,7 @@ def disable_location_config(workspace_id: str, location_id: str, actor_id: str) 
     if existing.data[0].get("vapi_phone_number_id"):
         try:
             vapi.delete_phone_number(existing.data[0]["vapi_phone_number_id"])
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             log.warning("vapi_delete_phone_failed", error=str(exc))
 
     db.table("location_voice_config").delete().eq("location_id", location_id).execute()

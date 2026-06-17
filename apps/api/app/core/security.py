@@ -33,7 +33,7 @@ def _fetch_jwks() -> dict[str, Any]:
         jwks = res.json()
         log.info("jwks_loaded", url=url, key_count=len(jwks.get("keys", [])))
         return jwks
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         log.error("jwks_fetch_failed", url=url, error=str(exc))
         return {"keys": []}
 

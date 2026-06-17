@@ -49,9 +49,7 @@ def _build_confirmation(
     )
 
 
-def _location_whatsapp_config(
-    workspace_id: str, location_id: str | None
-) -> dict[str, Any] | None:
+def _location_whatsapp_config(workspace_id: str, location_id: str | None) -> dict[str, Any] | None:
     if not location_id:
         return None
     db = get_supabase_admin()
@@ -76,9 +74,7 @@ def _confirmations_enabled(workspace_id: str) -> bool:
         .limit(1)
         .execute()
     )
-    if res.data and not res.data[0].get("send_order_confirmations", True):
-        return False
-    return True
+    return not (res.data and not res.data[0].get("send_order_confirmations", True))
 
 
 def send_order_confirmation(
@@ -102,9 +98,7 @@ def send_order_confirmation(
             log.info("order_confirmation_disabled", workspace_id=workspace_id)
             return
 
-        message = _build_confirmation(
-            customer_name, items_json, total_cents, fulfillment, order_id
-        )
+        message = _build_confirmation(customer_name, items_json, total_cents, fulfillment, order_id)
 
         # 1. Prefer WhatsApp via the location's own Twilio config.
         config = _location_whatsapp_config(workspace_id, location_id)
@@ -142,5 +136,5 @@ def send_order_confirmation(
 
         # 3. Nothing configured — stub mode, no crash.
         log.info("order_confirmation_skipped", order_id=order_id, reason="no_transport")
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         log.error("order_confirmation_error", order_id=order_id, error=str(exc))

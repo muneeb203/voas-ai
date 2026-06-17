@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, Query
 
@@ -18,7 +18,7 @@ async def get_summary(
     ctx: WorkspaceContextDep,
     days: int = Query(default=30, ge=1, le=365),
 ) -> DataResponse[AnalyticsSummary]:
-    since = datetime.now(timezone.utc) - timedelta(days=days)
+    since = datetime.now(UTC) - timedelta(days=days)
     return ok(analytics_service.get_summary(ctx.workspace_id, since))
 
 

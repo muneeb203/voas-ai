@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from app.core.exceptions import NotFoundError
 from app.core.supabase import get_supabase_admin
@@ -40,9 +40,7 @@ def get_order(workspace_id: str, order_id: str) -> Order:
     return Order.model_validate(res.data[0])
 
 
-def update_order_status(
-    workspace_id: str, order_id: str, new_status: OrderStatus
-) -> Order:
+def update_order_status(workspace_id: str, order_id: str, new_status: OrderStatus) -> Order:
     """Move an order to a new status. Workspace-scoped to prevent cross-tenant
     updates. Returns the updated row or raises NotFoundError if the order
     doesn't belong to the workspace."""
@@ -52,7 +50,7 @@ def update_order_status(
         .update(
             {
                 "status": new_status,
-                "updated_at": datetime.now(timezone.utc).isoformat(),
+                "updated_at": datetime.now(UTC).isoformat(),
             }
         )
         .eq("id", order_id)

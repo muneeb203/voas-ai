@@ -85,10 +85,7 @@ def _backfill_workspace(workspace_id: str, created_at: str) -> dict[str, int]:
 def main() -> None:
     db = get_supabase_admin()
     workspaces = (
-        db.table("workspaces")
-        .select("id, name, created_at")
-        .neq("status", "deleted")
-        .execute()
+        db.table("workspaces").select("id, name, created_at").neq("status", "deleted").execute()
     )
     total = {"voice": 0, "whatsapp_in": 0, "whatsapp_out": 0}
     for ws in workspaces.data or []:

@@ -2,12 +2,12 @@ from pydantic import BaseModel
 
 
 class DailyCount(BaseModel):
-    date: str       # "YYYY-MM-DD"
+    date: str  # "YYYY-MM-DD"
     count: int
 
 
 class DailyRevenue(BaseModel):
-    date: str       # "YYYY-MM-DD"
+    date: str  # "YYYY-MM-DD"
     cents: int
 
 
@@ -18,7 +18,7 @@ class TopItem(BaseModel):
 
 
 class HourlyCount(BaseModel):
-    hour: int       # 0-23
+    hour: int  # 0-23
     count: int
 
 

@@ -22,9 +22,7 @@ async def list_customers(
     sort_by: str = Query(default="last_seen"),
 ) -> DataResponse[list[Customer]]:
     sort_value = sort_by if sort_by in _SORT_OPTIONS else "last_seen"
-    customers = customer_service.list_customers(
-        ctx.workspace_id, search=search, sort_by=sort_value
-    )
+    customers = customer_service.list_customers(ctx.workspace_id, search=search, sort_by=sort_value)
     return ok(customers)
 
 
@@ -32,9 +30,7 @@ async def list_customers(
     "/workspaces/{workspace_id}/customers/{customer_id}",
     response_model=DataResponse[CustomerDetail],
 )
-async def get_customer(
-    customer_id: str, ctx: WorkspaceContextDep
-) -> DataResponse[CustomerDetail]:
+async def get_customer(customer_id: str, ctx: WorkspaceContextDep) -> DataResponse[CustomerDetail]:
     detail = customer_service.get_customer_with_history(ctx.workspace_id, customer_id)
     return ok(detail)
 

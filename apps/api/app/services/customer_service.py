@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from app.core.exceptions import NotFoundError
 from app.core.supabase import get_supabase_admin
@@ -20,11 +20,7 @@ def list_customers(
     db = get_supabase_admin()
     sort_column = sort_by if sort_by in _SORT_COLUMNS else "last_seen"
 
-    query = (
-        db.table("customers")
-        .select("*")
-        .eq("workspace_id", workspace_id)
-    )
+    query = db.table("customers").select("*").eq("workspace_id", workspace_id)
 
     if search:
         # Strip commas so they can't break PostgREST's `or` expression parsing.
@@ -84,8 +80,7 @@ def get_customer_with_history(workspace_id: str, customer_id: str) -> CustomerDe
     conv_rows = conv_res.data or []
     counts = _message_counts([r["id"] for r in conv_rows])
     recent_conversations = [
-        Conversation(**{**row, "message_count": counts.get(row["id"], 0)})
-        for row in conv_rows
+        Conversation(**{**row, "message_count": counts.get(row["id"], 0)}) for row in conv_rows
     ]
 
     return CustomerDetail(
@@ -152,7 +147,7 @@ def upsert_by_phone(workspace_id: str, payload: CustomerUpsert) -> Customer:
     call this on every inbound interaction in V2 Sprint 2+.
     """
     db = get_supabase_admin()
-    now_iso = datetime.now(timezone.utc).isoformat()
+    now_iso = datetime.now(UTC).isoformat()
 
     if payload.phone:
         existing = (
@@ -171,12 +166,7 @@ def upsert_by_phone(workspace_id: str, payload: CustomerUpsert) -> Customer:
                 updates["email"] = payload.email
             if payload.tags:
                 updates["tags"] = payload.tags
-            res = (
-                db.table("customers")
-                .update(updates)
-                .eq("id", existing.data[0]["id"])
-                .execute()
-            )
+            res = db.table("customers").update(updates).eq("id", existing.data[0]["id"]).execute()
             return Customer.model_validate(res.data[0])
 
     res = (

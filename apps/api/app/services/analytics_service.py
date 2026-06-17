@@ -8,7 +8,7 @@ per-workspace and time-bounded, so this stays cheap.
 """
 
 from collections import defaultdict
-from datetime import date, datetime, timedelta, timezone
+from datetime import UTC, date, datetime, timedelta
 from typing import Any
 
 from app.core.logging import get_logger
@@ -56,15 +56,14 @@ def _empty_daily_range(since: datetime, now: datetime) -> list[str]:
 
 def get_summary(workspace_id: str, since: datetime) -> AnalyticsSummary:
     db = get_supabase_admin()
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     since_iso = since.isoformat()
 
     # --- Conversations -----------------------------------------------------
     conv_res = (
         db.table("conversations")
         .select(
-            "id, channel, status, outcome, duration_seconds, sentiment, "
-            "started_at, customer_id"
+            "id, channel, status, outcome, duration_seconds, sentiment, " "started_at, customer_id"
         )
         .eq("workspace_id", workspace_id)
         .gte("started_at", since_iso)
@@ -101,12 +100,8 @@ def get_summary(workspace_id: str, since: datetime) -> AnalyticsSummary:
         if row.get("customer_id"):
             customer_ids.add(row["customer_id"])
 
-    avg_duration = (
-        sum(duration_values) / len(duration_values) if duration_values else None
-    )
-    avg_sentiment = (
-        sum(sentiment_values) / len(sentiment_values) if sentiment_values else None
-    )
+    avg_duration = sum(duration_values) / len(duration_values) if duration_values else None
+    avg_sentiment = sum(sentiment_values) / len(sentiment_values) if sentiment_values else None
 
     # --- Orders ------------------------------------------------------------
     order_res = (
@@ -157,15 +152,11 @@ def get_summary(workspace_id: str, since: datetime) -> AnalyticsSummary:
                     item_counts[name] += quantity
                     item_revenue[name] += quantity * unit_price
 
-    avg_order_value = (
-        total_revenue_cents / revenue_order_count if revenue_order_count else None
-    )
+    avg_order_value = total_revenue_cents / revenue_order_count if revenue_order_count else None
 
     top_menu_items = [
         TopItem(name=name, count=count, revenue_cents=item_revenue[name])
-        for name, count in sorted(
-            item_counts.items(), key=lambda kv: kv[1], reverse=True
-        )[:10]
+        for name, count in sorted(item_counts.items(), key=lambda kv: kv[1], reverse=True)[:10]
     ]
 
     # --- Customers ---------------------------------------------------------
@@ -187,20 +178,12 @@ def get_summary(workspace_id: str, since: datetime) -> AnalyticsSummary:
 
     # --- Time series (fill gaps so charts span the full range) -------------
     day_range = _empty_daily_range(since, now)
-    daily_conversations = [
-        DailyCount(date=d, count=daily_conv_counts.get(d, 0)) for d in day_range
-    ]
-    daily_orders = [
-        DailyCount(date=d, count=daily_order_counts.get(d, 0)) for d in day_range
-    ]
-    daily_revenue_cents = [
-        DailyRevenue(date=d, cents=daily_revenue.get(d, 0)) for d in day_range
-    ]
+    daily_conversations = [DailyCount(date=d, count=daily_conv_counts.get(d, 0)) for d in day_range]
+    daily_orders = [DailyCount(date=d, count=daily_order_counts.get(d, 0)) for d in day_range]
+    daily_revenue_cents = [DailyRevenue(date=d, cents=daily_revenue.get(d, 0)) for d in day_range]
 
     # --- Hourly distribution (fill 0-23) -----------------------------------
-    conversations_by_hour = [
-        HourlyCount(hour=h, count=hourly_counts.get(h, 0)) for h in range(24)
-    ]
+    conversations_by_hour = [HourlyCount(hour=h, count=hourly_counts.get(h, 0)) for h in range(24)]
 
     return AnalyticsSummary(
         total_conversations=len(conversations),
@@ -228,9 +211,7 @@ def get_today_stats(workspace_id: str) -> TodayStats:
     """Lightweight stats for the current UTC day — used by the dashboard home
     stat cards. Fetches only today's rows."""
     db = get_supabase_admin()
-    start_of_day = datetime.now(timezone.utc).replace(
-        hour=0, minute=0, second=0, microsecond=0
-    )
+    start_of_day = datetime.now(UTC).replace(hour=0, minute=0, second=0, microsecond=0)
     start_iso = start_of_day.isoformat()
 
     conv_res = (

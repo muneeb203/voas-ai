@@ -74,14 +74,14 @@ def send_whatsapp_message(
         if not res.is_success:
             try:
                 detail = res.json()
-            except Exception:  # noqa: BLE001
+            except Exception:
                 detail = res.text
             log.error(
                 "twilio_whatsapp_send_failed",
                 status=res.status_code,
                 detail=detail,
             )
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         # Never let a Twilio failure bubble into the webhook — the caller
         # already returned 200 to Twilio; this is fire-and-forget delivery.
         log.error("twilio_whatsapp_send_error", error=str(exc))
@@ -121,10 +121,10 @@ def send_sms_message(
         if not res.is_success:
             try:
                 detail = res.json()
-            except Exception:  # noqa: BLE001
+            except Exception:
                 detail = res.text
             log.error("twilio_sms_send_failed", status=res.status_code, detail=detail)
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         log.error("twilio_sms_send_error", error=str(exc))
 
 

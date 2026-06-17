@@ -183,9 +183,7 @@ def assistant_payload(
                 "Summarize this call in 1-2 sentences. What did the customer want, "
                 "what did the agent do?"
             ),
-            "structuredDataPrompt": (
-                "Extract structured data from this call."
-            ),
+            "structuredDataPrompt": ("Extract structured data from this call."),
             "structuredDataSchema": {
                 "type": "object",
                 "properties": {
@@ -221,7 +219,7 @@ def _raise_with_body(res: httpx.Response, action: str) -> None:
         return
     try:
         body = res.json()
-    except Exception:  # noqa: BLE001
+    except Exception:
         body = res.text
     log.error("vapi_request_failed", action=action, status=res.status_code, body=body)
     raise RuntimeError(f"Vapi {action} failed ({res.status_code}): {body}")

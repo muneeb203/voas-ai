@@ -22,9 +22,7 @@ async def list_locations(ctx: WorkspaceContextDep) -> DataResponse[list[Location
     response_model=DataResponse[Location],
     status_code=status.HTTP_201_CREATED,
 )
-async def create_location(
-    payload: LocationCreate, ctx: OwnerContextDep
-) -> DataResponse[Location]:
+async def create_location(payload: LocationCreate, ctx: OwnerContextDep) -> DataResponse[Location]:
     location = location_service.create_location(ctx.workspace_id, payload, ctx.user.id)
     return ok(location)
 
@@ -36,9 +34,7 @@ async def create_location(
 async def update_location(
     location_id: str, payload: LocationUpdate, ctx: OwnerContextDep
 ) -> DataResponse[Location]:
-    location = location_service.update_location(
-        ctx.workspace_id, location_id, payload, ctx.user.id
-    )
+    location = location_service.update_location(ctx.workspace_id, location_id, payload, ctx.user.id)
     return ok(location)
 
 

@@ -1,5 +1,5 @@
 import secrets
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from app.config import get_settings
 from app.core.exceptions import ConflictError, ForbiddenError, NotFoundError
@@ -172,7 +172,9 @@ def list_invitations(workspace_id: str) -> list[Invitation]:
 
 def _build_invite_url(token: str) -> str:
     settings = get_settings()
-    base = (settings.cors_origins_list[0] if settings.cors_origins_list else "http://localhost:3001").rstrip("/")
+    base = (
+        settings.cors_origins_list[0] if settings.cors_origins_list else "http://localhost:3001"
+    ).rstrip("/")
     return f"{base}/accept-invite?token={token}"
 
 
@@ -195,7 +197,7 @@ def create_invitation(
         raise ConflictError("An open invitation for this email already exists")
 
     token = secrets.token_urlsafe(32)
-    expires_at = datetime.now(timezone.utc) + timedelta(days=INVITE_TTL_DAYS)
+    expires_at = datetime.now(UTC) + timedelta(days=INVITE_TTL_DAYS)
 
     res = (
         db.table("invitations")
@@ -229,9 +231,7 @@ def create_invitation(
     try:
         from app.services import email_service
 
-        ws_res = (
-            db.table("workspaces").select("name").eq("id", workspace_id).limit(1).execute()
-        )
+        ws_res = db.table("workspaces").select("name").eq("id", workspace_id).limit(1).execute()
         workspace_name = ws_res.data[0]["name"] if ws_res.data else "your workspace"
         email_service.send_team_invite(
             to=normalized_email,
@@ -239,7 +239,7 @@ def create_invitation(
             accept_url=invite_url,
             role=payload.role,
         )
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         log.error("invite_email_failed", invitation_id=row["id"], error=str(exc))
 
     return InvitationWithUrl(
@@ -309,13 +309,7 @@ def lookup_invitation(token: str) -> InvitationLookup:
 
 def accept_invitation(token: str, user_id: str, user_email: str | None) -> Invitation:
     db = get_supabase_admin()
-    res = (
-        db.table("invitations")
-        .select("*")
-        .eq("token", token)
-        .limit(1)
-        .execute()
-    )
+    res = db.table("invitations").select("*").eq("token", token).limit(1).execute()
     if not res.data:
         raise NotFoundError("Invitation not found")
     invite = res.data[0]
@@ -324,7 +318,7 @@ def accept_invitation(token: str, user_id: str, user_email: str | None) -> Invit
         raise ConflictError("This invitation has already been accepted")
 
     expires_at = datetime.fromisoformat(invite["expires_at"].replace("Z", "+00:00"))
-    if expires_at < datetime.now(timezone.utc):
+    if expires_at < datetime.now(UTC):
         raise ForbiddenError("This invitation has expired")
 
     if user_email and invite["email"].lower() != user_email.lower():
@@ -346,11 +340,11 @@ def accept_invitation(token: str, user_id: str, user_email: str | None) -> Invit
                 "role": invite["role"],
                 "invited_by": invite["invited_by"],
                 "invited_at": invite["created_at"],
-                "joined_at": datetime.now(timezone.utc).isoformat(),
+                "joined_at": datetime.now(UTC).isoformat(),
             }
         ).execute()
 
-    now_iso = datetime.now(timezone.utc).isoformat()
+    now_iso = datetime.now(UTC).isoformat()
     db.table("invitations").update({"accepted_at": now_iso}).eq("id", invite["id"]).execute()
 
     audit_service.write(

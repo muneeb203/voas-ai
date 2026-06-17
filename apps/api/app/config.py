@@ -39,16 +39,18 @@ class Settings(BaseSettings):
 
     # --- Vapi (voice AI). V2 Sprint 2+; no-op without these. ---
     vapi_api_key: str | None = None
-    vapi_public_key: str | None = None       # exposed to the browser for web SDK test calls
+    vapi_public_key: str | None = None  # exposed to the browser for web SDK test calls
     vapi_webhook_secret: str | None = None
-    vapi_server_url: str | None = None       # public URL Vapi posts events to (e.g. https://abc.ngrok.io)
+    vapi_server_url: str | None = (
+        None  # public URL Vapi posts events to (e.g. https://abc.ngrok.io)
+    )
     vapi_base_url: str = "https://api.vapi.ai"
 
     # --- WhatsApp (Twilio + OpenAI). V2 Sprint 3+; no-op without these. ---
-    openai_api_key: str | None = None        # generates WhatsApp AI replies
+    openai_api_key: str | None = None  # generates WhatsApp AI replies
     openai_base_url: str = "https://api.openai.com/v1"
-    twilio_account_sid: str | None = None    # global fallback; per-location overrides live in the DB
-    twilio_auth_token: str | None = None     # global fallback
+    twilio_account_sid: str | None = None  # global fallback; per-location overrides live in the DB
+    twilio_auth_token: str | None = None  # global fallback
     twilio_sms_from_number: str | None = None  # E.164 sender for SMS confirmation fallback
     # Twilio's shared WhatsApp sandbox number — shown as a hint in the UI.
     twilio_whatsapp_sandbox_number: str = "+14155238886"

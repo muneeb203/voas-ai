@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from app.core.logging import get_logger
@@ -46,7 +46,7 @@ def list_for_user(user_id: str, *, limit: int = 30) -> NotificationList:
 
 def mark_read(notification_id: str, user_id: str) -> Notification:
     db = get_supabase_admin()
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(UTC).isoformat()
     res = (
         db.table("notifications")
         .update({"read_at": now})
@@ -82,10 +82,10 @@ def mark_all_read(user_id: str) -> int:
     if not unread_ids:
         return 0
 
-    now = datetime.now(timezone.utc).isoformat()
-    db.table("notifications").update({"read_at": now}).in_(
-        "id", unread_ids
-    ).eq("user_id", user_id).execute()
+    now = datetime.now(UTC).isoformat()
+    db.table("notifications").update({"read_at": now}).in_("id", unread_ids).eq(
+        "user_id", user_id
+    ).execute()
 
     log.info("notifications_mark_all_read", user_id=user_id, count=len(unread_ids))
     return len(unread_ids)
@@ -110,10 +110,7 @@ def notify_workspace_order(
     """Fan-out an order alert to every member of the workspace."""
     db = get_supabase_admin()
     members_res = (
-        db.table("workspace_members")
-        .select("user_id")
-        .eq("workspace_id", workspace_id)
-        .execute()
+        db.table("workspace_members").select("user_id").eq("workspace_id", workspace_id).execute()
     )
     user_ids = list({str(r["user_id"]) for r in members_res.data or [] if r.get("user_id")})
     if not user_ids:

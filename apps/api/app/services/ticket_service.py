@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from app.core.exceptions import AppError, ForbiddenError, NotFoundError
 from app.core.logging import get_logger
@@ -21,7 +21,7 @@ def _user_lookup(user_id: str) -> tuple[str | None, str | None]:
     db = get_supabase_admin()
     try:
         res = db.auth.admin.get_user_by_id(user_id)
-    except Exception:  # noqa: BLE001
+    except Exception:
         return (None, None)
     if not (res and res.user):
         return (None, None)
@@ -103,14 +103,20 @@ def list_tickets(workspace_id: str, status: TicketStatus | None = None) -> list[
         tid = m["ticket_id"]
         counts[tid] = counts.get(tid, 0) + 1
         ts = m["created_at"]
-        ts_dt = ts if isinstance(ts, datetime) else datetime.fromisoformat(ts.replace("Z", "+00:00"))
+        ts_dt = (
+            ts if isinstance(ts, datetime) else datetime.fromisoformat(ts.replace("Z", "+00:00"))
+        )
         if tid not in latest or latest[tid] < ts_dt:
             latest[tid] = ts_dt
 
-    return [_hydrate_ticket(row, counts.get(row["id"], 0), latest.get(row["id"])) for row in res.data]
+    return [
+        _hydrate_ticket(row, counts.get(row["id"], 0), latest.get(row["id"])) for row in res.data
+    ]
 
 
-def get_ticket(workspace_id: str, ticket_id: str, *, include_internal: bool = False) -> TicketWithMessages:
+def get_ticket(
+    workspace_id: str, ticket_id: str, *, include_internal: bool = False
+) -> TicketWithMessages:
     db = get_supabase_admin()
     res = (
         db.table("support_tickets")
@@ -189,7 +195,11 @@ def create_ticket(workspace_id: str, user_id: str, payload: TicketCreate) -> Tic
         action="ticket.created",
         resource_type="support_ticket",
         resource_id=ticket_id,
-        metadata={"subject": payload.subject, "category": payload.category, "priority": payload.priority},
+        metadata={
+            "subject": payload.subject,
+            "category": payload.category,
+            "priority": payload.priority,
+        },
     )
 
     email, _ = _user_lookup(user_id)
@@ -251,7 +261,7 @@ def add_user_message(
 
     new_status = "open" if ticket["status"] in {"waiting_user", "resolved"} else ticket["status"]
     db.table("support_tickets").update(
-        {"status": new_status, "updated_at": datetime.now(timezone.utc).isoformat()}
+        {"status": new_status, "updated_at": datetime.now(UTC).isoformat()}
     ).eq("id", ticket_id).execute()
 
     audit_service.write(
@@ -295,9 +305,9 @@ def update_status(
     if ticket["status"] == status:
         return _hydrate_ticket(ticket, 0, None)
 
-    update: dict = {"status": status, "updated_at": datetime.now(timezone.utc).isoformat()}
+    update: dict = {"status": status, "updated_at": datetime.now(UTC).isoformat()}
     if status == "resolved":
-        update["resolved_at"] = datetime.now(timezone.utc).isoformat()
+        update["resolved_at"] = datetime.now(UTC).isoformat()
 
     res = db.table("support_tickets").update(update).eq("id", ticket_id).execute()
     if not res.data:

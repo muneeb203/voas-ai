@@ -59,9 +59,7 @@ async def upsert_location_whatsapp(
     ctx: OwnerContextDep,
 ) -> DataResponse[LocationWhatsAppConfigSafe]:
     return ok(
-        whatsapp_service.upsert_location_config(
-            ctx.workspace_id, location_id, payload, ctx.user.id
-        )
+        whatsapp_service.upsert_location_config(ctx.workspace_id, location_id, payload, ctx.user.id)
     )
 
 

@@ -28,14 +28,20 @@ def _find_user_by_email(db: Any, email: str) -> dict[str, Any] | None:
         if not users:
             return None
         for u in users:
-            user_email = getattr(u, "email", None) or (u.get("email") if isinstance(u, dict) else None)
+            user_email = getattr(u, "email", None) or (
+                u.get("email") if isinstance(u, dict) else None
+            )
             if user_email and user_email.lower() == email.lower():
-                return u if isinstance(u, dict) else {
-                    "id": u.id,
-                    "email": u.email,
-                    "user_metadata": u.user_metadata or {},
-                    "app_metadata": u.app_metadata or {},
-                }
+                return (
+                    u
+                    if isinstance(u, dict)
+                    else {
+                        "id": u.id,
+                        "email": u.email,
+                        "user_metadata": u.user_metadata or {},
+                        "app_metadata": u.app_metadata or {},
+                    }
+                )
         if len(users) < 200:
             return None
         page += 1
@@ -90,9 +96,7 @@ def main() -> int:
             print(f"  Generated password (save this now): {password}")
 
     # Upsert into admin_users.
-    existing_admin = (
-        db.table("admin_users").select("id").eq("user_id", user_id).limit(1).execute()
-    )
+    existing_admin = db.table("admin_users").select("id").eq("user_id", user_id).limit(1).execute()
     if existing_admin.data:
         db.table("admin_users").update(
             {"full_name": args.name, "role": role, "is_active": True}

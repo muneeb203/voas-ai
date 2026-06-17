@@ -1,6 +1,6 @@
 """Admin-authored product updates broadcast to all workspace users."""
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from app.core.logging import get_logger
@@ -19,11 +19,7 @@ def list_announcements(*, limit: int = 50) -> list[Announcement]:
     db = get_supabase_admin()
     cap = min(max(limit, 1), 100)
     res = (
-        db.table("announcements")
-        .select("*")
-        .order("published_at", desc=True)
-        .limit(cap)
-        .execute()
+        db.table("announcements").select("*").order("published_at", desc=True).limit(cap).execute()
     )
     return [_row_to_announcement(r) for r in res.data or []]
 
@@ -35,7 +31,7 @@ def publish(
     admin_user_id: str,
 ) -> Announcement:
     db = get_supabase_admin()
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(UTC).isoformat()
 
     res = (
         db.table("announcements")

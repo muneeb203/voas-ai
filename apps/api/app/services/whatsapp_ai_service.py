@@ -28,9 +28,7 @@ log = get_logger(__name__)
 
 _HISTORY_LIMIT = 20
 _OPENAI_TIMEOUT = 9.0  # keep under Twilio's webhook patience (~10s)
-_FALLBACK_REPLY = (
-    "Sorry, I'm having trouble right now. Please call us or try again in a moment."
-)
+_FALLBACK_REPLY = "Sorry, I'm having trouble right now. Please call us or try again in a moment."
 
 _ORDER_BLOCK_RE = re.compile(
     r"<<<ORDER>>>\s*(?P<json>.*?)\s*<<<END_ORDER>>>",
@@ -119,7 +117,7 @@ def _call_openai(
         if not res.is_success:
             try:
                 detail = res.json()
-            except Exception:  # noqa: BLE001
+            except Exception:
                 detail = res.text
             log.error("whatsapp_openai_failed", status=res.status_code, detail=detail)
             return None, None
@@ -137,7 +135,7 @@ def _call_openai(
                 "total_tokens": int(usage_raw.get("total_tokens") or 0),
             }
         return text, usage
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         log.error("whatsapp_openai_error", error=str(exc))
         return None, None
 
@@ -185,8 +183,7 @@ def get_ai_reply(
                 location_id=conv.get("location_id"),
                 conversation_id=conversation_id,
                 customer_id=conv.get("customer_id"),
-                customer_phone=order_args.get("customer_phone")
-                or conv.get("customer_phone"),
+                customer_phone=order_args.get("customer_phone") or conv.get("customer_phone"),
                 arguments=order_args,
             )
             order_placed = bool(result.get("success"))
@@ -195,7 +192,7 @@ def get_ai_reply(
                 # Surface the failure reason to the customer rather than a
                 # silent drop (e.g. "couldn't capture any items").
                 customer_reply = f"{customer_reply}\n\n{result['message']}".strip()
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             log.error(
                 "whatsapp_order_place_failed",
                 workspace_id=workspace_id,

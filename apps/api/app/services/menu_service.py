@@ -32,12 +32,7 @@ def list_categories(workspace_id: str) -> list[MenuCategory]:
     if not cats:
         return []
 
-    items = (
-        db.table("menu_items")
-        .select("category_id")
-        .eq("workspace_id", workspace_id)
-        .execute()
-    )
+    items = db.table("menu_items").select("category_id").eq("workspace_id", workspace_id).execute()
     counts: dict[str, int] = {}
     for row in items.data or []:
         counts[row["category_id"]] = counts.get(row["category_id"], 0) + 1
@@ -47,9 +42,11 @@ def list_categories(workspace_id: str) -> list[MenuCategory]:
 
 def create_category(workspace_id: str, payload: MenuCategoryCreate, actor_id: str) -> MenuCategory:
     db = get_supabase_admin()
-    res = db.table("menu_categories").insert(
-        {**payload.model_dump(), "workspace_id": workspace_id}
-    ).execute()
+    res = (
+        db.table("menu_categories")
+        .insert({**payload.model_dump(), "workspace_id": workspace_id})
+        .execute()
+    )
     if not res.data:
         raise AppError("Could not create category")
     audit_service.write(
@@ -180,7 +177,13 @@ def list_items(workspace_id: str, *, category_id: str | None = None) -> list[Men
             item,
             [
                 MenuModifierGroup(
-                    **{**g, "options": [MenuModifierOption.model_validate(o) for o in options_by_group.get(g["id"], [])]}
+                    **{
+                        **g,
+                        "options": [
+                            MenuModifierOption.model_validate(o)
+                            for o in options_by_group.get(g["id"], [])
+                        ],
+                    }
                 )
                 for g in group_by_item.get(item["id"], [])
             ],
@@ -249,11 +252,7 @@ def update_item(
 def delete_item(workspace_id: str, item_id: str, actor_id: str) -> None:
     db = get_supabase_admin()
     res = (
-        db.table("menu_items")
-        .delete()
-        .eq("id", item_id)
-        .eq("workspace_id", workspace_id)
-        .execute()
+        db.table("menu_items").delete().eq("id", item_id).eq("workspace_id", workspace_id).execute()
     )
     if not res.data:
         raise NotFoundError("Item not found")
@@ -333,12 +332,7 @@ def update_modifier_group(
     _verify_group_owned(workspace_id, group_id)
     db = get_supabase_admin()
     changes = payload.model_dump(exclude_none=True)
-    res = (
-        db.table("menu_modifier_groups")
-        .update(changes)
-        .eq("id", group_id)
-        .execute()
-    )
+    res = db.table("menu_modifier_groups").update(changes).eq("id", group_id).execute()
     if not res.data:
         raise NotFoundError("Modifier group not found")
     audit_service.write(
@@ -406,23 +400,14 @@ def update_modifier_option(
 ) -> MenuModifierOption:
     db = get_supabase_admin()
     existing = (
-        db.table("menu_modifier_options")
-        .select("group_id")
-        .eq("id", option_id)
-        .limit(1)
-        .execute()
+        db.table("menu_modifier_options").select("group_id").eq("id", option_id).limit(1).execute()
     )
     if not existing.data:
         raise NotFoundError("Modifier option not found")
     _verify_group_owned(workspace_id, existing.data[0]["group_id"])
 
     changes = payload.model_dump(exclude_none=True)
-    res = (
-        db.table("menu_modifier_options")
-        .update(changes)
-        .eq("id", option_id)
-        .execute()
-    )
+    res = db.table("menu_modifier_options").update(changes).eq("id", option_id).execute()
     audit_service.write(
         actor_type="user",
         actor_id=actor_id,
@@ -437,11 +422,7 @@ def update_modifier_option(
 def delete_modifier_option(workspace_id: str, option_id: str, actor_id: str) -> None:
     db = get_supabase_admin()
     existing = (
-        db.table("menu_modifier_options")
-        .select("group_id")
-        .eq("id", option_id)
-        .limit(1)
-        .execute()
+        db.table("menu_modifier_options").select("group_id").eq("id", option_id).limit(1).execute()
     )
     if not existing.data:
         raise NotFoundError("Modifier option not found")

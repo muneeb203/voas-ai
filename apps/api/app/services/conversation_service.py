@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from app.core.exceptions import AppError, NotFoundError
 from app.core.supabase import get_supabase_admin
@@ -91,11 +91,7 @@ def get_conversation(workspace_id: str, conversation_id: str) -> ConversationDet
         customer = customer_service.get_customer(workspace_id, row["customer_id"])
 
     order_lookup = (
-        db.table("orders")
-        .select("id")
-        .eq("conversation_id", conversation_id)
-        .limit(1)
-        .execute()
+        db.table("orders").select("id").eq("conversation_id", conversation_id).limit(1).execute()
     )
     order_id = order_lookup.data[0]["id"] if order_lookup.data else None
 
@@ -114,6 +110,7 @@ def create_conversation(workspace_id: str, payload: ConversationCreate) -> Conve
     customer_id: str | None = None
     if payload.customer_phone:
         from app.models.customer import CustomerUpsert
+
         customer = customer_service.upsert_by_phone(
             workspace_id,
             CustomerUpsert(phone=payload.customer_phone, name=payload.customer_name),
@@ -174,9 +171,9 @@ def append_message(
     if not res.data:
         raise AppError("Could not save message")
 
-    db.table("conversations").update(
-        {"updated_at": datetime.now(timezone.utc).isoformat()}
-    ).eq("id", conversation_id).execute()
+    db.table("conversations").update({"updated_at": datetime.now(UTC).isoformat()}).eq(
+        "id", conversation_id
+    ).execute()
 
     return ConversationMessage.model_validate(res.data[0])
 
@@ -227,9 +224,7 @@ def escalate_to_ticket(
         ),
     )
 
-    db.table("conversations").update({"status": "escalated"}).eq(
-        "id", conversation_id
-    ).execute()
+    db.table("conversations").update({"status": "escalated"}).eq("id", conversation_id).execute()
 
     audit_service.write(
         actor_type="user",

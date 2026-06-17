@@ -1,8 +1,7 @@
-from app.core.exceptions import AppError, NotFoundError
+from app.core.exceptions import NotFoundError
 from app.core.supabase import get_supabase_admin
 from app.models.admin import AdminWorkspaceDetail, AdminWorkspaceListItem
 from app.models.location import Location
-from app.models.member import Member
 from app.models.workspace import Workspace, WorkspaceStatus
 from app.services import audit_service, member_service
 
@@ -96,11 +95,11 @@ def get_detail(workspace_id: str) -> AdminWorkspaceDetail:
     return AdminWorkspaceDetail(workspace=workspace, members=members, locations=locations)
 
 
-def set_status(workspace_id: str, status: WorkspaceStatus, actor_id: str, *, action: str) -> Workspace:
+def set_status(
+    workspace_id: str, status: WorkspaceStatus, actor_id: str, *, action: str
+) -> Workspace:
     db = get_supabase_admin()
-    res = (
-        db.table("workspaces").update({"status": status}).eq("id", workspace_id).execute()
-    )
+    res = db.table("workspaces").update({"status": status}).eq("id", workspace_id).execute()
     if not res.data:
         raise NotFoundError("Workspace not found")
 

@@ -64,7 +64,7 @@ def _dispatch(
             server.sendmail(settings.email_from, [to], msg.as_string())
 
         log.info("email_sent", to=to, subject=subject, **context)
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         log.error("email_send_failed", to=to, subject=subject, error=str(exc), **context)
 
 
@@ -72,7 +72,7 @@ def send_welcome(*, to: str, full_name: str | None, workspace_name: str) -> None
     greeting = f"Hi {full_name}," if full_name else "Hi,"
     body = (
         f"{greeting}\n\n"
-        f"Welcome to VOAS AI — your workspace \"{workspace_name}\" is ready.\n\n"
+        f'Welcome to VOAS AI — your workspace "{workspace_name}" is ready.\n\n'
         f"Your AI front desk can answer calls, take orders, and handle customer "
         f"messages from one dashboard. Next steps:\n"
         f"  • Add your menu in Knowledge Base\n"
@@ -115,7 +115,7 @@ def send_team_invite(
     role_label = _ROLE_LABELS.get(role, role.title())
     body = (
         f"Hi,\n\n"
-        f"You've been invited to join \"{workspace_name}\" on VOAS AI as {role_label}.\n\n"
+        f'You\'ve been invited to join "{workspace_name}" on VOAS AI as {role_label}.\n\n'
         f"Accept your invite (expires in 7 days):\n{accept_url}\n\n"
         f"If you don't have a VOAS account yet, you'll be asked to sign up first.\n\n"
         f"— VOAS AI"
@@ -124,7 +124,7 @@ def send_team_invite(
         f"<p>Hi,</p>"
         f"<p>You've been invited to join <strong>{workspace_name}</strong> on "
         f"VOAS AI as <strong>{role_label}</strong>.</p>"
-        f"<p><a href=\"{accept_url}\">Accept your invite</a> (expires in 7 days)</p>"
+        f'<p><a href="{accept_url}">Accept your invite</a> (expires in 7 days)</p>'
         f"<p>If you don't have a VOAS account yet, you'll be asked to sign up first.</p>"
         f"<p>— VOAS AI</p>"
     )

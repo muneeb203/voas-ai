@@ -68,7 +68,7 @@ class LocationWhatsAppConfigSafe(BaseModel):
     location_id: str
     workspace_id: str
     twilio_account_sid: str
-    twilio_auth_token_masked: str            # 'AC12…XXXX' style
+    twilio_auth_token_masked: str  # 'AC12…XXXX' style
     twilio_whatsapp_number: str
     enabled: bool
     last_synced_at: datetime | None

@@ -40,7 +40,7 @@ def write(
                 "user_agent": user_agent,
             }
         ).execute()
-    except Exception as exc:  # noqa: BLE001 — we intentionally swallow
+    except Exception as exc:
         log.error(
             "audit_write_failed",
             action=action,

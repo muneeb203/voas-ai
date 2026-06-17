@@ -64,9 +64,7 @@ async def delete_category(category_id: str, ctx: OwnerContextDep) -> None:
 # --- Items ------------------------------------------------------------------
 
 
-@router.get(
-    "/workspaces/{workspace_id}/menu/items", response_model=DataResponse[list[MenuItem]]
-)
+@router.get("/workspaces/{workspace_id}/menu/items", response_model=DataResponse[list[MenuItem]])
 async def list_items(
     ctx: WorkspaceContextDep,
     category_id: str | None = Query(default=None),
@@ -153,7 +151,9 @@ async def create_option(
 async def update_option(
     option_id: str, payload: MenuModifierOptionUpdate, ctx: OwnerContextDep
 ) -> DataResponse[MenuModifierOption]:
-    return ok(menu_service.update_modifier_option(ctx.workspace_id, option_id, payload, ctx.user.id))
+    return ok(
+        menu_service.update_modifier_option(ctx.workspace_id, option_id, payload, ctx.user.id)
+    )
 
 
 @router.delete(

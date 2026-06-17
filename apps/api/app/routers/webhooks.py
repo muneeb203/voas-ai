@@ -6,18 +6,19 @@ update the conversations / conversation_messages tables accordingly.
 Webhook event shapes are documented at https://docs.vapi.ai/server-url.
 """
 
-from datetime import datetime, timedelta, timezone
+import contextlib
+import json
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from fastapi import APIRouter, BackgroundTasks, Header, Request, status
 from fastapi.responses import Response
 
-import json
-
 from app.core.exceptions import ForbiddenError
 from app.core.logging import get_logger
 from app.core.supabase import get_supabase_admin
 from app.integrations import twilio_whatsapp, vapi
+from app.models.customer import CustomerUpsert
 from app.services import (
     billing_service,
     customer_service,
@@ -26,9 +27,8 @@ from app.services import (
     whatsapp_ai_service,
     whatsapp_service,
 )
-from app.models.customer import CustomerUpsert
 
-_EMPTY_TWIML = "<?xml version=\"1.0\" encoding=\"UTF-8\"?><Response/>"
+_EMPTY_TWIML = '<?xml version="1.0" encoding="UTF-8"?><Response/>'
 
 
 def _twiml_ok() -> Response:
@@ -38,7 +38,8 @@ def _twiml_ok() -> Response:
 
 
 def _strip_whatsapp_prefix(value: str) -> str:
-    return value[len("whatsapp:"):] if value.startswith("whatsapp:") else value
+    return value[len("whatsapp:") :] if value.startswith("whatsapp:") else value
+
 
 log = get_logger(__name__)
 
@@ -112,9 +113,7 @@ async def vapi_webhook(
     if event_type == "status-update":
         status_val = message.get("status")
         if status_val == "in-progress" and call_id:
-            if not billing_service.check_allowed(
-                workspace_id, "voice_minutes", channel="voice"
-            ):
+            if not billing_service.check_allowed(workspace_id, "voice_minutes", channel="voice"):
                 log.warning(
                     "vapi_voice_limit_reached",
                     workspace_id=workspace_id,
@@ -180,9 +179,7 @@ async def vapi_webhook(
                 results.append({"toolCallId": tc_id, "result": order_result["message"]})
             else:
                 log.warning("vapi_unknown_tool", name=name, args_preview=str(args)[:120])
-                results.append(
-                    {"toolCallId": tc_id, "result": f"Unknown tool {name}, sorry."}
-                )
+                results.append({"toolCallId": tc_id, "result": f"Unknown tool {name}, sorry."})
 
         return {"results": results}
 
@@ -215,7 +212,7 @@ async def vapi_webhook(
             recording_url = message.get("recordingUrl") or call.get("recordingUrl")
 
             started = call.get("startedAt") or conv.get("started_at")
-            ended = call.get("endedAt") or datetime.now(timezone.utc).isoformat()
+            ended = call.get("endedAt") or datetime.now(UTC).isoformat()
             duration = None
             try:
                 if started and ended:
@@ -274,15 +271,10 @@ def _ensure_conversation(
     if existing.data:
         return existing.data[0]
 
-    customer_phone = (
-        (call.get("customer") or {}).get("number")
-        or message.get("customerNumber")
-    )
+    customer_phone = (call.get("customer") or {}).get("number") or message.get("customerNumber")
     customer_id: str | None = None
     if customer_phone:
-        cust = customer_service.upsert_by_phone(
-            workspace_id, CustomerUpsert(phone=customer_phone)
-        )
+        cust = customer_service.upsert_by_phone(workspace_id, CustomerUpsert(phone=customer_phone))
         customer_id = cust.id
 
     res = (
@@ -294,7 +286,7 @@ def _ensure_conversation(
                 "customer_id": customer_id,
                 "channel": "voice",
                 "customer_phone": customer_phone,
-                "started_at": call.get("startedAt") or datetime.now(timezone.utc).isoformat(),
+                "started_at": call.get("startedAt") or datetime.now(UTC).isoformat(),
                 "status": "active",
                 "metadata": {"vapi_call_id": call_id},
             }
@@ -321,9 +313,7 @@ def _find_or_create_whatsapp_conversation(
     """Reuse an active WhatsApp conversation within the session window, else
     open a new one. Keyed by (workspace, phone, channel='whatsapp')."""
     db = get_supabase_admin()
-    window_start = (
-        datetime.now(timezone.utc) - timedelta(hours=session_window_hours)
-    ).isoformat()
+    window_start = (datetime.now(UTC) - timedelta(hours=session_window_hours)).isoformat()
 
     existing = (
         db.table("conversations")
@@ -350,7 +340,7 @@ def _find_or_create_whatsapp_conversation(
                 "channel": "whatsapp",
                 "customer_phone": customer_phone,
                 "customer_name": customer_name,
-                "started_at": datetime.now(timezone.utc).isoformat(),
+                "started_at": datetime.now(UTC).isoformat(),
                 "status": "active",
                 "metadata": {"transport": "twilio_whatsapp"},
             }
@@ -373,7 +363,7 @@ async def whatsapp_webhook(
     try:
         form = await request.form()
         params = {k: str(v) for k, v in form.items()}
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         log.error("whatsapp_webhook_bad_form", error=str(exc))
         return _twiml_ok()
 
@@ -425,17 +415,14 @@ async def whatsapp_webhook(
             to=from_number,
             from_=to_number,
             body=(
-                "WhatsApp ordering isn't included in your current plan. "
-                "Please call us instead."
+                "WhatsApp ordering isn't included in your current plan. " "Please call us instead."
             ),
             account_sid=config.twilio_account_sid,
             auth_token=config.twilio_auth_token,
         )
         return _twiml_ok()
 
-    if not billing_service.check_allowed(
-        workspace_id, "whatsapp_in", channel="whatsapp"
-    ):
+    if not billing_service.check_allowed(workspace_id, "whatsapp_in", channel="whatsapp"):
         log.warning("whatsapp_usage_limit", workspace_id=workspace_id)
         twilio_whatsapp.send_whatsapp_message(
             to=from_number,
@@ -463,9 +450,10 @@ async def whatsapp_webhook(
         conversation_id = conversation["id"]
 
         # Dedup Twilio retries: skip if we already processed this MessageSid.
-        if message_sid and (conversation.get("metadata") or {}).get(
-            "last_message_sid"
-        ) == message_sid:
+        if (
+            message_sid
+            and (conversation.get("metadata") or {}).get("last_message_sid") == message_sid
+        ):
             log.info("whatsapp_webhook_duplicate_skipped", message_sid=message_sid)
             return _twiml_ok()
 
@@ -533,10 +521,10 @@ async def whatsapp_webhook(
             conversation_id=conversation_id,
             order_placed=result.get("order_placed"),
         )
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         log.error("whatsapp_webhook_processing_error", error=str(exc))
         # Best-effort fallback so the customer isn't left hanging.
-        try:
+        with contextlib.suppress(Exception):
             twilio_whatsapp.send_whatsapp_message(
                 to=from_number,
                 from_=to_number,
@@ -547,7 +535,5 @@ async def whatsapp_webhook(
                 account_sid=config.twilio_account_sid,
                 auth_token=config.twilio_auth_token,
             )
-        except Exception:  # noqa: BLE001
-            pass
 
     return _twiml_ok()

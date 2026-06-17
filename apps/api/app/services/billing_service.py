@@ -7,10 +7,10 @@ Billing periods are rolling 30-day windows anchored on workspace signup
 from __future__ import annotations
 
 import math
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Any, Literal
 
-from app.core.exceptions import ForbiddenError, NotFoundError
+from app.core.exceptions import NotFoundError
 from app.core.logging import get_logger
 from app.core.supabase import get_supabase_admin
 from app.models.billing import (
@@ -32,7 +32,10 @@ _PERIOD_DAYS = 30
 EventType = Literal["voice_minutes", "whatsapp_in", "whatsapp_out", "help_bot_turn"]
 CreditType = Literal["voice_minutes", "whatsapp_messages", "help_bot_turns"]
 
-_WHATSAPP_EVENT_TYPES = ("whatsapp_in", "whatsapp_out",)
+_WHATSAPP_EVENT_TYPES = (
+    "whatsapp_in",
+    "whatsapp_out",
+)
 _LIMIT_NOTIFY_THRESHOLD = 0.8
 
 _LIMIT_MESSAGES: dict[EventType, str] = {
@@ -45,14 +48,14 @@ _LIMIT_MESSAGES: dict[EventType, str] = {
 
 def _parse_dt(value: str | datetime) -> datetime:
     if isinstance(value, datetime):
-        return value if value.tzinfo else value.replace(tzinfo=timezone.utc)
+        return value if value.tzinfo else value.replace(tzinfo=UTC)
     return datetime.fromisoformat(str(value).replace("Z", "+00:00"))
 
 
 def get_period_bounds(workspace_created_at: str | datetime) -> tuple[datetime, datetime]:
     """Current rolling 30-day window from signup anchor."""
     anchor = _parse_dt(workspace_created_at)
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     if now < anchor:
         return anchor, anchor + timedelta(days=_PERIOD_DAYS)
     elapsed_days = (now - anchor).total_seconds() / 86400
@@ -99,13 +102,7 @@ def get_plan(slug: str) -> BillingPlan:
 
 def list_plans() -> list[BillingPlan]:
     db = get_supabase_admin()
-    res = (
-        db.table("billing_plans")
-        .select("*")
-        .eq("is_active", True)
-        .order("sort_order")
-        .execute()
-    )
+    res = db.table("billing_plans").select("*").eq("is_active", True).order("sort_order").execute()
     return [
         BillingPlan(
             slug=r["slug"],
@@ -199,7 +196,7 @@ def get_usage_summary(workspace_id: str) -> UsageSummary:
     ws = _get_workspace_row(workspace_id)
     plan = get_plan(ws["plan"])
     period_start, period_end = get_period_bounds(ws["created_at"])
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     days_remaining = max(0, (period_end - now).days)
 
     voice_used = _sum_units(workspace_id, ("voice_minutes",), period_start, period_end)
@@ -317,9 +314,9 @@ def _consume_grants(workspace_id: str, credit_type: CreditType, amount: int) -> 
             break
         avail = int(grant["amount_remaining"])
         take = min(avail, remaining)
-        db.table("credit_grants").update(
-            {"amount_remaining": avail - take}
-        ).eq("id", grant["id"]).execute()
+        db.table("credit_grants").update({"amount_remaining": avail - take}).eq(
+            "id", grant["id"]
+        ).execute()
         remaining -= take
 
 
@@ -398,9 +395,7 @@ def _notify_usage_threshold(
 
     if warnings != (ws_row.get("usage_warnings") or {}):
         db = get_supabase_admin()
-        db.table("workspaces").update({"usage_warnings": warnings}).eq(
-            "id", workspace_id
-        ).execute()
+        db.table("workspaces").update({"usage_warnings": warnings}).eq("id", workspace_id).execute()
 
 
 def record_usage(
@@ -439,7 +434,7 @@ def record_usage(
 
     try:
         db.table("usage_events").insert(row).execute()
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         err = str(exc).lower()
         if idempotency_key and ("duplicate" in err or "unique" in err):
             return False
@@ -559,11 +554,7 @@ def update_workspace_billing(
     db = get_supabase_admin()
     if payload.plan is not None:
         plan_res = (
-            db.table("billing_plans")
-            .select("slug")
-            .eq("slug", payload.plan)
-            .limit(1)
-            .execute()
+            db.table("billing_plans").select("slug").eq("slug", payload.plan).limit(1).execute()
         )
         if not plan_res.data:
             raise NotFoundError("Billing plan not found")

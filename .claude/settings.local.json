@@ -4,7 +4,11 @@
       "Bash(pnpm --version)",
       "Bash(docker --version)",
       "Bash(git --version)",
-      "WebFetch(domain:seahorse-app-mzw2u.ondigitalocean.app)"
+      "WebFetch(domain:seahorse-app-mzw2u.ondigitalocean.app)",
+      "PowerShell(python -m pip install ruff 2>&1)",
+      "PowerShell(cd E:\\\\convosol\\\\VOAS-AI\\\\frontend; $env:NEXT_PUBLIC_SUPABASE_URL='http://localhost:54321'; $env:NEXT_PUBLIC_SUPABASE_ANON_KEY='placeholder'; $env:NEXT_PUBLIC_API_URL='http://localhost:8000'; $env:NEXT_PUBLIC_SITE_URL='http://localhost:3001'; pnpm --filter @voas/web build 2>&1 | Select-Object -Last 120)",
+      "Bash(git add *)",
+      "Bash(git commit *)"
     ]
   }
 }

@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Path, Query, status
+from fastapi import APIRouter, Query, status
 from pydantic import BaseModel, Field
 
 from app.deps import AdminContextDep
@@ -10,19 +10,19 @@ from app.models.admin import (
     AdminWorkspaceDetail,
     AdminWorkspaceListItem,
 )
-from app.models.ticket import (
-    Ticket,
-    TicketMessage,
-    TicketStatus,
-    TicketWithMessages,
-)
-from app.models.notification import Announcement, AnnouncementCreate
 from app.models.billing import (
     AdminBillingUpdate,
     AdminWorkspaceUsageRow,
     CreditGrant,
     CreditGrantCreate,
     UsageSummary,
+)
+from app.models.notification import Announcement, AnnouncementCreate
+from app.models.ticket import (
+    Ticket,
+    TicketMessage,
+    TicketStatus,
+    TicketWithMessages,
 )
 from app.models.workspace import Workspace
 from app.services import (
@@ -58,10 +58,10 @@ async def list_workspaces(
     return ok(workspaces)
 
 
-@router.get(
-    "/workspaces/{workspace_id}", response_model=DataResponse[AdminWorkspaceDetail]
-)
-async def get_workspace(workspace_id: str, _: AdminContextDep) -> DataResponse[AdminWorkspaceDetail]:
+@router.get("/workspaces/{workspace_id}", response_model=DataResponse[AdminWorkspaceDetail])
+async def get_workspace(
+    workspace_id: str, _: AdminContextDep
+) -> DataResponse[AdminWorkspaceDetail]:
     detail = admin_workspace_service.get_detail(workspace_id)
     return ok(detail)
 
@@ -78,9 +78,7 @@ async def restore_workspace(workspace_id: str, ctx: AdminContextDep) -> DataResp
     return ok(workspace)
 
 
-@router.delete(
-    "/workspaces/{workspace_id}", status_code=status.HTTP_204_NO_CONTENT
-)
+@router.delete("/workspaces/{workspace_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_workspace(workspace_id: str, ctx: AdminContextDep) -> None:
     admin_workspace_service.soft_delete(workspace_id, ctx.admin_id)
 
@@ -188,9 +186,7 @@ async def admin_update_ticket(
 # ---------- Contact submissions ---------------------------------------------
 
 
-@router.get(
-    "/contact-submissions", response_model=DataResponse[list[AdminContactSubmission]]
-)
+@router.get("/contact-submissions", response_model=DataResponse[list[AdminContactSubmission]])
 async def list_contact_submissions(
     _: AdminContextDep, status_filter: str | None = Query(default=None, alias="status")
 ) -> DataResponse[list[AdminContactSubmission]]:
@@ -262,9 +258,7 @@ async def list_usage(_: AdminContextDep) -> DataResponse[list[AdminWorkspaceUsag
     "/workspaces/{workspace_id}/billing/usage",
     response_model=DataResponse[UsageSummary],
 )
-async def get_workspace_usage(
-    workspace_id: str, _: AdminContextDep
-) -> DataResponse[UsageSummary]:
+async def get_workspace_usage(workspace_id: str, _: AdminContextDep) -> DataResponse[UsageSummary]:
     return ok(billing_service.get_usage_summary(workspace_id))
 
 

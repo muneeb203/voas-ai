@@ -1,5 +1,5 @@
+from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from typing import AsyncIterator
 
 from fastapi import FastAPI
 from fastapi.exceptions import RequestValidationError
@@ -55,7 +55,7 @@ def _init_sentry() -> bool:
             integrations=[FastApiIntegration(), StarletteIntegration()],
         )
         return True
-    except Exception:  # noqa: BLE001
+    except Exception:
         return False
 
 

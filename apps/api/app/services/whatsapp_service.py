@@ -5,7 +5,7 @@ credentials from location_whatsapp_config at message time (never from env),
 and the AI personality from whatsapp_settings.
 """
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from app.config import get_settings
 from app.core.exceptions import AppError
@@ -104,10 +104,7 @@ def update_settings(
     changes = payload.model_dump(exclude_none=True)
     if changes:
         res = (
-            db.table("whatsapp_settings")
-            .update(changes)
-            .eq("workspace_id", workspace_id)
-            .execute()
+            db.table("whatsapp_settings").update(changes).eq("workspace_id", workspace_id).execute()
         )
         if not res.data:
             raise AppError("Could not update WhatsApp settings")
@@ -142,9 +139,7 @@ def _to_safe(row: dict) -> LocationWhatsAppConfigSafe:
     )
 
 
-def get_location_config(
-    workspace_id: str, location_id: str
-) -> LocationWhatsAppConfigSafe | None:
+def get_location_config(workspace_id: str, location_id: str) -> LocationWhatsAppConfigSafe | None:
     db = get_supabase_admin()
     res = (
         db.table("location_whatsapp_config")
@@ -182,7 +177,7 @@ def upsert_location_config(
         "twilio_auth_token": payload.twilio_auth_token,
         "twilio_whatsapp_number": payload.twilio_whatsapp_number,
         "enabled": payload.enabled,
-        "last_synced_at": datetime.now(timezone.utc).isoformat(),
+        "last_synced_at": datetime.now(UTC).isoformat(),
     }
 
     if existing.data:
@@ -225,9 +220,9 @@ def disable_location_config(workspace_id: str, location_id: str, actor_id: str) 
     if not existing.data:
         return
 
-    db.table("location_whatsapp_config").delete().eq(
-        "location_id", location_id
-    ).eq("workspace_id", workspace_id).execute()
+    db.table("location_whatsapp_config").delete().eq("location_id", location_id).eq(
+        "workspace_id", workspace_id
+    ).execute()
 
     audit_service.write(
         actor_type="user",

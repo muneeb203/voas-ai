@@ -168,7 +168,7 @@ class LocationVoiceConfigSafe(BaseModel):
     location_id: str
     workspace_id: str
     twilio_account_sid: str
-    twilio_auth_token_masked: str            # 'AC1234…XXXX' style
+    twilio_auth_token_masked: str  # 'AC1234…XXXX' style
     twilio_phone_number: str
     vapi_phone_number_id: str | None
     enabled: bool

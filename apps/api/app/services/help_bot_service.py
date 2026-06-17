@@ -17,7 +17,7 @@ import httpx
 from app.config import Settings, get_settings
 from app.core.logging import get_logger
 from app.core.supabase import get_supabase_admin
-from app.models.help import HelpChatRequest, HelpChatReply, HelpChatTurn
+from app.models.help import HelpChatReply, HelpChatRequest, HelpChatTurn
 from app.services import billing_service
 
 log = get_logger(__name__)
@@ -71,12 +71,7 @@ def _workspace_hints(workspace_id: str) -> str:
     hints: list[str] = _server_capability_hints(settings)
 
     try:
-        loc_res = (
-            db.table("locations")
-            .select("id")
-            .eq("workspace_id", workspace_id)
-            .execute()
-        )
+        loc_res = db.table("locations").select("id").eq("workspace_id", workspace_id).execute()
         location_ids = [row["id"] for row in (loc_res.data or []) if row.get("id")]
         hints.append(f"Locations configured: {len(location_ids)}")
 
@@ -103,13 +98,9 @@ def _workspace_hints(workspace_id: str) -> str:
             )
             voice_rows = voice_loc_res.data or []
             voice_live = sum(
-                1
-                for r in voice_rows
-                if r.get("enabled") and r.get("vapi_phone_number_id")
+                1 for r in voice_rows if r.get("enabled") and r.get("vapi_phone_number_id")
             )
-            hints.append(
-                f"Locations with live voice phone: {voice_live} of {len(location_ids)}"
-            )
+            hints.append(f"Locations with live voice phone: {voice_live} of {len(location_ids)}")
 
         try:
             wa_res = (
@@ -132,33 +123,22 @@ def _workspace_hints(workspace_id: str) -> str:
             )
             wa_live = sum(1 for r in (wa_loc_res.data or []) if r.get("enabled"))
             hints.append(f"Locations with WhatsApp enabled: {wa_live} of {len(location_ids)}")
-        except Exception:  # noqa: BLE001
+        except Exception:
             hints.append("WhatsApp settings: not configured")
 
         cat_res = (
-            db.table("menu_categories")
-            .select("id")
-            .eq("workspace_id", workspace_id)
-            .execute()
+            db.table("menu_categories").select("id").eq("workspace_id", workspace_id).execute()
         )
         hints.append(f"Menu categories: {len(cat_res.data or [])}")
 
-        item_res = (
-            db.table("menu_items")
-            .select("id")
-            .eq("workspace_id", workspace_id)
-            .execute()
-        )
+        item_res = db.table("menu_items").select("id").eq("workspace_id", workspace_id).execute()
         hints.append(f"Menu items: {len(item_res.data or [])}")
 
         member_res = (
-            db.table("workspace_members")
-            .select("id")
-            .eq("workspace_id", workspace_id)
-            .execute()
+            db.table("workspace_members").select("id").eq("workspace_id", workspace_id).execute()
         )
         hints.append(f"Team members: {len(member_res.data or [])}")
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         log.warning("help_bot_hints_failed", workspace_id=workspace_id, error=str(exc))
         hints.append("Workspace context partially unavailable.")
 
@@ -178,9 +158,7 @@ def _build_system_prompt(workspace_id: str, page_path: str, member_role: str) ->
     )
 
 
-def _to_gemini_contents(
-    history: list[HelpChatTurn], message: str
-) -> list[dict[str, Any]]:
+def _to_gemini_contents(history: list[HelpChatTurn], message: str) -> list[dict[str, Any]]:
     contents: list[dict[str, Any]] = []
     for turn in history:
         role = "user" if turn.role == "user" else "model"
@@ -201,9 +179,7 @@ def _call_gemini(
         return _STUB_REPLY, None
 
     model = settings.gemini_model
-    url = (
-        f"{settings.gemini_base_url.rstrip('/')}/models/{model}:generateContent"
-    )
+    url = f"{settings.gemini_base_url.rstrip('/')}/models/{model}:generateContent"
     payload = {
         "systemInstruction": {"parts": [{"text": system_prompt}]},
         "contents": contents,
@@ -219,7 +195,7 @@ def _call_gemini(
         if not res.is_success:
             try:
                 detail = res.json()
-            except Exception:  # noqa: BLE001
+            except Exception:
                 detail = res.text
             log.error("help_bot_gemini_failed", status=res.status_code, detail=detail)
             if res.status_code == 404:
@@ -265,7 +241,7 @@ def _call_gemini(
                 "total_tokens": total,
             }
         return reply or None, usage
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         log.error("help_bot_gemini_error", error=str(exc))
         return None, None
 
@@ -318,6 +294,6 @@ def chat(
             page_path=payload.page_path,
         )
         return HelpChatReply(reply=reply)
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         log.error("help_bot_chat_failed", workspace_id=workspace_id, error=str(exc))
         return HelpChatReply(reply=_FALLBACK_REPLY)

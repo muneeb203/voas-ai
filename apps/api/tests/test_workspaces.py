@@ -24,15 +24,18 @@ def test_bootstrap_workspace_creates_workspace_and_owner(client: TestClient) -> 
         "updated_at": "2026-05-20T12:00:00+00:00",
     }
 
-    with patch("app.services.workspace_service.get_supabase_admin") as get_db, patch(
-        "app.services.audit_service.get_supabase_admin"
-    ) as audit_db:
+    with (
+        patch("app.services.workspace_service.get_supabase_admin") as get_db,
+        patch("app.services.audit_service.get_supabase_admin") as audit_db,
+    ):
         db = MagicMock()
         get_db.return_value = db
         audit_db.return_value = MagicMock()
 
         # No existing membership.
-        db.table.return_value.select.return_value.eq.return_value.limit.return_value.execute.return_value = _result([])
+        db.table.return_value.select.return_value.eq.return_value.limit.return_value.execute.return_value = _result(
+            []
+        )
         # Slug uniqueness check returns empty.
         # Insert calls — set up via .insert(...).execute()
         db.table.return_value.insert.return_value.execute.return_value = _result(workspace_row)
@@ -85,7 +88,9 @@ def test_workspace_context_404s_for_unknown_workspace(client: TestClient) -> Non
         db = MagicMock()
         get_db.return_value = db
         # workspaces lookup returns nothing
-        db.table.return_value.select.return_value.eq.return_value.limit.return_value.execute.return_value = _result([])
+        db.table.return_value.select.return_value.eq.return_value.limit.return_value.execute.return_value = _result(
+            []
+        )
 
         res = client.get(
             "/v1/workspaces/00000000-0000-0000-0000-000000000000",
@@ -111,7 +116,9 @@ def test_workspace_context_403s_for_non_member(client: TestClient) -> None:
                     {"id": "ws", "status": "active"}
                 )
             else:
-                chain.eq.return_value.eq.return_value.limit.return_value.execute.return_value = _result([])
+                chain.eq.return_value.eq.return_value.limit.return_value.execute.return_value = (
+                    _result([])
+                )
             return chain
 
         db.table.return_value.select.side_effect = select_chain

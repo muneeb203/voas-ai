@@ -13,9 +13,7 @@ class OrderStatusUpdate(BaseModel):
     status: OrderStatus
 
 
-@router.get(
-    "/workspaces/{workspace_id}/orders", response_model=DataResponse[list[Order]]
-)
+@router.get("/workspaces/{workspace_id}/orders", response_model=DataResponse[list[Order]])
 async def list_orders(
     ctx: WorkspaceContextDep,
     status_filter: OrderStatus | None = Query(default=None, alias="status"),
@@ -24,9 +22,7 @@ async def list_orders(
     return ok(orders)
 
 
-@router.get(
-    "/workspaces/{workspace_id}/orders/{order_id}", response_model=DataResponse[Order]
-)
+@router.get("/workspaces/{workspace_id}/orders/{order_id}", response_model=DataResponse[Order])
 async def get_order(order_id: str, ctx: WorkspaceContextDep) -> DataResponse[Order]:
     order = order_service.get_order(ctx.workspace_id, order_id)
     return ok(order)
@@ -41,7 +37,5 @@ async def update_status(
     payload: OrderStatusUpdate,
     ctx: WorkspaceContextDep,
 ) -> DataResponse[Order]:
-    order = order_service.update_order_status(
-        ctx.workspace_id, order_id, payload.status
-    )
+    order = order_service.update_order_status(ctx.workspace_id, order_id, payload.status)
     return ok(order)
