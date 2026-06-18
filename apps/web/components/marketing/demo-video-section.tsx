@@ -9,7 +9,7 @@ import { Volume2 } from 'lucide-react';
 // ─────────────────────────────────────────────────────────────────────────────
 const VIDEOS = {
   en: {
-    id: 'REPLACE_ENGLISH_VIMEO_ID',
+    id: '1202488321',
     label: 'English',
     nativeLabel: 'English',
     flag: '🇬🇧',
