@@ -52,6 +52,10 @@ class UsageSummary(BaseModel):
     tokens: TokenUsage
     usage_enforcement_disabled: bool
     enforcement_active: bool
+    # True when the workspace was auto-granted a free trial on signup.
+    # Remains True even after the trial minutes run out so the UI can
+    # show the right CTA ("contact us to continue" vs "reload credits").
+    has_trial_grant: bool = False
 
 
 class CreditGrant(BaseModel):

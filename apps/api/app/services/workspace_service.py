@@ -105,6 +105,14 @@ def create_workspace(payload: WorkspaceCreate, user_id: str, user_email: str | N
 
     log.info("workspace_created", workspace_id=workspace_id, slug=slug, owner=user_id)
 
+    # Auto-grant free trial credits — best-effort, never fails the signup
+    try:
+        from app.services import billing_service
+
+        billing_service.grant_trial_credits(workspace_id)
+    except Exception as exc:
+        log.error("trial_credits_grant_failed", workspace_id=workspace_id, error=str(exc))
+
     if user_email:
         try:
             from app.services import email_service

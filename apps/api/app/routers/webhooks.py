@@ -115,10 +115,13 @@ async def vapi_webhook(
         if status_val == "in-progress" and call_id:
             if not billing_service.check_allowed(workspace_id, "voice_minutes", channel="voice"):
                 log.warning(
-                    "vapi_voice_limit_reached",
+                    "vapi_voice_limit_reached_ending_call",
                     workspace_id=workspace_id,
                     call_id=call_id,
                 )
+                # Hard cutoff: terminate the call in the background so we
+                # return 200 to Vapi immediately (it re-tries on non-200).
+                background_tasks.add_task(vapi.end_call, call_id)
             _ensure_conversation(workspace_id, location_id, call, message)
         return {"status": "ok"}
 

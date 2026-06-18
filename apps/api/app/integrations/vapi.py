@@ -274,6 +274,37 @@ def delete_assistant(assistant_id: str) -> None:
             _raise_with_body(res, "delete_assistant")
 
 
+# ---------- Active call control -------------------------------------------
+
+
+def end_call(call_id: str) -> None:
+    """Terminate an in-progress call via the Vapi REST API.
+
+    Used for a hard cutoff when a workspace exhausts its voice credits.
+    Safe to call on an already-ended call — Vapi returns 404, which we
+    treat as success.
+    """
+    if not is_configured():
+        log.info("vapi_stub_end_call", call_id=call_id)
+        return
+    import time
+
+    t0 = time.monotonic()
+    with _client() as c:
+        res = c.delete(f"/call/{call_id}")
+        log.info(
+            "vapi_http_call",
+            action="end_call",
+            call_id=call_id,
+            status=res.status_code,
+            elapsed_ms=int((time.monotonic() - t0) * 1000),
+        )
+        # 404 = call already ended; treat as success so background retries
+        # don't surface a noisy error.
+        if res.status_code not in (200, 204, 404):
+            _raise_with_body(res, "end_call")
+
+
 # ---------- Phone numbers (BYO Twilio import) ------------------------------
 
 
