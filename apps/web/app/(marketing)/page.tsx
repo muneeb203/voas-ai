@@ -58,8 +58,6 @@ const MORE_PROPS = [
   },
 ] as const;
 
-const LOGO_SLOTS = ['Logo', 'Logo', 'Logo', 'Logo', 'Logo', 'Logo'] as const;
-
 export default function HomePage() {
   return (
     <>
@@ -105,26 +103,6 @@ export default function HomePage() {
                 ↓ Watch the full demo below — switch between English, Arabic &amp; Urdu
               </p>
             </div>
-          </div>
-        </div>
-      </section>
-
-      {/* Logo strip */}
-      <section className="border-y border-border/60 bg-background">
-        <div className="container py-10">
-          <p className="text-center text-xs font-medium uppercase tracking-widest text-muted-foreground">
-            Trusted by operators across the US
-          </p>
-          <div className="mt-6 grid grid-cols-3 gap-6 sm:grid-cols-6">
-            {LOGO_SLOTS.map((label, i) => (
-              <div
-                key={i}
-                className="flex h-10 items-center justify-center rounded border border-dashed border-border text-xs font-medium text-muted-foreground/60"
-                aria-label="Customer logo placeholder"
-              >
-                {label}
-              </div>
-            ))}
           </div>
         </div>
       </section>
