@@ -18,6 +18,7 @@ export default async function VoiceSettingsPage() {
   const session = await requireDashboardSession('/integrations/voice');
   const isOwner = session.active.role === 'owner';
   const workspaceId = session.active.workspace_id;
+  const workspaceName = session.active.workspace.name;
 
   const [settingsRes, capsRes, billingRes] = await Promise.all([
     getVoiceSettings(workspaceId),
@@ -78,6 +79,7 @@ export default async function VoiceSettingsPage() {
               settings={settings}
               capabilities={caps}
               disabled={!isOwner}
+              workspaceName={workspaceName}
             />
           </CardContent>
         </Card>

@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import { Sparkles } from 'lucide-react';
 import { toast } from 'sonner';
 import { useActionState } from '@/lib/use-action-state';
 import { Button } from '@/components/ui/button';
@@ -26,6 +27,7 @@ import {
   isDefaultGreeting,
   isDefaultPrompt,
 } from '@/lib/voice-language-defaults';
+import { VoicePromptGeneratorModal } from '@/components/dashboard/voice-prompt-generator-modal';
 
 const INITIAL: FormResult = { error: null };
 
@@ -33,12 +35,15 @@ interface VoiceSettingsFormProps {
   settings: VoiceSettings;
   capabilities: VoiceCapabilities;
   disabled?: boolean;
+  /** Workspace name — pre-fills the generator modal's business name field */
+  workspaceName?: string;
 }
 
 export function VoiceSettingsForm({
   settings,
   capabilities,
   disabled,
+  workspaceName = '',
 }: VoiceSettingsFormProps) {
   const [state, formAction, pending] = useActionState(updateVoiceSettingsAction, INITIAL);
   const fieldErrors = state.fieldErrors;
@@ -51,6 +56,9 @@ export function VoiceSettingsForm({
   const [language, setLanguage] = useState<VoiceLanguage>(settings.language);
   const [greeting, setGreeting] = useState<string>(settings.greeting);
   const [systemPrompt, setSystemPrompt] = useState<string>(settings.system_prompt);
+
+  // Generator modal
+  const [generatorOpen, setGeneratorOpen] = useState(false);
 
   // Voice selection: "custom" is a sentinel that reveals a freeform text
   // input so owners can paste any ElevenLabs voice id directly.
@@ -125,6 +133,28 @@ export function VoiceSettingsForm({
           </SelectContent>
         </Select>
       </Field>
+
+      {/* Auto-generate button — opens the template modal */}
+      {!disabled && (
+        <div className="flex items-center justify-between rounded-lg border border-accent/30 bg-accent/5 px-4 py-3">
+          <div>
+            <p className="text-sm font-medium">Not sure what to write?</p>
+            <p className="text-xs text-muted-foreground">
+              Generate a prompt and greeting from your tone preferences — no AI needed.
+            </p>
+          </div>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="shrink-0 gap-2 border-accent/40 text-accent hover:bg-accent/10 hover:text-accent"
+            onClick={() => setGeneratorOpen(true)}
+          >
+            <Sparkles className="h-3.5 w-3.5" />
+            Auto-generate
+          </Button>
+        </div>
+      )}
 
       <Field label="Greeting" htmlFor="greeting" required error={fieldErrors?.greeting}>
         <Input
@@ -291,6 +321,18 @@ export function VoiceSettingsForm({
       {disabled && (
         <p className="text-xs text-muted-foreground">Only workspace owners can edit voice settings.</p>
       )}
+
+      <VoicePromptGeneratorModal
+        open={generatorOpen}
+        onClose={() => setGeneratorOpen(false)}
+        onApply={(generatedPrompt, generatedGreeting) => {
+          setSystemPrompt(generatedPrompt);
+          setGreeting(generatedGreeting);
+          toast.success('Prompt and greeting applied — review and save when ready.');
+        }}
+        workspaceName={workspaceName}
+        language={language}
+      />
     </form>
   );
 }
