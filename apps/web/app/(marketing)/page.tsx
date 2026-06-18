@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { Phone, MessageSquare, BarChart3, Plug, Sparkles, Smile } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { CallToAction } from '@/components/marketing/cta';
+import { DemoVideoSection } from '@/components/marketing/demo-video-section';
 
 const HOW_IT_WORKS = [
   {
@@ -65,33 +66,46 @@ export default function HomePage() {
       {/* Hero */}
       <section className="relative overflow-hidden">
         <div className="absolute inset-0 -z-10 bg-gradient-to-b from-secondary/40 via-background to-background" />
-        <div className="container py-20 text-center sm:py-28">
-          <span className="inline-flex items-center gap-2 rounded-full border border-accent/30 bg-accent/10 px-3 py-1 text-xs font-medium uppercase tracking-wider text-accent-700">
-            <span className="h-1.5 w-1.5 rounded-full bg-accent" />
-            Now in pilot with restaurants
-          </span>
+        <div className="container py-16 sm:py-24">
+          <div className="grid items-center gap-10 lg:grid-cols-[1fr_480px] lg:gap-16">
+            {/* Left: copy */}
+            <div className="text-center lg:text-left">
+              <span className="inline-flex items-center gap-2 rounded-full border border-accent/30 bg-accent/10 px-3 py-1 text-xs font-medium uppercase tracking-wider text-accent-700">
+                <span className="h-1.5 w-1.5 rounded-full bg-accent" />
+                Now in pilot with restaurants
+              </span>
 
-          <h1 className="mx-auto mt-6 max-w-3xl text-balance text-4xl font-semibold tracking-tight text-foreground sm:text-6xl">
-            A conversational front desk that never sleeps.
-          </h1>
+              <h1 className="mx-auto mt-6 max-w-2xl text-balance text-4xl font-semibold tracking-tight text-foreground sm:text-5xl lg:mx-0 lg:text-6xl">
+                A conversational front desk that never sleeps.
+              </h1>
 
-          <p className="mx-auto mt-6 max-w-2xl text-balance text-lg text-muted-foreground sm:text-xl">
-            VOAS AI answers every phone call, WhatsApp message, and web chat — takes the order,
-            books the appointment, handles the complaint, and follows up. One brain. Every channel.
-          </p>
+              <p className="mx-auto mt-6 max-w-xl text-balance text-lg text-muted-foreground sm:text-xl lg:mx-0">
+                VOAS AI answers every phone call, WhatsApp message, and web chat — takes the order,
+                books the appointment, handles the complaint, and follows up. One brain. Every channel.
+              </p>
 
-          <div className="mt-10 flex flex-col items-center justify-center gap-3 sm:flex-row">
-            <Button asChild size="lg">
-              <Link href="/signup">Start free</Link>
-            </Button>
-            <Button asChild variant="outline" size="lg">
-              <Link href="/contact">Talk to sales</Link>
-            </Button>
+              <div className="mt-10 flex flex-col items-center justify-center gap-3 sm:flex-row lg:justify-start">
+                <Button asChild size="lg">
+                  <Link href="/signup">Start free</Link>
+                </Button>
+                <Button asChild variant="outline" size="lg">
+                  <Link href="/contact">Talk to sales</Link>
+                </Button>
+              </div>
+
+              <p className="mt-6 text-xs text-muted-foreground">
+                No credit card required. Live in under an hour.
+              </p>
+            </div>
+
+            {/* Right: looping demo preview */}
+            <div className="mx-auto w-full max-w-lg lg:mx-0">
+              <DemoVideoSection preview />
+              <p className="mt-3 text-center text-xs text-muted-foreground lg:text-left">
+                ↓ Watch the full demo below — switch between English, Arabic &amp; Urdu
+              </p>
+            </div>
           </div>
-
-          <p className="mt-6 text-xs text-muted-foreground">
-            No credit card required. Live in under an hour.
-          </p>
         </div>
       </section>
 
@@ -114,6 +128,9 @@ export default function HomePage() {
           </div>
         </div>
       </section>
+
+      {/* Demo video — language switcher (EN / AR / UR) */}
+      <DemoVideoSection />
 
       {/* How it works */}
       <section className="container py-20 sm:py-28">
