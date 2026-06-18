@@ -9,7 +9,7 @@ import { Volume2 } from 'lucide-react';
 // ─────────────────────────────────────────────────────────────────────────────
 const VIDEOS = {
   en: {
-    id: 'REPLACE_ENGLISH_VIMEO_ID',
+    id: 'https://vimeo.com/1202488321?share=copy&fl=sv&fe=ci',
     label: 'English',
     nativeLabel: 'English',
     flag: '🇬🇧',
