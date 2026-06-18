@@ -21,7 +21,7 @@ const VIDEOS = {
     flag: '🇸🇦',
   },
   ur: {
-    id: 'REPLACE_URDU_VIMEO_ID',
+    id: '1202508526',
     label: 'Urdu',
     nativeLabel: 'اردو',
     flag: '🇵🇰',
