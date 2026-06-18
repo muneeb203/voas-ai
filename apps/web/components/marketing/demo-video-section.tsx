@@ -15,7 +15,7 @@ const VIDEOS = {
     flag: '🇬🇧',
   },
   ar: {
-    id: 'REPLACE_ARABIC_VIMEO_ID',
+    id: '1202499549',
     label: 'Arabic',
     nativeLabel: 'العربية',
     flag: '🇸🇦',
