@@ -315,7 +315,7 @@ export function VoiceSettingsForm({
       </Field>
 
       <Button type="submit" disabled={disabled || pending}>
-        {pending ? 'Saving…' : 'Save & sync to Vapi'}
+        {pending ? 'Saving…' : 'Save & Sync'}
       </Button>
 
       {disabled && (
