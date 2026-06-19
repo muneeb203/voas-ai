@@ -13,24 +13,24 @@ export const metadata: Metadata = {
 
 const FAQ = [
   {
-    q: ‘Are there setup or per-call fees?’,
-    a: ‘No setup fees. Voice minutes over your monthly cap are charged at the overage rate shown on your plan — you can see the meter in real time in the dashboard.’,
+    q: "Are there setup or per-call fees?",
+    a: "No setup fees. Voice minutes over your monthly cap are charged at the overage rate shown on your plan — you can see the meter in real time in the dashboard.",
   },
   {
-    q: ‘How does payment work?’,
-    a: ‘Plans are paid directly to us — contact us to subscribe or upgrade. Once payment is confirmed we activate your plan and credits in the dashboard.’,
+    q: "How does payment work?",
+    a: "Plans are paid directly to us — contact us to subscribe or upgrade. Once payment is confirmed we activate your plan and credits in the dashboard.",
   },
   {
-    q: ‘Can I change plans later?’,
-    a: ‘Yes. Contact us any time to upgrade or downgrade. Changes take effect from your next billing period.’,
+    q: "Can I change plans later?",
+    a: "Yes. Contact us any time to upgrade or downgrade. Changes take effect from your next billing period.",
   },
   {
-    q: ‘What about chains or franchises?’,
-    a: ‘For 10+ locations, we tailor a plan around your locations, channels, and integration needs. Talk to sales.’,
+    q: "What about chains or franchises?",
+    a: "For 10+ locations, we tailor a plan around your locations, channels, and integration needs. Talk to sales.",
   },
   {
-    q: ‘How does the free trial work?’,
-    a: ‘Create an account and get 30 free voice minutes to test your agent. When you\’re ready to go live, contact us to activate a plan.’,
+    q: "How does the free trial work?",
+    a: "Create an account and get 30 free voice minutes to test your agent. When you are ready to go live, contact us to activate a plan.",
   },
 ] as const;
 
