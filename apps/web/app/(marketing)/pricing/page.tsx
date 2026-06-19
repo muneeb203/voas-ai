@@ -14,23 +14,23 @@ export const metadata: Metadata = {
 const FAQ = [
   {
     q: "Are there setup or per-call fees?",
-    a: "No setup fees. Voice minutes over your monthly cap are charged at the overage rate shown on your plan — you can see the meter in real time in the dashboard.",
+    a: "None. Your monthly plan covers everything up to your included minutes. Any calls beyond that are billed at your plan's overage rate — no surprises.",
   },
   {
     q: "How does payment work?",
-    a: "Plans are paid directly to us — contact us to subscribe or upgrade. Once payment is confirmed we activate your plan and credits in the dashboard.",
+    a: "We handle it directly — no checkout flow. Reach out, confirm payment, and your plan and voice credits are live in your dashboard the same day.",
   },
   {
     q: "Can I change plans later?",
-    a: "Yes. Contact us any time to upgrade or downgrade. Changes take effect from your next billing period.",
+    a: "Yes, just message us. We update your plan and credits straight away, and any price difference applies from your next billing date.",
   },
   {
     q: "What about chains or franchises?",
-    a: "For 10+ locations, we tailor a plan around your locations, channels, and integration needs. Talk to sales.",
+    a: "We put together something custom around your location count, channels, and existing tools. Hit Talk to sales and we will get back to you within a day.",
   },
   {
     q: "How does the free trial work?",
-    a: "Create an account and get 30 free voice minutes to test your agent. When you are ready to go live, contact us to activate a plan.",
+    a: "Sign up and you get 30 free voice minutes immediately — no card needed. Test your agent on real calls, and when you are ready to go fully live, contact us to pick a plan.",
   },
 ] as const;
 

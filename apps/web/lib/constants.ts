@@ -55,13 +55,6 @@ export const PLANS = [
       '$0.10 / min overage',
     ],
   },
-  {
-    id: 'enterprise',
-    name: 'Enterprise',
-    priceMonthly: 0,
-    blurb: 'Custom limits for chains and franchises.',
-    features: ['Custom limits', 'Dedicated support', 'All channels'],
-  },
 ] as const;
 export type PlanId = (typeof PLANS)[number]['id'];
 

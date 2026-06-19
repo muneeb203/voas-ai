@@ -9,7 +9,7 @@ import { Logo } from '@/components/shared/logo';
 import { cn } from '@/lib/utils';
 
 const NAV_LINKS = [
-  { href: '/product', label: 'Product' },
+  { href: '/#features', label: 'Product' },
   { href: '/pricing', label: 'Pricing' },
   { href: '/contact', label: 'Contact' },
 ] as const;
@@ -30,7 +30,7 @@ export function MarketingNav() {
               href={link.href}
               className={cn(
                 'text-sm font-medium transition-colors',
-                pathname === link.href
+                pathname === link.href || (link.href === '/#features' && pathname === '/')
                   ? 'text-foreground'
                   : 'text-muted-foreground hover:text-foreground',
               )}
