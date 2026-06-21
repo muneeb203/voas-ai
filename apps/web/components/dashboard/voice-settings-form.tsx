@@ -1,10 +1,11 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { Sparkles } from 'lucide-react';
+import { Sparkles, CheckCircle2, AlertCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { useActionState } from '@/lib/use-action-state';
 import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Field } from '@/components/ui/field';
@@ -48,6 +49,20 @@ export function VoiceSettingsForm({
   const [state, formAction, pending] = useActionState(updateVoiceSettingsAction, INITIAL);
   const fieldErrors = state.fieldErrors;
   const wasPending = useRef(false);
+
+  type SyncPhase = 'idle' | 'saving' | 'done' | 'failed';
+  const [syncPhase, setSyncPhase] = useState<SyncPhase>('idle');
+  const [progress, setProgress] = useState(0);
+  const [msgIdx, setMsgIdx] = useState(0);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const SYNC_MESSAGES = [
+    'Saving your settings...',
+    'Getting your AI ready...',
+    'Bringing your assistant online...',
+    'Almost there — final checks in progress...',
+    'Just a moment more...',
+  ] as const;
 
   // Controlled inputs so we can swap their contents when the language
   // dropdown changes. Greeting + prompt start as whatever the workspace
@@ -98,13 +113,47 @@ export function VoiceSettingsForm({
   const isNonEnglishLang = language !== 'en';
 
   useEffect(() => {
-    // Fire a toast only on the transition from pending → not pending
-    // (i.e. the action just finished). This avoids the initial render firing.
-    if (wasPending.current && !pending) {
-      if (state.error && !state.fieldErrors) toast.error(state.error);
-      else if (!state.error) toast.success('Voice settings saved');
+    const wasP = wasPending.current;
+
+    if (!wasP && pending) {
+      // Save started
+      setSyncPhase('saving');
+      setProgress(4);
+      setMsgIdx(0);
+      const start = Date.now();
+      timerRef.current = setInterval(() => {
+        const elapsed = Date.now() - start;
+        // Asymptotic crawl toward 84% — slows down as it gets closer
+        const p = Math.floor(84 * (1 - Math.exp(-0.0005 * elapsed))) + 4;
+        setProgress(Math.min(p, 84));
+        setMsgIdx(Math.min(Math.floor(elapsed / 5000), SYNC_MESSAGES.length - 1));
+      }, 250);
     }
+
+    if (wasP && !pending) {
+      if (timerRef.current) clearInterval(timerRef.current);
+
+      if (state.error && !state.fieldErrors) {
+        setSyncPhase('failed');
+        setProgress(0);
+        toast.error(state.error);
+      } else if (!state.error) {
+        setSyncPhase('done');
+        setProgress(100);
+        const dismiss = setTimeout(() => {
+          setSyncPhase('idle');
+          setProgress(0);
+        }, 3500);
+        return () => clearTimeout(dismiss);
+      }
+    }
+
     wasPending.current = pending;
+
+    return () => {
+      if (timerRef.current) clearInterval(timerRef.current);
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pending, state]);
 
   return (
@@ -317,6 +366,58 @@ export function VoiceSettingsForm({
       <Button type="submit" disabled={disabled || pending}>
         {pending ? 'Saving…' : 'Save & Sync'}
       </Button>
+
+      {syncPhase !== 'idle' && (
+        <div
+          className={cn(
+            'rounded-lg border p-4 transition-colors',
+            syncPhase === 'done'
+              ? 'border-success/30 bg-success/5'
+              : syncPhase === 'failed'
+                ? 'border-error/30 bg-error/5'
+                : 'border-border bg-secondary/30',
+          )}
+        >
+          {/* Progress bar */}
+          <div className="relative h-1.5 w-full overflow-hidden rounded-full bg-muted">
+            <div
+              className={cn(
+                'absolute left-0 top-0 h-full rounded-full',
+                syncPhase === 'done'
+                  ? 'bg-success transition-all duration-500'
+                  : syncPhase === 'failed'
+                    ? 'bg-error transition-all duration-200'
+                    : 'bg-accent transition-all duration-300',
+              )}
+              style={{ width: `${progress}%` }}
+            />
+            {syncPhase === 'saving' && (
+              <div className="absolute inset-0 animate-pulse bg-gradient-to-r from-transparent via-white/10 to-transparent" />
+            )}
+          </div>
+
+          {/* Status message */}
+          <div className="mt-2.5 flex items-center gap-2">
+            {syncPhase === 'done' && (
+              <>
+                <CheckCircle2 className="h-3.5 w-3.5 flex-shrink-0 text-success" />
+                <p className="text-xs font-medium text-success">
+                  Your assistant is live and ready to take calls.
+                </p>
+              </>
+            )}
+            {syncPhase === 'failed' && (
+              <>
+                <AlertCircle className="h-3.5 w-3.5 flex-shrink-0 text-error" />
+                <p className="text-xs text-error">{state.error}</p>
+              </>
+            )}
+            {syncPhase === 'saving' && (
+              <p className="text-xs text-muted-foreground">{SYNC_MESSAGES[msgIdx]}</p>
+            )}
+          </div>
+        </div>
+      )}
 
       {disabled && (
         <p className="text-xs text-muted-foreground">Only workspace owners can edit voice settings.</p>
