@@ -12,15 +12,26 @@ interface FieldProps {
   required?: boolean;
   className?: string;
   children: React.ReactNode;
+  help?: React.ReactNode;
 }
 
-export function Field({ label, htmlFor, error, hint, required, className, children }: FieldProps) {
+export function Field({ label, htmlFor, error, hint, required, className, children, help }: FieldProps) {
   return (
     <div className={cn('space-y-1.5', className)}>
-      <Label htmlFor={htmlFor}>
-        {label}
-        {required && <span className="ml-0.5 text-error">*</span>}
-      </Label>
+      {help ? (
+        <div className="flex items-center gap-1.5">
+          <Label htmlFor={htmlFor}>
+            {label}
+            {required && <span className="ml-0.5 text-error">*</span>}
+          </Label>
+          {help}
+        </div>
+      ) : (
+        <Label htmlFor={htmlFor}>
+          {label}
+          {required && <span className="ml-0.5 text-error">*</span>}
+        </Label>
+      )}
       {children}
       {error ? (
         <p className="text-xs text-error" role="alert">

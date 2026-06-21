@@ -11,6 +11,7 @@ import { VoiceSettingsForm } from '@/components/dashboard/voice-settings-form';
 import { TestCallButton } from '@/components/dashboard/test-call-button';
 import { MenuSyncCard } from '@/components/dashboard/menu-sync-card';
 import { VoiceMinutesCard } from '@/components/dashboard/voice-minutes-card';
+import { VoiceSetupGuide } from '@/components/dashboard/voice-setup-guide';
 
 export const metadata: Metadata = { title: 'Voice settings' };
 
@@ -47,6 +48,8 @@ export default async function VoiceSettingsPage() {
         title="Voice"
         description="Configure your AI agent's prompt + voice. Phone numbers are configured per location."
       />
+
+      <VoiceSetupGuide />
 
       {!caps.vapi_configured && (
         <div className="flex items-start gap-2 rounded-md border border-warning/40 bg-warning/10 p-3 text-sm">

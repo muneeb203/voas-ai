@@ -64,3 +64,10 @@ export function disableLocationVoice(workspaceId: string, locationId: string) {
     { method: 'DELETE' },
   );
 }
+
+export function testLocationVoice(workspaceId: string, locationId: string) {
+  return apiCall<{ ok: boolean; message: string }>(
+    `/v1/workspaces/${workspaceId}/locations/${locationId}/voice/test`,
+    { method: 'POST' },
+  );
+}
