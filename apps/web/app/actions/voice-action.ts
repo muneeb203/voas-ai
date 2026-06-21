@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { requireDashboardSession } from '@/lib/auth/workspace';
 import {
   disableLocationVoice,
+  testLocationVoice,
   updateVoiceSettings,
   upsertLocationVoice,
 } from '@/lib/api/voice';
@@ -124,6 +125,18 @@ export async function resyncMenuToVapiAction(): Promise<FormResult> {
   revalidatePath('/integrations/voice');
   revalidatePath('/integrations');
   return { error: null };
+}
+
+export async function testLocationVoiceAction(
+  locationId: string,
+): Promise<{ ok: boolean; message: string }> {
+  const { error, session } = await requireOwner('/locations');
+  if (error) return { ok: false, message: error };
+
+  const res = await testLocationVoice(session.active.workspace_id, locationId);
+  if (isApiError(res)) return { ok: false, message: res.error.message };
+
+  return { ok: res.data.ok, message: res.data.message };
 }
 
 export async function disableLocationVoiceAction(locationId: string): Promise<FormResult> {
