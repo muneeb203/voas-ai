@@ -18,7 +18,9 @@ export interface LocationCreatePayload {
 export type LocationUpdatePayload = Partial<LocationCreatePayload>;
 
 export function listLocations(workspaceId: string) {
-  return apiCall<Location[]>(`/v1/workspaces/${workspaceId}/locations`, { cache: 'no-store' });
+  return apiCall<Location[]>(`/v1/workspaces/${workspaceId}/locations`, {
+    next: { revalidate: 60 },
+  });
 }
 
 export function createLocation(workspaceId: string, payload: LocationCreatePayload) {

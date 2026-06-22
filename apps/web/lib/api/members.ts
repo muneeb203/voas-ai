@@ -4,7 +4,9 @@ import type { Invitation, InvitationLookup, InvitationWithUrl, Member } from '@/
 import type { WorkspaceRole } from '@/lib/constants';
 
 export function listMembers(workspaceId: string) {
-  return apiCall<Member[]>(`/v1/workspaces/${workspaceId}/members`, { cache: 'no-store' });
+  return apiCall<Member[]>(`/v1/workspaces/${workspaceId}/members`, {
+    next: { revalidate: 60 },
+  });
 }
 
 export function updateMember(workspaceId: string, memberId: string, role: WorkspaceRole) {

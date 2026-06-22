@@ -8,12 +8,12 @@ import type {
 } from '@/lib/types';
 
 export function getVoiceCapabilities() {
-  return apiCall<VoiceCapabilities>('/v1/voice/capabilities', { cache: 'no-store' });
+  return apiCall<VoiceCapabilities>('/v1/voice/capabilities', { next: { revalidate: 300 } });
 }
 
 export function getVoiceSettings(workspaceId: string) {
   return apiCall<VoiceSettings>(`/v1/workspaces/${workspaceId}/voice/settings`, {
-    cache: 'no-store',
+    next: { revalidate: 60 },
   });
 }
 
@@ -38,7 +38,7 @@ export function updateVoiceSettings(
 export function getLocationVoice(workspaceId: string, locationId: string) {
   return apiCall<LocationVoiceConfigSafe | null>(
     `/v1/workspaces/${workspaceId}/locations/${locationId}/voice`,
-    { cache: 'no-store' },
+    { next: { revalidate: 60 } },
   );
 }
 
