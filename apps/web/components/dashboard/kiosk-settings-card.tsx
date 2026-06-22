@@ -133,7 +133,7 @@ export function KioskSettingsCard({ initialSettings }: KioskSettingsCardProps) {
           <Switch
             id="session-lock"
             checked={sessionLock}
-            onCheckedChange={setSessionLock}
+            onChange={(e) => setSessionLock(e.target.checked)}
             className="mt-0.5 flex-shrink-0"
           />
         </div>
