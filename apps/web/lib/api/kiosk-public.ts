@@ -1,0 +1,37 @@
+import { apiFetch } from '@/lib/api';
+import type { ApiResponse } from '@/lib/types';
+
+const API_BASE = (process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000').replace(/\/+$/, '');
+
+async function publicFetch<T>(path: string, init: RequestInit = {}): Promise<ApiResponse<T>> {
+  const res = await fetch(`${API_BASE}${path}`, {
+    ...init,
+    headers: { 'Content-Type': 'application/json', ...(init.headers ?? {}) },
+  });
+  if (res.status === 204) return { data: null as T };
+  const json = await res.json().catch(() => null);
+  if (!json) {
+    return { error: { code: 'NETWORK_ERROR', message: `Request failed (${res.status})` } };
+  }
+  return json as ApiResponse<T>;
+}
+
+export function claimKioskSession(
+  token: string,
+  sessionId: string,
+): Promise<ApiResponse<{ claimed: boolean }>> {
+  return publicFetch(`/v1/kiosk/${token}/claim`, {
+    method: 'POST',
+    body: JSON.stringify({ session_id: sessionId }),
+  });
+}
+
+export function heartbeatKioskSession(
+  token: string,
+  sessionId: string,
+): Promise<ApiResponse<{ alive: boolean }>> {
+  return publicFetch(`/v1/kiosk/${token}/heartbeat`, {
+    method: 'POST',
+    body: JSON.stringify({ session_id: sessionId }),
+  });
+}

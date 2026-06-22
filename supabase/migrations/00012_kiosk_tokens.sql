@@ -3,7 +3,7 @@ create table kiosk_tokens (
   id uuid primary key default gen_random_uuid(),
   workspace_id uuid not null references workspaces(id) on delete cascade,
   location_id uuid not null references locations(id) on delete cascade,
-  token text not null unique default encode(gen_random_bytes(32), 'hex'),
+  token text not null unique,
   is_active boolean not null default true,
   created_by uuid not null references auth.users(id),
   last_used_at timestamptz,
