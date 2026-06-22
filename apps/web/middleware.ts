@@ -25,6 +25,8 @@ const DASHBOARD_PREFIXES = [
   '/team',
   '/settings',
   '/support',
+  '/self-order',
+  '/locations',
 ];
 
 function isPublic(pathname: string) {

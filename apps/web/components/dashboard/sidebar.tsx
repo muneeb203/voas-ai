@@ -12,6 +12,7 @@ import {
   Plug,
   BarChart3,
   MapPin,
+  MonitorSmartphone,
   Users,
   Settings,
   LifeBuoy,
@@ -54,6 +55,7 @@ const SECTIONS: NavSection[] = [
     titleKey: 'workspace',
     items: [
       { href: '/locations', labelKey: 'locations', icon: MapPin },
+      { href: '/self-order', labelKey: 'selfOrder', icon: MonitorSmartphone },
       { href: '/team', labelKey: 'team', icon: Users },
       { href: '/settings', labelKey: 'settings', icon: Settings },
       { href: '/support', labelKey: 'support', icon: LifeBuoy },
