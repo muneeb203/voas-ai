@@ -25,6 +25,7 @@ from app.routers import (
     customers,
     health,
     help,
+    kiosk,
     locations,
     members,
     menu,
@@ -119,6 +120,8 @@ def create_app() -> FastAPI:
     app.include_router(notifications.router, prefix="/v1")
     app.include_router(voice.router, prefix="/v1")
     app.include_router(whatsapp.router, prefix="/v1")
+    app.include_router(kiosk.router, prefix="/v1")
+    app.include_router(kiosk.public_router, prefix="/v1")
     app.include_router(webhooks.router, prefix="/v1")
     app.include_router(admin.router, prefix="/v1")
 
