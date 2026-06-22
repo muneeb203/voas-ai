@@ -11,6 +11,7 @@ import {
   BookOpen,
   Plug,
   BarChart3,
+  MapPin,
   Users,
   Settings,
   LifeBuoy,
@@ -52,6 +53,7 @@ const SECTIONS: NavSection[] = [
   {
     titleKey: 'workspace',
     items: [
+      { href: '/locations', labelKey: 'locations', icon: MapPin },
       { href: '/team', labelKey: 'team', icon: Users },
       { href: '/settings', labelKey: 'settings', icon: Settings },
       { href: '/support', labelKey: 'support', icon: LifeBuoy },
