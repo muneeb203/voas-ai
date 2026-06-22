@@ -1,4 +1,3 @@
-import { apiFetch } from '@/lib/api';
 import type { ApiResponse } from '@/lib/types';
 
 const API_BASE = (process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000').replace(/\/+$/, '');

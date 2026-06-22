@@ -90,7 +90,7 @@ export function KioskClient({
   theme,
   sessionLockEnabled,
 }: KioskClientProps) {
-  const cfg = THEME_CFG[theme] ?? THEME_CFG.gradient;
+  const cfg = (THEME_CFG[theme] ?? THEME_CFG['gradient']) as ThemeCfg;
 
   const [kioskState, setKioskState] = useState<KioskState>('idle');
   const [muted, setMuted] = useState(false);
