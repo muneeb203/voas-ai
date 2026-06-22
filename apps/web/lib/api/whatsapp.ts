@@ -8,13 +8,13 @@ import type {
 
 export function getWhatsAppCapabilities() {
   return apiCall<WhatsAppCapabilities>('/v1/whatsapp/capabilities', {
-    cache: 'no-store',
+    next: { revalidate: 300 },
   });
 }
 
 export function getWhatsAppSettings(workspaceId: string) {
   return apiCall<WhatsAppSettings>(`/v1/workspaces/${workspaceId}/whatsapp/settings`, {
-    cache: 'no-store',
+    next: { revalidate: 60 },
   });
 }
 
@@ -37,7 +37,7 @@ export function updateWhatsAppSettings(
 export function getLocationWhatsAppConfig(workspaceId: string, locationId: string) {
   return apiCall<LocationWhatsAppConfigSafe | null>(
     `/v1/workspaces/${workspaceId}/locations/${locationId}/whatsapp`,
-    { cache: 'no-store' },
+    { next: { revalidate: 60 } },
   );
 }
 
