@@ -169,7 +169,7 @@ async def get_kiosk_info(token: Annotated[str, Path()]) -> DataResponse[KioskInf
         .execute()
     )
     voice_res = (
-        db.table("workspace_voice_settings")
+        db.table("voice_settings")
         .select("vapi_assistant_id")
         .eq("workspace_id", workspace_id)
         .limit(1)
