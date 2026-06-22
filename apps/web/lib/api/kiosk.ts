@@ -12,11 +12,18 @@ export interface KioskToken {
   last_used_at: string | null;
 }
 
+export interface KioskSettings {
+  theme: 'warm' | 'light' | 'gradient';
+  session_lock_enabled: boolean;
+}
+
 export interface KioskInfo {
   location_name: string;
   workspace_name: string;
   vapi_public_key: string;
   vapi_assistant_id: string;
+  theme: 'warm' | 'light' | 'gradient';
+  session_lock_enabled: boolean;
 }
 
 export function listKioskTokens(workspaceId: string) {
@@ -35,6 +42,22 @@ export function generateKioskToken(workspaceId: string, locationId: string) {
 export function revokeKioskToken(workspaceId: string, tokenId: string) {
   return apiCall<null>(`/v1/workspaces/${workspaceId}/kiosk-tokens/${tokenId}`, {
     method: 'DELETE',
+  });
+}
+
+export function getKioskSettings(workspaceId: string) {
+  return apiCall<KioskSettings>(`/v1/workspaces/${workspaceId}/kiosk-settings`, {
+    next: { revalidate: 30 },
+  });
+}
+
+export function updateKioskSettings(
+  workspaceId: string,
+  body: Partial<KioskSettings>,
+) {
+  return apiCall<KioskSettings>(`/v1/workspaces/${workspaceId}/kiosk-settings`, {
+    method: 'PATCH',
+    body,
   });
 }
 

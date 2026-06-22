@@ -2,12 +2,13 @@ import type { Metadata } from 'next';
 import { AlertTriangle } from 'lucide-react';
 import { requireDashboardSession } from '@/lib/auth/workspace';
 import { listLocations } from '@/lib/api/locations';
-import { listKioskTokens } from '@/lib/api/kiosk';
+import { listKioskTokens, getKioskSettings } from '@/lib/api/kiosk';
 import { getBillingUsage } from '@/lib/api/billing';
 import { isApiError } from '@/lib/types';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { PageHeader } from '@/components/dashboard/page-header';
 import { SelfOrderLocationCard } from '@/components/dashboard/self-order-location-card';
+import { KioskSettingsCard } from '@/components/dashboard/kiosk-settings-card';
 
 export const metadata: Metadata = { title: 'Self Order' };
 
@@ -16,15 +17,19 @@ export default async function SelfOrderPage() {
   const isOwner = session.active.role === 'owner';
   const workspaceId = session.active.workspace_id;
 
-  const [locationsRes, tokensRes, billingRes] = await Promise.all([
+  const [locationsRes, tokensRes, billingRes, settingsRes] = await Promise.all([
     listLocations(workspaceId),
     listKioskTokens(workspaceId),
     getBillingUsage(workspaceId),
+    getKioskSettings(workspaceId),
   ]);
 
   const locations = !isApiError(locationsRes) ? locationsRes.data : [];
   const tokens = !isApiError(tokensRes) ? tokensRes.data : [];
   const billing = !isApiError(billingRes) ? billingRes.data : null;
+  const kioskSettings = !isApiError(settingsRes)
+    ? settingsRes.data
+    : { theme: 'gradient' as const, session_lock_enabled: false };
 
   const tokenByLocation = Object.fromEntries(tokens.map((t) => [t.location_id, t]));
 
@@ -65,6 +70,8 @@ export default async function SelfOrderPage() {
           </CardDescription>
         </CardHeader>
       </Card>
+
+      {isOwner && <KioskSettingsCard initialSettings={kioskSettings} />}
 
       {locations.length === 0 ? (
         <Card>
