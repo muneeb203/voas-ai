@@ -29,9 +29,13 @@ export default async function SelfOrderPage() {
   const billing = !isApiError(billingRes) ? billingRes.data : null;
   const kioskSettings = !isApiError(settingsRes)
     ? settingsRes.data
-    : { theme: 'gradient' as const, session_lock_enabled: false };
+    : { theme: 'gradient' as const, session_lock_enabled: false, kiosk_enabled: false, max_kiosk_urls: 1 };
 
   const tokenByLocation = Object.fromEntries(tokens.map((t) => [t.location_id, t]));
+
+  const kioskEnabled = kioskSettings.kiosk_enabled;
+  const maxKioskUrls = kioskSettings.max_kiosk_urls;
+  const activeCount = tokens.filter((t) => t.is_active).length;
 
   const minutesUsed = billing?.voice_minutes.used ?? 0;
   const minutesLimit = billing?.voice_minutes.plan_limit ?? 0;
@@ -73,6 +77,12 @@ export default async function SelfOrderPage() {
 
       {isOwner && <KioskSettingsCard initialSettings={kioskSettings} />}
 
+      {kioskEnabled && (
+        <p className="text-sm text-muted-foreground">
+          {activeCount} of {maxKioskUrls} kiosk URL{maxKioskUrls !== 1 ? 's' : ''} active
+        </p>
+      )}
+
       {locations.length === 0 ? (
         <Card>
           <CardContent className="py-12 text-center">
@@ -87,14 +97,21 @@ export default async function SelfOrderPage() {
         </Card>
       ) : (
         <div className="space-y-4">
-          {locations.map((loc) => (
-            <SelfOrderLocationCard
-              key={loc.id}
-              location={loc}
-              token={tokenByLocation[loc.id] ?? null}
-              isOwner={isOwner}
-            />
-          ))}
+          {locations.map((loc) => {
+            const token = tokenByLocation[loc.id] ?? null;
+            const hasActiveToken = token?.is_active === true;
+            const canGenerate = kioskEnabled && (hasActiveToken || activeCount < maxKioskUrls);
+            return (
+              <SelfOrderLocationCard
+                key={loc.id}
+                location={loc}
+                token={token}
+                isOwner={isOwner}
+                kioskEnabled={kioskEnabled}
+                canGenerate={canGenerate}
+              />
+            );
+          })}
         </div>
       )}
     </div>

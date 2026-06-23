@@ -15,13 +15,13 @@ export interface KioskToken {
 export interface KioskSettings {
   theme: 'warm' | 'light' | 'gradient';
   session_lock_enabled: boolean;
+  kiosk_enabled: boolean;
+  max_kiosk_urls: number;
 }
 
 export interface KioskInfo {
   location_name: string;
   workspace_name: string;
-  vapi_public_key: string;
-  vapi_assistant_id: string;
   theme: 'warm' | 'light' | 'gradient';
   session_lock_enabled: boolean;
 }

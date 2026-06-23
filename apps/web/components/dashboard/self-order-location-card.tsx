@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Copy, Check, ExternalLink, RefreshCw, Trash2, MonitorSmartphone } from 'lucide-react';
+import { Copy, Check, ExternalLink, RefreshCw, Trash2, MonitorSmartphone, Lock } from 'lucide-react';
 import { toast } from 'sonner';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -14,15 +14,24 @@ interface SelfOrderLocationCardProps {
   location: Location;
   token: KioskToken | null;
   isOwner: boolean;
+  kioskEnabled: boolean;
+  canGenerate: boolean;
 }
 
-export function SelfOrderLocationCard({ location, token, isOwner }: SelfOrderLocationCardProps) {
+export function SelfOrderLocationCard({
+  location,
+  token,
+  isOwner,
+  kioskEnabled,
+  canGenerate,
+}: SelfOrderLocationCardProps) {
   const [pending, setPending] = useState<'generate' | 'revoke' | null>(null);
   const [copied, setCopied] = useState(false);
 
-  const kioskUrl = token?.is_active
-    ? `${typeof window !== 'undefined' ? window.location.origin : ''}/kiosk/${token.token}`
-    : null;
+  const kioskUrl =
+    token?.is_active && kioskEnabled
+      ? `${typeof window !== 'undefined' ? window.location.origin : ''}/kiosk/${token.token}`
+      : null;
 
   async function handleGenerate() {
     setPending('generate');
@@ -49,6 +58,16 @@ export function SelfOrderLocationCard({ location, token, isOwner }: SelfOrderLoc
     setTimeout(() => setCopied(false), 2000);
   }
 
+  const isDisabledByLimit = token && !token.is_active;
+  const hasActiveToken = token?.is_active === true;
+
+  function renderBadge() {
+    if (!kioskEnabled) return <Badge variant="secondary">Kiosk disabled</Badge>;
+    if (hasActiveToken) return <Badge variant="success">Active</Badge>;
+    if (isDisabledByLimit) return <Badge variant="warning">Disabled — over limit</Badge>;
+    return <Badge variant="secondary">No kiosk URL</Badge>;
+  }
+
   return (
     <Card>
       <CardContent className="p-5">
@@ -60,19 +79,33 @@ export function SelfOrderLocationCard({ location, token, isOwner }: SelfOrderLoc
             <div>
               <p className="font-medium text-foreground">{location.name}</p>
               <p className="text-xs text-muted-foreground">
-                {location.city ? `${location.city}${location.state ? `, ${location.state}` : ''}` : 'No address'}
+                {location.city
+                  ? `${location.city}${location.state ? `, ${location.state}` : ''}`
+                  : 'No address'}
               </p>
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
-            {token?.is_active ? (
-              <Badge variant="success">Active</Badge>
-            ) : (
-              <Badge variant="secondary">No kiosk URL</Badge>
-            )}
-          </div>
+          <div className="flex items-center gap-2">{renderBadge()}</div>
         </div>
+
+        {!kioskEnabled && (
+          <div className="mt-4 flex items-center gap-2 rounded-lg border border-border bg-secondary/30 px-3 py-2">
+            <Lock className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground" />
+            <p className="text-xs text-muted-foreground">
+              Kiosk access is disabled for this workspace. Contact your administrator to enable it.
+            </p>
+          </div>
+        )}
+
+        {kioskEnabled && isDisabledByLimit && (
+          <div className="mt-4 rounded-lg border border-warning/30 bg-warning/10 px-3 py-2">
+            <p className="text-xs text-warning">
+              This URL was disabled because the workspace reached its kiosk URL limit. Revoke
+              another location&apos;s URL to re-enable this one.
+            </p>
+          </div>
+        )}
 
         {kioskUrl && (
           <div className="mt-4 flex items-center gap-2 rounded-lg border border-border bg-secondary/30 px-3 py-2">
@@ -101,19 +134,22 @@ export function SelfOrderLocationCard({ location, token, isOwner }: SelfOrderLoc
           </div>
         )}
 
-        {isOwner && (
+        {isOwner && kioskEnabled && (
           <div className="mt-4 flex gap-2">
             <Button
               variant="outline"
               size="sm"
               onClick={handleGenerate}
-              disabled={pending !== null}
+              disabled={pending !== null || !canGenerate}
+              title={!canGenerate ? 'Active URL limit reached — revoke another location first' : undefined}
             >
-              <RefreshCw className={`h-3.5 w-3.5 ${pending === 'generate' ? 'animate-spin' : ''}`} />
-              {token?.is_active ? 'Regenerate URL' : 'Generate URL'}
+              <RefreshCw
+                className={`h-3.5 w-3.5 ${pending === 'generate' ? 'animate-spin' : ''}`}
+              />
+              {hasActiveToken ? 'Regenerate URL' : 'Generate URL'}
             </Button>
 
-            {token?.is_active && (
+            {token && (
               <Button
                 variant="ghost"
                 size="sm"

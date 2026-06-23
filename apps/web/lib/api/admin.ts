@@ -260,3 +260,29 @@ export function updateAdminWorkspaceBilling(
     cache: 'no-store',
   });
 }
+
+// --- Kiosk settings (admin-controlled) ---
+
+export interface AdminKioskSettings {
+  kiosk_enabled: boolean;
+  max_kiosk_urls: number;
+  theme: 'warm' | 'light' | 'gradient';
+  session_lock_enabled: boolean;
+}
+
+export function getAdminKioskSettings(workspaceId: string) {
+  return apiCall<AdminKioskSettings>(
+    `/v1/admin/workspaces/${workspaceId}/kiosk-settings`,
+    { cache: 'no-store' },
+  );
+}
+
+export function updateAdminKioskSettings(
+  workspaceId: string,
+  body: { kiosk_enabled?: boolean; max_kiosk_urls?: number },
+) {
+  return apiCall<AdminKioskSettings>(`/v1/admin/workspaces/${workspaceId}/kiosk-settings`, {
+    method: 'PATCH',
+    body,
+  });
+}
