@@ -50,7 +50,7 @@ export function AdminKioskSettingsCard({ workspaceId, settings }: AdminKioskSett
               When off, all kiosk URLs return an error immediately.
             </p>
           </div>
-          <Switch id="kiosk-enabled" checked={enabled} onCheckedChange={setEnabled} />
+          <Switch id="kiosk-enabled" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} />
         </div>
 
         <div className="space-y-2">
