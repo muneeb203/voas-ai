@@ -1,6 +1,9 @@
+from datetime import UTC, datetime
+
 from fastapi import APIRouter, Query, status
 from pydantic import BaseModel, Field
 
+from app.core.supabase import get_supabase_admin
 from app.deps import AdminContextDep
 from app.models.admin import (
     AdminAuditEntry,
@@ -295,3 +298,98 @@ async def update_workspace_billing(
     ctx: AdminContextDep,
 ) -> DataResponse[UsageSummary]:
     return ok(billing_service.update_workspace_billing(workspace_id, payload, ctx.admin_id))
+
+
+# ---------- Kiosk settings (admin-controlled) ----------------------------------
+
+
+class AdminKioskSettings(BaseModel):
+    kiosk_enabled: bool
+    max_kiosk_urls: int
+    theme: str
+    session_lock_enabled: bool
+
+
+class AdminKioskSettingsUpdate(BaseModel):
+    kiosk_enabled: bool | None = None
+    max_kiosk_urls: int | None = Field(default=None, ge=1, le=10)
+
+
+@router.get(
+    "/workspaces/{workspace_id}/kiosk-settings",
+    response_model=DataResponse[AdminKioskSettings],
+)
+async def get_admin_kiosk_settings(
+    workspace_id: str, _: AdminContextDep
+) -> DataResponse[AdminKioskSettings]:
+    db = get_supabase_admin()
+    res = (
+        db.table("workspace_kiosk_settings")
+        .select("kiosk_enabled, max_kiosk_urls, theme, session_lock_enabled")
+        .eq("workspace_id", workspace_id)
+        .limit(1)
+        .execute()
+    )
+    if res.data:
+        return ok(AdminKioskSettings(**res.data[0]))
+    return ok(
+        AdminKioskSettings(
+            kiosk_enabled=False, max_kiosk_urls=1, theme="gradient", session_lock_enabled=False
+        )
+    )
+
+
+@router.patch(
+    "/workspaces/{workspace_id}/kiosk-settings",
+    response_model=DataResponse[AdminKioskSettings],
+)
+async def update_admin_kiosk_settings(
+    workspace_id: str,
+    body: AdminKioskSettingsUpdate,
+    ctx: AdminContextDep,
+) -> DataResponse[AdminKioskSettings]:
+    db = get_supabase_admin()
+
+    # Deactivate oldest excess active tokens whenever max_kiosk_urls is being set
+    if body.max_kiosk_urls is not None:
+        active_tokens = (
+            db.table("kiosk_tokens")
+            .select("id")
+            .eq("workspace_id", workspace_id)
+            .eq("is_active", True)
+            .order("created_at", desc=True)
+            .execute()
+        )
+        excess_ids = [row["id"] for row in active_tokens.data[body.max_kiosk_urls :]]
+        if excess_ids:
+            db.table("kiosk_tokens").update({"is_active": False}).in_("id", excess_ids).execute()
+
+    changes: dict = {"updated_at": datetime.now(UTC).isoformat()}
+    if body.kiosk_enabled is not None:
+        changes["kiosk_enabled"] = body.kiosk_enabled
+    if body.max_kiosk_urls is not None:
+        changes["max_kiosk_urls"] = body.max_kiosk_urls
+
+    existing = (
+        db.table("workspace_kiosk_settings")
+        .select("id")
+        .eq("workspace_id", workspace_id)
+        .limit(1)
+        .execute()
+    )
+    if existing.data:
+        res = (
+            db.table("workspace_kiosk_settings")
+            .update(changes)
+            .eq("workspace_id", workspace_id)
+            .execute()
+        )
+    else:
+        changes["workspace_id"] = workspace_id
+        changes.setdefault("kiosk_enabled", False)
+        changes.setdefault("max_kiosk_urls", 1)
+        changes.setdefault("theme", "gradient")
+        changes.setdefault("session_lock_enabled", False)
+        res = db.table("workspace_kiosk_settings").insert(changes).execute()
+
+    return ok(AdminKioskSettings(**res.data[0]))

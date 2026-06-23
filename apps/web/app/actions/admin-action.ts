@@ -140,3 +140,17 @@ export async function updateWorkspaceBillingAction(
   revalidatePath('/admin/usage');
   return { error: null };
 }
+
+// --- Kiosk settings actions -----------------------------------------------
+
+export async function updateAdminKioskSettingsAction(
+  workspaceId: string,
+  body: { kiosk_enabled?: boolean; max_kiosk_urls?: number },
+) {
+  await requireAdminSession(`/admin/workspaces/${workspaceId}`);
+  const { updateAdminKioskSettings } = await import('@/lib/api/admin');
+  const res = await updateAdminKioskSettings(workspaceId, body);
+  if (isApiError(res)) return { error: res.error.message };
+  revalidatePath(`/admin/workspaces/${workspaceId}`);
+  return { error: null };
+}

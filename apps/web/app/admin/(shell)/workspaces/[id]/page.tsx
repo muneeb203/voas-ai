@@ -4,12 +4,13 @@ import { notFound } from 'next/navigation';
 import { formatDistanceToNow } from 'date-fns';
 import { ArrowLeft } from 'lucide-react';
 import { requireAdminSession } from '@/lib/auth/admin';
-import { getAdminWorkspace, listAdminTickets, listAdminAuditLogs, getAdminWorkspaceUsage, listAdminWorkspaceGrants } from '@/lib/api/admin';
+import { getAdminWorkspace, listAdminTickets, listAdminAuditLogs, getAdminWorkspaceUsage, listAdminWorkspaceGrants, getAdminKioskSettings } from '@/lib/api/admin';
 import { isApiError } from '@/lib/types';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { AdminWorkspaceBillingPanel } from '@/components/admin/admin-workspace-billing-panel';
+import { AdminKioskSettingsCard } from '@/components/admin/admin-kiosk-settings-card';
 import {
   Table,
   TableBody,
@@ -39,12 +40,13 @@ export default async function AdminWorkspaceDetailPage({
 }) {
   await requireAdminSession(`/admin/workspaces/${params.id}`);
 
-  const [detailRes, ticketsRes, auditRes, usageRes, grantsRes] = await Promise.all([
+  const [detailRes, ticketsRes, auditRes, usageRes, grantsRes, kioskRes] = await Promise.all([
     getAdminWorkspace(params.id),
     listAdminTickets({ workspaceId: params.id }),
     listAdminAuditLogs({ workspace_id: params.id }),
     getAdminWorkspaceUsage(params.id),
     listAdminWorkspaceGrants(params.id),
+    getAdminKioskSettings(params.id),
   ]);
 
   if (isApiError(detailRes)) {
@@ -54,6 +56,9 @@ export default async function AdminWorkspaceDetailPage({
   const { workspace, members, locations } = detailRes.data;
   const tickets = !isApiError(ticketsRes) ? ticketsRes.data : [];
   const auditEntries = !isApiError(auditRes) ? auditRes.data : [];
+  const kioskSettings = !isApiError(kioskRes)
+    ? kioskRes.data
+    : { kiosk_enabled: false, max_kiosk_urls: 1, theme: 'gradient' as const, session_lock_enabled: false };
   const defaultTab = searchParams.tab === 'billing' ? 'billing' : 'overview';
 
   return (
@@ -82,6 +87,7 @@ export default async function AdminWorkspaceDetailPage({
         <TabsList>
           <TabsTrigger value="overview">Overview</TabsTrigger>
           <TabsTrigger value="billing">Billing</TabsTrigger>
+          <TabsTrigger value="kiosk">Kiosk</TabsTrigger>
           <TabsTrigger value="members">Members ({members.length})</TabsTrigger>
           <TabsTrigger value="locations">Locations ({locations.length})</TabsTrigger>
           <TabsTrigger value="tickets">Tickets ({tickets.length})</TabsTrigger>
@@ -127,6 +133,10 @@ export default async function AdminWorkspaceDetailPage({
               </CardContent>
             </Card>
           )}
+        </TabsContent>
+
+        <TabsContent value="kiosk">
+          <AdminKioskSettingsCard workspaceId={workspace.id} settings={kioskSettings} />
         </TabsContent>
 
         <TabsContent value="members">
