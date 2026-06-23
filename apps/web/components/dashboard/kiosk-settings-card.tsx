@@ -5,8 +5,6 @@ import { toast } from 'sonner';
 import { Loader2 } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Switch } from '@/components/ui/switch';
-import { Label } from '@/components/ui/label';
 import { updateKioskSettingsAction } from '@/app/actions/kiosk-action';
 import type { KioskSettings } from '@/lib/api/kiosk';
 
@@ -68,18 +66,13 @@ const THEMES: { id: Theme; label: string; description: string; preview: React.Re
 
 export function KioskSettingsCard({ initialSettings }: KioskSettingsCardProps) {
   const [theme, setTheme] = useState<Theme>(initialSettings.theme);
-  const [sessionLock, setSessionLock] = useState(initialSettings.session_lock_enabled);
   const [saving, setSaving] = useState(false);
 
-  const isDirty =
-    theme !== initialSettings.theme || sessionLock !== initialSettings.session_lock_enabled;
+  const isDirty = theme !== initialSettings.theme;
 
   async function handleSave() {
     setSaving(true);
-    const res = await updateKioskSettingsAction({
-      theme,
-      session_lock_enabled: sessionLock,
-    });
+    const res = await updateKioskSettingsAction({ theme });
     setSaving(false);
     if (res.error) toast.error(res.error);
     else toast.success('Kiosk settings saved');
@@ -117,25 +110,6 @@ export function KioskSettingsCard({ initialSettings }: KioskSettingsCardProps) {
               </button>
             ))}
           </div>
-        </div>
-
-        {/* Session lock toggle */}
-        <div className="flex items-start justify-between gap-4 rounded-lg border border-border p-4">
-          <div className="space-y-1">
-            <Label htmlFor="session-lock" className="text-sm font-medium">
-              Single-device lock
-            </Label>
-            <p className="text-xs text-muted-foreground">
-              When enabled, the kiosk URL can only run on one screen at a time. A second device
-              trying to open the same URL will be blocked until you regenerate the URL.
-            </p>
-          </div>
-          <Switch
-            id="session-lock"
-            checked={sessionLock}
-            onChange={(e) => setSessionLock(e.target.checked)}
-            className="mt-0.5 flex-shrink-0"
-          />
         </div>
 
         <div className="flex justify-end">

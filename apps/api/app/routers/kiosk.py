@@ -360,10 +360,7 @@ async def claim_kiosk_session(
 ) -> DataResponse[dict]:
     db = get_supabase_admin()
     row = _get_token_row(db, token)
-    cfg = _require_kiosk_enabled(db, row["workspace_id"])
-
-    if not cfg.session_lock_enabled:
-        return ok({"claimed": True})
+    _require_kiosk_enabled(db, row["workspace_id"])
 
     if _is_lock_held(row, body.session_id):
         raise ConflictError("Kiosk is already in use on another device")
@@ -388,10 +385,7 @@ async def heartbeat_kiosk_session(
 ) -> DataResponse[dict]:
     db = get_supabase_admin()
     row = _get_token_row(db, token)
-    cfg = _require_kiosk_enabled(db, row["workspace_id"])
-
-    if not cfg.session_lock_enabled:
-        return ok({"alive": True})
+    _require_kiosk_enabled(db, row["workspace_id"])
 
     if row.get("active_session_id") != body.session_id:
         raise ConflictError("Session has been taken over by another device")
