@@ -23,16 +23,13 @@ export default async function KioskPage({ params }: KioskPageProps) {
     );
   }
 
-  const { location_name, workspace_name, vapi_public_key, vapi_assistant_id, theme, session_lock_enabled } =
-    res.data;
+  const { location_name, workspace_name, theme, session_lock_enabled } = res.data;
 
   return (
     <KioskClient
       token={params.token}
       locationName={location_name}
       workspaceName={workspace_name}
-      vapiPublicKey={vapi_public_key}
-      vapiAssistantId={vapi_assistant_id}
       theme={theme}
       sessionLockEnabled={session_lock_enabled}
     />

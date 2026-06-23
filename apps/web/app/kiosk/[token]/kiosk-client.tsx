@@ -1,20 +1,33 @@
 'use client';
 
-import { useEffect, useRef, useState, useCallback } from 'react';
-import { Mic, MicOff, PhoneOff } from 'lucide-react';
-import { claimKioskSession, heartbeatKioskSession } from '@/lib/api/kiosk-public';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { Mic, PhoneOff } from 'lucide-react';
+import {
+  claimKioskSession,
+  heartbeatKioskSession,
+  kioskChat,
+  kioskSpeak,
+  transcribeAudio,
+  type KioskChatMessage,
+} from '@/lib/api/kiosk-public';
 
 interface KioskClientProps {
   token: string;
   locationName: string;
   workspaceName: string;
-  vapiPublicKey: string;
-  vapiAssistantId: string;
   theme: 'warm' | 'light' | 'gradient';
   sessionLockEnabled: boolean;
 }
 
-type KioskState = 'idle' | 'connecting' | 'active' | 'confirmed' | 'error' | 'locked' | 'stolen';
+type KioskState =
+  | 'idle'
+  | 'recording'
+  | 'processing'
+  | 'speaking'
+  | 'confirmed'
+  | 'error'
+  | 'locked'
+  | 'stolen';
 
 interface OrderItem {
   name: string;
@@ -37,7 +50,6 @@ type ThemeCfg = {
   badgeClass: string;
   textPrimary: string;
   textSecondary: string;
-  separateHeader: boolean;
 };
 
 const THEME_CFG: Record<string, ThemeCfg> = {
@@ -51,7 +63,6 @@ const THEME_CFG: Record<string, ThemeCfg> = {
     badgeClass: 'bg-amber-500/15 text-amber-400 border border-amber-500/30',
     textPrimary: 'text-white',
     textSecondary: 'text-white/50',
-    separateHeader: false,
   },
   light: {
     wrapperStyle: {},
@@ -63,7 +74,6 @@ const THEME_CFG: Record<string, ThemeCfg> = {
     badgeClass: 'bg-[#00C2A8]/10 text-[#00C2A8] border border-[#00C2A8]/30',
     textPrimary: 'text-[#0A2540]',
     textSecondary: 'text-slate-500',
-    separateHeader: true,
   },
   gradient: {
     wrapperStyle: { background: 'linear-gradient(145deg, #0A2540 0%, #0d3260 40%, #0a4a4a 100%)' },
@@ -75,7 +85,6 @@ const THEME_CFG: Record<string, ThemeCfg> = {
     badgeClass: 'bg-[#00C2A8]/15 text-[#00C2A8] border border-[#00C2A8]/30',
     textPrimary: 'text-white',
     textSecondary: 'text-white/50',
-    separateHeader: false,
   },
 };
 
@@ -85,28 +94,79 @@ export function KioskClient({
   token,
   locationName,
   workspaceName,
-  vapiPublicKey,
-  vapiAssistantId,
   theme,
   sessionLockEnabled,
 }: KioskClientProps) {
   const cfg = (THEME_CFG[theme] ?? THEME_CFG['gradient']) as ThemeCfg;
 
   const [kioskState, setKioskState] = useState<KioskState>('idle');
-  const [muted, setMuted] = useState(false);
   const [orderItems, setOrderItems] = useState<OrderItem[]>([]);
   const [orderNumber, setOrderNumber] = useState<string | null>(null);
   const [countdown, setCountdown] = useState(30);
   const [errorMsg, setErrorMsg] = useState('');
+  const [lastTranscript, setLastTranscript] = useState('');
+  const [aiResponse, setAiResponse] = useState('');
 
-  const vapiRef = useRef<unknown>(null);
+  // Refs — stable across renders, safe to read/write inside async loops
+  const kioskStateRef = useRef<KioskState>('idle');
+  const sessionIdRef = useRef<string>('');
+  const messagesRef = useRef<KioskChatMessage[]>([]);
+  const streamRef = useRef<MediaStream | null>(null);
+  const recorderRef = useRef<MediaRecorder | null>(null);
+  const audioCtxRef = useRef<AudioContext | null>(null);
+  const rafRef = useRef<number | null>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
   const resetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const heartbeatRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const kioskStateRef = useRef<KioskState>('idle');
-  const sessionIdRef = useRef<string>('');
 
-  // ── Session lock setup ──────────────────────────────────────────────────────
+  // ── Stream cleanup ────────────────────────────────────────────────────────────
+
+  const stopStream = useCallback(() => {
+    if (rafRef.current !== null) {
+      cancelAnimationFrame(rafRef.current);
+      rafRef.current = null;
+    }
+    if (audioCtxRef.current) {
+      audioCtxRef.current.close().catch(() => {});
+      audioCtxRef.current = null;
+    }
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((t) => t.stop());
+      streamRef.current = null;
+    }
+  }, []);
+
+  // ── Reset to idle ─────────────────────────────────────────────────────────────
+
+  const reset = useCallback(() => {
+    if (resetTimerRef.current) clearTimeout(resetTimerRef.current);
+    if (countdownRef.current) clearInterval(countdownRef.current);
+
+    if (recorderRef.current && recorderRef.current.state !== 'inactive') {
+      try { recorderRef.current.stop(); } catch { /* already stopped */ }
+    }
+    recorderRef.current = null;
+    stopStream();
+
+    if (audioRef.current) {
+      audioRef.current.pause(); // triggers onpause → resolves any pending speakText promise
+      audioRef.current = null;
+    }
+    if ('speechSynthesis' in window) window.speechSynthesis.cancel();
+
+    messagesRef.current = [];
+    kioskStateRef.current = 'idle';
+    setKioskState('idle');
+    setOrderItems([]);
+    setOrderNumber(null);
+    setCountdown(30);
+    setErrorMsg('');
+    setLastTranscript('');
+    setAiResponse('');
+  }, [stopStream]);
+
+  // ── Session lock ──────────────────────────────────────────────────────────────
 
   useEffect(() => {
     if (!sessionLockEnabled) return;
@@ -140,22 +200,7 @@ export function KioskClient({
     };
   }, [token, sessionLockEnabled]);
 
-  // ── Core helpers ────────────────────────────────────────────────────────────
-
-  const reset = useCallback(() => {
-    if (resetTimerRef.current) clearTimeout(resetTimerRef.current);
-    if (countdownRef.current) clearInterval(countdownRef.current);
-    const v = vapiRef.current as { stop?: () => void } | null;
-    v?.stop?.();
-    vapiRef.current = null;
-    kioskStateRef.current = 'idle';
-    setKioskState('idle');
-    setMuted(false);
-    setOrderItems([]);
-    setOrderNumber(null);
-    setCountdown(30);
-    setErrorMsg('');
-  }, []);
+  // ── Countdown ─────────────────────────────────────────────────────────────────
 
   const startCountdown = useCallback(() => {
     setCountdown(30);
@@ -171,88 +216,228 @@ export function KioskClient({
     resetTimerRef.current = setTimeout(reset, 30_000);
   }, [reset]);
 
+  // ── Unmount cleanup ───────────────────────────────────────────────────────────
+
   useEffect(() => {
     return () => {
-      const v = vapiRef.current as { stop?: () => void } | null;
-      v?.stop?.();
       if (resetTimerRef.current) clearTimeout(resetTimerRef.current);
       if (countdownRef.current) clearInterval(countdownRef.current);
+      if (audioRef.current) audioRef.current.pause();
+      if ('speechSynthesis' in window) window.speechSynthesis.cancel();
+      stopStream();
     };
-  }, []);
+  }, [stopStream]);
 
-  async function startOrder() {
-    if (kioskState !== 'idle') return;
-    setKioskState('connecting');
-    try {
-      const { default: Vapi } = await import('@vapi-ai/web');
-      const vapi = new Vapi(vapiPublicKey);
-      vapiRef.current = vapi;
+  // ── Audio helpers ─────────────────────────────────────────────────────────────
 
-      vapi.on('call-start', () => setKioskState('active'));
+  function playAudioBlob(blob: Blob): Promise<void> {
+    return new Promise<void>((resolve) => {
+      const url = URL.createObjectURL(blob);
+      const audio = new Audio(url);
+      audioRef.current = audio;
+      const cleanup = () => {
+        URL.revokeObjectURL(url);
+        audioRef.current = null;
+      };
+      audio.onended = () => { cleanup(); resolve(); };
+      audio.onerror = () => { cleanup(); resolve(); };
+      // Resolve early when paused externally (reset / endSession)
+      audio.onpause = () => { if (!audio.ended) { cleanup(); resolve(); } };
+      audio.play().catch(() => { cleanup(); resolve(); });
+    });
+  }
 
-      vapi.on('call-end', () => {
-        if (kioskStateRef.current !== 'confirmed') reset();
-      });
+  function speakWithBrowser(text: string): Promise<void> {
+    return new Promise<void>((resolve) => {
+      if (!('speechSynthesis' in window)) { resolve(); return; }
+      window.speechSynthesis.cancel();
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.rate = 0.9;
+      utterance.onend = () => resolve();
+      utterance.onerror = () => resolve();
+      window.speechSynthesis.speak(utterance);
+    });
+  }
 
-      vapi.on('message', (msg: unknown) => {
-        const m = msg as {
-          type?: string;
-          toolCallList?: Array<{ function?: { name?: string; arguments?: string } }>;
-        };
-        if (m?.type === 'tool-calls' && m.toolCallList?.length) {
-          const call = m.toolCallList[0];
-          if (call?.function?.name === 'confirm_order') {
-            try {
-              const args = JSON.parse(call.function.arguments ?? '{}') as {
-                items?: OrderItem[];
-                order_number?: string;
-              };
-              setOrderItems(args.items ?? []);
-              setOrderNumber(
-                args.order_number ?? `#${Math.floor(Math.random() * 9000) + 1000}`,
-              );
-            } catch {
-              // args unparseable — still show confirmed
+  async function speakText(text: string): Promise<void> {
+    if (!text.trim()) return;
+    const blob = await kioskSpeak(token, text);
+    if (blob) { await playAudioBlob(blob); return; }
+    await speakWithBrowser(text);
+  }
+
+  // ── Capture audio until silence (MediaRecorder + AudioContext) ────────────────
+
+  function captureUntilSilence(
+    stream: MediaStream,
+    audioCtx: AudioContext,
+  ): Promise<Blob | null> {
+    return new Promise<Blob | null>((resolve) => {
+      const chunks: Blob[] = [];
+      let recorder: MediaRecorder;
+      try {
+        recorder = new MediaRecorder(stream);
+      } catch {
+        resolve(null);
+        return;
+      }
+      recorderRef.current = recorder;
+      recorder.ondataavailable = (e) => { if (e.data.size > 0) chunks.push(e.data); };
+      recorder.onstop = () => {
+        resolve(
+          chunks.length > 0
+            ? new Blob(chunks, { type: recorder.mimeType || 'audio/webm' })
+            : null,
+        );
+      };
+      recorder.onerror = () => resolve(null);
+      recorder.start(250);
+
+      const analyser = audioCtx.createAnalyser();
+      analyser.fftSize = 1024;
+      audioCtx.createMediaStreamSource(stream).connect(analyser);
+
+      const SILENCE_THRESHOLD = 0.01;
+      const SILENCE_DURATION_MS = 1500;
+      const MIN_RECORD_MS = 800;
+      const recordStart = Date.now();
+      let silenceStart: number | null = null;
+
+      function tick() {
+        // State changed externally → abort
+        if (kioskStateRef.current !== 'recording') {
+          if (recorder.state !== 'inactive') recorder.stop();
+          return;
+        }
+        const data = new Float32Array(analyser.fftSize);
+        analyser.getFloatTimeDomainData(data);
+        const rms = Math.sqrt(data.reduce((s, v) => s + v * v, 0) / data.length);
+
+        if (Date.now() - recordStart > MIN_RECORD_MS) {
+          if (rms < SILENCE_THRESHOLD) {
+            if (!silenceStart) silenceStart = Date.now();
+            else if (Date.now() - silenceStart >= SILENCE_DURATION_MS) {
+              if (recorder.state !== 'inactive') recorder.stop();
+              return;
             }
-            kioskStateRef.current = 'confirmed';
-            setKioskState('confirmed');
-            const v = vapiRef.current as { stop?: () => void } | null;
-            v?.stop?.();
-            startCountdown();
+          } else {
+            silenceStart = null;
           }
         }
-      });
+        rafRef.current = requestAnimationFrame(tick);
+      }
+      rafRef.current = requestAnimationFrame(tick);
+    });
+  }
 
-      vapi.on('error', () => {
-        setErrorMsg('Something went wrong. Please try again.');
-        setKioskState('error');
-        resetTimerRef.current = setTimeout(reset, 5000);
-      });
+  // ── Conversation loop ─────────────────────────────────────────────────────────
 
-      await vapi.start(vapiAssistantId);
-    } catch {
-      setErrorMsg('Could not connect. Please try again.');
-      setKioskState('error');
-      resetTimerRef.current = setTimeout(reset, 5000);
+  function showError(msg: string) {
+    setErrorMsg(msg);
+    kioskStateRef.current = 'error';
+    setKioskState('error');
+    resetTimerRef.current = setTimeout(reset, 5000);
+  }
+
+  async function runConversation() {
+    // Each iteration = one recording turn.
+    // After every await we check the expected state; if wrong, someone called reset/endSession.
+    while (true) {
+      // ── Record ──────────────────────────────────────────────────────────────
+      kioskStateRef.current = 'recording';
+      setKioskState('recording');
+
+      let stream: MediaStream;
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      } catch {
+        showError('Microphone access denied. Please allow mic and try again.');
+        return;
+      }
+      if (kioskStateRef.current !== 'recording') return; // cancelled during getUserMedia
+
+      streamRef.current = stream;
+      const audioCtx = new AudioContext();
+      audioCtxRef.current = audioCtx;
+
+      const blob = await captureUntilSilence(stream, audioCtx);
+      stopStream();
+
+      if (kioskStateRef.current !== 'recording') return; // cancelled during recording
+      if (!blob) continue; // nothing recorded → try again
+
+      // ── Transcribe ──────────────────────────────────────────────────────────
+      kioskStateRef.current = 'processing';
+      setKioskState('processing');
+
+      const transcribeRes = await transcribeAudio(token, blob);
+      if (kioskStateRef.current !== 'processing') return;
+
+      const transcript =
+        'error' in transcribeRes ? '' : transcribeRes.data.transcript.trim();
+
+      if (!transcript) continue; // nothing heard → loop back to recording
+
+      setLastTranscript(transcript);
+      messagesRef.current.push({ role: 'user', content: transcript });
+
+      // ── Chat ────────────────────────────────────────────────────────────────
+      const chatRes = await kioskChat(token, messagesRef.current);
+      if (kioskStateRef.current !== 'processing') return;
+
+      if ('error' in chatRes) {
+        showError('Could not reach AI. Please try again.');
+        return;
+      }
+
+      const { response, order_confirmed, order } = chatRes.data;
+      messagesRef.current.push({ role: 'assistant', content: response });
+      setAiResponse(response);
+
+      if (order_confirmed) {
+        setOrderItems(order?.items ?? []);
+        setOrderNumber(
+          order?.order_number ?? `#${Math.floor(Math.random() * 9000) + 1000}`,
+        );
+        kioskStateRef.current = 'confirmed';
+        setKioskState('confirmed');
+        await speakText(response);
+        startCountdown();
+        return; // loop ends — countdown handles reset
+      }
+
+      // ── Speak ───────────────────────────────────────────────────────────────
+      kioskStateRef.current = 'speaking';
+      setKioskState('speaking');
+      await speakText(response);
+
+      if (kioskStateRef.current !== 'speaking') return; // cancelled during playback
+      // Loop → next recording turn
     }
   }
 
-  function endCall() {
-    const v = vapiRef.current as { stop?: () => void } | null;
-    v?.stop?.();
-    reset();
+  async function startOrder() {
+    if (kioskStateRef.current !== 'idle') return;
+    messagesRef.current = [];
+    setLastTranscript('');
+    setAiResponse('');
+    await runConversation();
   }
 
-  function toggleMute() {
-    const v = vapiRef.current as { setMuted?: (m: boolean) => void } | null;
-    const next = !muted;
-    v?.setMuted?.(next);
-    setMuted(next);
+  function endSession() {
+    if (audioRef.current) audioRef.current.pause();
+    if ('speechSynthesis' in window) window.speechSynthesis.cancel();
+    if (recorderRef.current && recorderRef.current.state !== 'inactive') {
+      try { recorderRef.current.stop(); } catch { /* ok */ }
+    }
+    reset();
   }
 
   // ── Render ──────────────────────────────────────────────────────────────────
 
   const isLight = theme === 'light';
+  const isActive =
+    kioskState === 'recording' || kioskState === 'processing' || kioskState === 'speaking';
 
   return (
     <div
@@ -313,7 +498,9 @@ export function KioskClient({
               </button>
             </div>
             <div>
-              <span className={`mb-3 inline-block rounded-full px-3 py-1 text-xs font-semibold ${cfg.badgeClass}`}>
+              <span
+                className={`mb-3 inline-block rounded-full px-3 py-1 text-xs font-semibold ${cfg.badgeClass}`}
+              >
                 Voice Ordering
               </span>
               <h1 className={`text-5xl font-black tracking-tight ${cfg.textPrimary}`}>
@@ -326,27 +513,8 @@ export function KioskClient({
           </div>
         )}
 
-        {/* CONNECTING */}
-        {kioskState === 'connecting' && (
-          <div className="flex flex-col items-center gap-8 text-center">
-            <div
-              className="flex h-32 w-32 items-center justify-center rounded-full border-2"
-              style={{ borderColor: `${cfg.accentColor}40`, background: `${cfg.accentColor}10` }}
-            >
-              <div
-                className="h-12 w-12 animate-spin rounded-full border-4"
-                style={{ borderColor: `${cfg.accentColor}30`, borderTopColor: cfg.accentColor }}
-              />
-            </div>
-            <div>
-              <h1 className={`text-3xl font-bold ${cfg.textPrimary}`}>Connecting…</h1>
-              <p className={`mt-2 ${cfg.textSecondary}`}>Setting up your AI assistant</p>
-            </div>
-          </div>
-        )}
-
-        {/* ACTIVE */}
-        {kioskState === 'active' && (
+        {/* RECORDING */}
+        {kioskState === 'recording' && (
           <div className="flex flex-col items-center gap-10 text-center">
             <div className="flex items-end gap-2" aria-hidden>
               {SOUND_BAR_HEIGHTS.map((h, i) => (
@@ -364,31 +532,80 @@ export function KioskClient({
               ))}
             </div>
             <div>
-              <h1 className={`text-4xl font-bold ${cfg.textPrimary}`}>
-                {muted ? 'Muted' : 'Listening…'}
-              </h1>
-              <p className={`mt-2 ${cfg.textSecondary}`}>Speak your order clearly</p>
+              <h1 className={`text-4xl font-bold ${cfg.textPrimary}`}>Listening…</h1>
+              <p className={`mt-2 ${cfg.textSecondary}`}>Speak clearly — stops when you pause</p>
+              {lastTranscript && (
+                <p className={`mt-4 max-w-xs text-sm italic ${cfg.textSecondary} opacity-70`}>
+                  "{lastTranscript}"
+                </p>
+              )}
             </div>
-            <div className="flex items-center gap-4">
-              <button
-                onClick={toggleMute}
-                className={`flex h-14 w-14 items-center justify-center rounded-full border ${
-                  isLight
-                    ? 'border-slate-200 bg-slate-100 text-slate-600 hover:bg-slate-200'
-                    : 'border-white/20 bg-white/10 text-white/70 hover:bg-white/20'
-                } transition`}
-                aria-label={muted ? 'Unmute' : 'Mute'}
-              >
-                {muted ? <MicOff className="h-6 w-6" /> : <Mic className="h-6 w-6" />}
-              </button>
-              <button
-                onClick={endCall}
-                className="flex h-14 w-14 items-center justify-center rounded-full bg-red-500/20 text-red-400 transition hover:bg-red-500/30"
-                aria-label="End session"
-              >
-                <PhoneOff className="h-6 w-6" />
-              </button>
+            <button
+              onClick={endSession}
+              className="flex h-14 w-14 items-center justify-center rounded-full bg-red-500/20 text-red-400 transition hover:bg-red-500/30"
+              aria-label="End session"
+            >
+              <PhoneOff className="h-6 w-6" />
+            </button>
+          </div>
+        )}
+
+        {/* PROCESSING */}
+        {kioskState === 'processing' && (
+          <div className="flex flex-col items-center gap-8 text-center">
+            <div
+              className="flex h-32 w-32 items-center justify-center rounded-full border-2"
+              style={{ borderColor: `${cfg.accentColor}40`, background: `${cfg.accentColor}10` }}
+            >
+              <div
+                className="h-12 w-12 animate-spin rounded-full border-4"
+                style={{ borderColor: `${cfg.accentColor}30`, borderTopColor: cfg.accentColor }}
+              />
             </div>
+            <div>
+              <h1 className={`text-3xl font-bold ${cfg.textPrimary}`}>Thinking…</h1>
+              {lastTranscript && (
+                <p className={`mt-3 max-w-xs text-sm italic ${cfg.textSecondary}`}>
+                  You said: "{lastTranscript}"
+                </p>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* SPEAKING */}
+        {kioskState === 'speaking' && (
+          <div className="flex flex-col items-center gap-10 text-center">
+            <div
+              className="relative flex h-32 w-32 items-center justify-center rounded-full"
+              style={{ background: `${cfg.accentColor}15` }}
+            >
+              <span
+                className="absolute h-full w-full animate-ping rounded-full"
+                style={{ background: `${cfg.accentColor}18`, animationDuration: '1.5s' }}
+              />
+              <svg
+                className="relative h-14 w-14"
+                style={{ color: cfg.accentColor }}
+                fill="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z" />
+              </svg>
+            </div>
+            <div>
+              <h1 className={`text-3xl font-bold ${cfg.textPrimary}`}>Responding…</h1>
+              {aiResponse && (
+                <p className={`mt-3 max-w-sm text-base ${cfg.textSecondary}`}>{aiResponse}</p>
+              )}
+            </div>
+            <button
+              onClick={endSession}
+              className="flex h-14 w-14 items-center justify-center rounded-full bg-red-500/20 text-red-400 transition hover:bg-red-500/30"
+              aria-label="End session"
+            >
+              <PhoneOff className="h-6 w-6" />
+            </button>
           </div>
         )}
 
@@ -429,15 +646,15 @@ export function KioskClient({
                     <li
                       key={i}
                       className={`flex items-center justify-between text-sm ${
-                        isLight ? 'border-b border-slate-100 pb-2' : 'border-b border-white/10 pb-2'
+                        isLight
+                          ? 'border-b border-slate-100 pb-2'
+                          : 'border-b border-white/10 pb-2'
                       }`}
                     >
                       <span className={`font-medium ${cfg.textPrimary}`}>
                         {item.qty}× {item.name}
                       </span>
-                      {item.price && (
-                        <span className={cfg.textSecondary}>{item.price}</span>
-                      )}
+                      {item.price && <span className={cfg.textSecondary}>{item.price}</span>}
                     </li>
                   ))}
                 </ul>
@@ -461,7 +678,7 @@ export function KioskClient({
           </div>
         )}
 
-        {/* LOCKED — another device is using this URL */}
+        {/* LOCKED */}
         {kioskState === 'locked' && (
           <div className="flex flex-col items-center gap-6 text-center">
             <div className="flex h-24 w-24 items-center justify-center rounded-full bg-amber-500/20">
@@ -471,13 +688,13 @@ export function KioskClient({
               <h1 className={`text-2xl font-bold ${cfg.textPrimary}`}>Kiosk in use</h1>
               <p className={`mt-2 max-w-xs ${cfg.textSecondary}`}>
                 This kiosk is already running on another screen. Ask a staff member to regenerate
-                the URL if you need to move it to this device.
+                the URL to move it here.
               </p>
             </div>
           </div>
         )}
 
-        {/* STOLEN — heartbeat was taken over */}
+        {/* STOLEN */}
         {kioskState === 'stolen' && (
           <div className="flex flex-col items-center gap-4 text-center">
             <div className="flex h-24 w-24 items-center justify-center rounded-full bg-red-500/20">
@@ -492,7 +709,20 @@ export function KioskClient({
       </main>
 
       {/* ── Footer ── */}
-      <footer className={`relative z-10 flex flex-col items-center pb-8 pt-4 ${isLight ? 'border-t border-slate-100' : ''}`}>
+      <footer
+        className={`relative z-10 flex flex-col items-center pb-8 pt-4 ${
+          isLight ? 'border-t border-slate-100' : ''
+        }`}
+      >
+        {isActive && (
+          <p
+            className={`mb-3 text-xs font-medium ${isLight ? 'text-slate-400' : 'text-white/30'}`}
+          >
+            {kioskState === 'recording' && 'Listening — stops automatically when you pause'}
+            {kioskState === 'processing' && 'Processing your order…'}
+            {kioskState === 'speaking' && 'Next turn starts automatically after the response'}
+          </p>
+        )}
         <p className={`text-xs ${isLight ? 'text-slate-400' : 'text-white/25'}`}>
           Powered by Convosol · VOAS.AI
         </p>

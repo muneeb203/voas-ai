@@ -59,6 +59,14 @@ class Settings(BaseSettings):
     # Admin can raise/lower this per-workspace via the admin credit-grant panel.
     free_trial_voice_minutes: int = Field(default=30, ge=0)
 
+    # --- Kiosk direct voice pipeline. No-op without these keys. ---
+    # ANTHROPIC_API_KEY → Claude Haiku for kiosk AI chat
+    # OPENAI_API_KEY    → Whisper STT (shared with WhatsApp)
+    # ELEVENLABS_*      → optional TTS; kiosk falls back to browser speech synthesis
+    anthropic_api_key: str | None = None
+    elevenlabs_api_key: str | None = None
+    elevenlabs_voice_id: str = "21m00Tcm4TlvDq8ikWAM"  # ElevenLabs "Rachel"
+
     # --- Dashboard help bot (Gemini). No-op without GEMINI_API_KEY. ---
     gemini_api_key: str | None = None
     gemini_model: str = "gemini-3.1-flash-lite"
