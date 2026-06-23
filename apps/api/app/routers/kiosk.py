@@ -333,9 +333,9 @@ async def get_kiosk_info(token: Annotated[str, Path()]) -> DataResponse[KioskInf
 
     kiosk_cfg = _require_kiosk_enabled(db, workspace_id)
 
-    db.table("kiosk_tokens").update(
-        {"last_used_at": datetime.now(UTC).isoformat()}
-    ).eq("id", row["id"]).execute()
+    db.table("kiosk_tokens").update({"last_used_at": datetime.now(UTC).isoformat()}).eq(
+        "id", row["id"]
+    ).execute()
 
     loc_res = db.table("locations").select("name").eq("id", location_id).limit(1).execute()
     ws_res = db.table("workspaces").select("name").eq("id", workspace_id).limit(1).execute()
@@ -396,9 +396,9 @@ async def heartbeat_kiosk_session(
     if row.get("active_session_id") != body.session_id:
         raise ConflictError("Session has been taken over by another device")
 
-    db.table("kiosk_tokens").update(
-        {"session_heartbeat_at": datetime.now(UTC).isoformat()}
-    ).eq("id", row["id"]).execute()
+    db.table("kiosk_tokens").update({"session_heartbeat_at": datetime.now(UTC).isoformat()}).eq(
+        "id", row["id"]
+    ).execute()
 
     return ok({"alive": True})
 
