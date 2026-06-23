@@ -109,6 +109,7 @@ export default async function SelfOrderPage() {
                 isOwner={isOwner}
                 kioskEnabled={kioskEnabled}
                 canGenerate={canGenerate}
+                maxKioskUrls={maxKioskUrls}
               />
             );
           })}

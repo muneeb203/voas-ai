@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Copy, Check, ExternalLink, RefreshCw, Trash2, MonitorSmartphone, Lock } from 'lucide-react';
+import { Copy, Check, ExternalLink, RefreshCw, Trash2, MonitorSmartphone, Lock, ArrowUpRight } from 'lucide-react';
 import { toast } from 'sonner';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -16,6 +16,7 @@ interface SelfOrderLocationCardProps {
   isOwner: boolean;
   kioskEnabled: boolean;
   canGenerate: boolean;
+  maxKioskUrls: number;
 }
 
 export function SelfOrderLocationCard({
@@ -24,6 +25,7 @@ export function SelfOrderLocationCard({
   isOwner,
   kioskEnabled,
   canGenerate,
+  maxKioskUrls,
 }: SelfOrderLocationCardProps) {
   const [pending, setPending] = useState<'generate' | 'revoke' | null>(null);
   const [copied, setCopied] = useState(false);
@@ -60,11 +62,12 @@ export function SelfOrderLocationCard({
 
   const isDisabledByLimit = token && !token.is_active;
   const hasActiveToken = token?.is_active === true;
+  const atLimit = kioskEnabled && !canGenerate && !hasActiveToken;
 
   function renderBadge() {
-    if (!kioskEnabled) return <Badge variant="secondary">Kiosk disabled</Badge>;
+    if (!kioskEnabled) return <Badge variant="secondary">Not available</Badge>;
     if (hasActiveToken) return <Badge variant="success">Active</Badge>;
-    if (isDisabledByLimit) return <Badge variant="warning">Disabled — over limit</Badge>;
+    if (isDisabledByLimit) return <Badge variant="warning">Paused</Badge>;
     return <Badge variant="secondary">No kiosk URL</Badge>;
   }
 
@@ -89,24 +92,42 @@ export function SelfOrderLocationCard({
           <div className="flex items-center gap-2">{renderBadge()}</div>
         </div>
 
+        {/* Kiosk not enabled on this plan */}
         {!kioskEnabled && (
-          <div className="mt-4 flex items-center gap-2 rounded-lg border border-border bg-secondary/30 px-3 py-2">
-            <Lock className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground" />
-            <p className="text-xs text-muted-foreground">
-              Kiosk access is disabled for this workspace. Contact your administrator to enable it.
-            </p>
+          <div className="mt-4 flex items-start gap-2 rounded-lg border border-border bg-secondary/30 px-3 py-3">
+            <Lock className="mt-0.5 h-3.5 w-3.5 flex-shrink-0 text-muted-foreground" />
+            <div className="flex-1">
+              <p className="text-xs text-muted-foreground">
+                Self-order kiosk is not included in your current plan.
+              </p>
+              <a
+                href="/support"
+                className="mt-1 inline-flex items-center gap-1 text-xs font-medium text-accent hover:underline"
+              >
+                Contact us to get access <ArrowUpRight className="h-3 w-3" />
+              </a>
+            </div>
           </div>
         )}
 
+        {/* Over limit — this location's URL was paused */}
         {kioskEnabled && isDisabledByLimit && (
-          <div className="mt-4 rounded-lg border border-warning/30 bg-warning/10 px-3 py-2">
+          <div className="mt-4 rounded-lg border border-warning/30 bg-warning/10 px-3 py-3">
             <p className="text-xs text-warning">
-              This URL was disabled because the workspace reached its kiosk URL limit. Revoke
-              another location&apos;s URL to re-enable this one.
+              This location&apos;s kiosk was paused because your plan allows a maximum of{' '}
+              <strong>{maxKioskUrls}</strong> active kiosk URL{maxKioskUrls !== 1 ? 's' : ''}.
+              Revoke another location to reactivate this one, or contact us to increase your limit.
             </p>
+            <a
+              href="/support"
+              className="mt-1 inline-flex items-center gap-1 text-xs font-medium text-accent hover:underline"
+            >
+              Request more kiosk URLs <ArrowUpRight className="h-3 w-3" />
+            </a>
           </div>
         )}
 
+        {/* Active URL display */}
         {kioskUrl && (
           <div className="mt-4 flex items-center gap-2 rounded-lg border border-border bg-secondary/30 px-3 py-2">
             <p className="flex-1 truncate font-mono text-xs text-muted-foreground">{kioskUrl}</p>
@@ -134,32 +155,45 @@ export function SelfOrderLocationCard({
           </div>
         )}
 
+        {/* Action buttons */}
         {isOwner && kioskEnabled && (
-          <div className="mt-4 flex gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleGenerate}
-              disabled={pending !== null || !canGenerate}
-              title={!canGenerate ? 'Active URL limit reached — revoke another location first' : undefined}
-            >
-              <RefreshCw
-                className={`h-3.5 w-3.5 ${pending === 'generate' ? 'animate-spin' : ''}`}
-              />
-              {hasActiveToken ? 'Regenerate URL' : 'Generate URL'}
-            </Button>
-
-            {token && (
+          <div className="mt-4 space-y-3">
+            <div className="flex gap-2">
               <Button
-                variant="ghost"
+                variant="outline"
                 size="sm"
-                onClick={handleRevoke}
-                disabled={pending !== null}
-                className="text-error hover:text-error"
+                onClick={handleGenerate}
+                disabled={pending !== null || !canGenerate}
               >
-                <Trash2 className="h-3.5 w-3.5" />
-                {pending === 'revoke' ? 'Revoking…' : 'Revoke'}
+                <RefreshCw
+                  className={`h-3.5 w-3.5 ${pending === 'generate' ? 'animate-spin' : ''}`}
+                />
+                {hasActiveToken ? 'Regenerate URL' : 'Generate URL'}
               </Button>
+
+              {token && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleRevoke}
+                  disabled={pending !== null}
+                  className="text-error hover:text-error"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                  {pending === 'revoke' ? 'Revoking…' : 'Revoke'}
+                </Button>
+              )}
+            </div>
+
+            {/* At limit — no token for this location */}
+            {atLimit && (
+              <p className="text-xs text-muted-foreground">
+                You&apos;ve reached your limit of <strong>{maxKioskUrls}</strong> active kiosk
+                URL{maxKioskUrls !== 1 ? 's' : ''}.{' '}
+                <a href="/support" className="font-medium text-accent hover:underline">
+                  Contact us to add more.
+                </a>
+              </p>
             )}
           </div>
         )}
