@@ -21,11 +21,11 @@ public_router = APIRouter(tags=["kiosk"])
 SESSION_LOCK_TTL_SECONDS = 60
 
 KIOSK_MODIFIER = """
-KIOSK MODE — the customer is ordering at an in-store self-service kiosk touchscreen.
-- Do NOT ask for a phone number, full name, or delivery address — they are ordering in person.
-- Do NOT offer delivery or pickup options — the order is always for in-store pickup at the counter.
-- Keep every response SHORT and CONVERSATIONAL — 1 to 3 sentences maximum.
-- When the customer confirms their complete order, immediately call the confirm_order tool.
+KIOSK MODE — in-store self-service kiosk. Rules:
+- Reply in 1 sentence only. Maximum 15 words. Never exceed this.
+- No phone number, name, or delivery address — always in-person counter pickup.
+- No filler words ("Sure!", "Of course!", "Great choice!") — go straight to the point.
+- When order is complete and confirmed, immediately call the confirm_order tool.
 """
 
 CONFIRM_ORDER_TOOL: dict = {
@@ -493,7 +493,7 @@ async def kiosk_chat(
             },
             json={
                 "model": "claude-haiku-4-5-20251001",
-                "max_tokens": 300,
+                "max_tokens": 80,
                 "system": system_prompt,
                 "messages": messages_payload,
                 "tools": [CONFIRM_ORDER_TOOL],
@@ -548,7 +548,7 @@ async def kiosk_speak(
             },
             json={
                 "text": body.text,
-                "model_id": "eleven_turbo_v2_5",
+                "model_id": "eleven_flash_v2_5",
                 "voice_settings": {"stability": 0.5, "similarity_boost": 0.75},
             },
         )
