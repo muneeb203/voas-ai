@@ -8,7 +8,7 @@ from fastapi.responses import Response
 from pydantic import BaseModel
 
 from app.config import get_settings
-from app.core.exceptions import AppError, ConflictError, ForbiddenError, NotFoundError
+from app.core.exceptions import AppError, ConflictError, ForbiddenError, KioskLimitError, NotFoundError
 from app.core.supabase import get_supabase_admin
 from app.deps import OwnerContextDep, WorkspaceContextDep
 from app.models.voice import DEFAULT_SYSTEM_PROMPT
@@ -75,6 +75,10 @@ class KioskSettings(BaseModel):
     session_lock_enabled: bool
     kiosk_enabled: bool = False
     max_kiosk_urls: int = 1
+    kiosk_monthly_limit: int = 500
+    kiosk_credits_balance: int = 0
+    kiosk_credits_used_this_month: int = 0
+    kiosk_month_start: str | None = None
 
 
 class KioskSettingsUpdate(BaseModel):
@@ -118,7 +122,10 @@ class KioskSpeakBody(BaseModel):
 def _get_ws_kiosk_settings(db, workspace_id: str) -> KioskSettings:
     res = (
         db.table("workspace_kiosk_settings")
-        .select("theme, session_lock_enabled, kiosk_enabled, max_kiosk_urls")
+        .select(
+            "theme, session_lock_enabled, kiosk_enabled, max_kiosk_urls, "
+            "kiosk_monthly_limit, kiosk_credits_balance, kiosk_credits_used_this_month, kiosk_month_start"
+        )
         .eq("workspace_id", workspace_id)
         .limit(1)
         .execute()
@@ -449,6 +456,19 @@ async def kiosk_chat(
     cfg = get_settings()
     if not cfg.anthropic_api_key:
         raise NotFoundError("AI not configured")
+
+    # Atomic credit check + decrement (handles monthly rollover internally)
+    credit_res = db.rpc("decrement_kiosk_credit", {"p_workspace_id": workspace_id}).execute()
+    result = credit_res.data if credit_res.data else {}
+    if isinstance(result, list):
+        result = result[0] if result else {}
+    if not result.get("success"):
+        reason = result.get("reason", "KIOSK_LIMIT_REACHED")
+        if reason == "KIOSK_LIMIT_REACHED":
+            raise KioskLimitError(
+                "This kiosk has reached its monthly interaction limit. "
+                "Contact the restaurant to add more credits."
+            )
 
     voice_res = (
         db.table("voice_settings")

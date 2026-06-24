@@ -17,6 +17,10 @@ export interface KioskSettings {
   session_lock_enabled: boolean;
   kiosk_enabled: boolean;
   max_kiosk_urls: number;
+  kiosk_monthly_limit: number;
+  kiosk_credits_balance: number;
+  kiosk_credits_used_this_month: number;
+  kiosk_month_start: string | null;
 }
 
 export interface KioskInfo {

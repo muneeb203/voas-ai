@@ -27,7 +27,8 @@ type KioskState =
   | 'confirmed'
   | 'error'
   | 'locked'
-  | 'stolen';
+  | 'stolen'
+  | 'unavailable';
 
 interface OrderItem {
   name: string;
@@ -386,6 +387,11 @@ export function KioskClient({
       if (kioskStateRef.current !== 'processing') return;
 
       if ('error' in chatRes) {
+        if (chatRes.error.code === 'KIOSK_LIMIT_REACHED') {
+          kioskStateRef.current = 'unavailable';
+          setKioskState('unavailable');
+          return;
+        }
         showError('Could not reach AI. Please try again.');
         return;
       }
@@ -704,6 +710,22 @@ export function KioskClient({
             <p className={`max-w-xs ${cfg.textSecondary}`}>
               This kiosk session was ended — a new URL has been generated for this location.
             </p>
+          </div>
+        )}
+
+        {/* UNAVAILABLE (limit reached — customers see friendly message) */}
+        {kioskState === 'unavailable' && (
+          <div className="flex flex-col items-center gap-6 text-center">
+            <div className="flex h-24 w-24 items-center justify-center rounded-full bg-slate-500/20">
+              <span className="text-5xl">🙏</span>
+            </div>
+            <div>
+              <h1 className={`text-2xl font-bold ${cfg.textPrimary}`}>Currently unavailable</h1>
+              <p className={`mt-2 max-w-xs ${cfg.textSecondary}`}>
+                The kiosk assistant is temporarily unavailable. Please order with a staff member —
+                we apologize for any inconvenience.
+              </p>
+            </div>
           </div>
         )}
       </main>

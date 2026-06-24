@@ -13,12 +13,16 @@ export const metadata: Metadata = {
 
 const FAQ = [
   {
+    q: "What channels are included in every plan?",
+    a: "All plans include voice (phone calls), WhatsApp, and kiosk — no channel is locked to a higher tier. Plans differ only in the monthly usage limits for each channel and how many locations or kiosk URLs you can run.",
+  },
+  {
     q: "Are there setup or per-call fees?",
-    a: "None. Your monthly plan covers everything up to your included minutes. Any calls beyond that are billed at your plan's overage rate — no surprises.",
+    a: "None. Your monthly plan covers everything up to your included limits. Voice minutes beyond your plan are billed at your plan's overage rate — no surprises.",
   },
   {
     q: "How does payment work?",
-    a: "We handle it directly — no checkout flow. Reach out, confirm payment, and your plan and voice credits are live in your dashboard the same day.",
+    a: "We handle it directly — no checkout flow. Reach out, confirm payment, and your plan and usage credits are live in your dashboard the same day.",
   },
   {
     q: "Can I change plans later?",
@@ -26,7 +30,7 @@ const FAQ = [
   },
   {
     q: "What about chains or franchises?",
-    a: "We put together something custom around your location count, channels, and existing tools. Hit Talk to sales and we will get back to you within a day.",
+    a: "We put together something custom around your location count, channel volumes, and existing tools. Hit Talk to sales and we will get back to you within a day.",
   },
   {
     q: "How does the free trial work?",
@@ -110,7 +114,8 @@ export default function PricingPage() {
             <ul className="mt-6 space-y-3 text-sm text-white/80">
               {[
                 'Unlimited locations',
-                'Custom integrations',
+                'Custom voice, WhatsApp & kiosk limits',
+                'Custom integrations (Toast, Square, etc.)',
                 'Dedicated account team',
                 'SLA and security review',
               ].map((f) => (

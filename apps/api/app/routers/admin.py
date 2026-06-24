@@ -308,11 +308,26 @@ class AdminKioskSettings(BaseModel):
     max_kiosk_urls: int
     theme: str
     session_lock_enabled: bool
+    kiosk_monthly_limit: int = 500
+    kiosk_credits_balance: int = 0
+    kiosk_credits_used_this_month: int = 0
+    kiosk_month_start: str | None = None
 
 
 class AdminKioskSettingsUpdate(BaseModel):
     kiosk_enabled: bool | None = None
     max_kiosk_urls: int | None = Field(default=None, ge=1, le=10)
+    kiosk_monthly_limit: int | None = Field(default=None, ge=0)
+
+
+class KioskTopupBody(BaseModel):
+    amount: int = Field(..., ge=1, le=100_000)
+
+
+_KIOSK_SELECT = (
+    "kiosk_enabled, max_kiosk_urls, theme, session_lock_enabled, "
+    "kiosk_monthly_limit, kiosk_credits_balance, kiosk_credits_used_this_month, kiosk_month_start"
+)
 
 
 @router.get(
@@ -325,7 +340,7 @@ async def get_admin_kiosk_settings(
     db = get_supabase_admin()
     res = (
         db.table("workspace_kiosk_settings")
-        .select("kiosk_enabled, max_kiosk_urls, theme, session_lock_enabled")
+        .select(_KIOSK_SELECT)
         .eq("workspace_id", workspace_id)
         .limit(1)
         .execute()
@@ -364,20 +379,28 @@ async def update_admin_kiosk_settings(
         if excess_ids:
             db.table("kiosk_tokens").update({"is_active": False}).in_("id", excess_ids).execute()
 
+    existing = (
+        db.table("workspace_kiosk_settings")
+        .select(_KIOSK_SELECT)
+        .eq("workspace_id", workspace_id)
+        .limit(1)
+        .execute()
+    )
+    existing_row = existing.data[0] if existing.data else {}
+
     changes: dict = {"updated_at": datetime.now(UTC).isoformat()}
     if body.kiosk_enabled is not None:
         changes["kiosk_enabled"] = body.kiosk_enabled
     if body.max_kiosk_urls is not None:
         changes["max_kiosk_urls"] = body.max_kiosk_urls
+    if body.kiosk_monthly_limit is not None:
+        changes["kiosk_monthly_limit"] = body.kiosk_monthly_limit
+        # First time monthly limit is set: seed balance and start the billing cycle
+        if not existing_row.get("kiosk_month_start"):
+            changes["kiosk_month_start"] = datetime.now(UTC).isoformat()
+            changes["kiosk_credits_balance"] = body.kiosk_monthly_limit
 
-    existing = (
-        db.table("workspace_kiosk_settings")
-        .select("id")
-        .eq("workspace_id", workspace_id)
-        .limit(1)
-        .execute()
-    )
-    if existing.data:
+    if existing_row:
         res = (
             db.table("workspace_kiosk_settings")
             .update(changes)
@@ -390,6 +413,72 @@ async def update_admin_kiosk_settings(
         changes.setdefault("max_kiosk_urls", 1)
         changes.setdefault("theme", "gradient")
         changes.setdefault("session_lock_enabled", False)
+        changes.setdefault("kiosk_monthly_limit", 500)
         res = db.table("workspace_kiosk_settings").insert(changes).execute()
+
+    return ok(AdminKioskSettings(**res.data[0]))
+
+
+@router.post(
+    "/workspaces/{workspace_id}/kiosk-topup",
+    response_model=DataResponse[AdminKioskSettings],
+)
+async def topup_kiosk_credits(
+    workspace_id: str,
+    body: KioskTopupBody,
+    ctx: AdminContextDep,
+) -> DataResponse[AdminKioskSettings]:
+    db = get_supabase_admin()
+
+    existing = (
+        db.table("workspace_kiosk_settings")
+        .select(_KIOSK_SELECT)
+        .eq("workspace_id", workspace_id)
+        .limit(1)
+        .execute()
+    )
+
+    now_iso = datetime.now(UTC).isoformat()
+
+    if existing.data:
+        current = existing.data[0]
+        new_balance = (current.get("kiosk_credits_balance") or 0) + body.amount
+        changes: dict = {
+            "kiosk_credits_balance": new_balance,
+            "updated_at": now_iso,
+        }
+        # Also start billing cycle if not yet started
+        if not current.get("kiosk_month_start"):
+            changes["kiosk_month_start"] = now_iso
+        res = (
+            db.table("workspace_kiosk_settings")
+            .update(changes)
+            .eq("workspace_id", workspace_id)
+            .execute()
+        )
+    else:
+        res = (
+            db.table("workspace_kiosk_settings")
+            .insert({
+                "workspace_id": workspace_id,
+                "kiosk_credits_balance": body.amount,
+                "kiosk_month_start": now_iso,
+                "theme": "gradient",
+                "session_lock_enabled": False,
+                "kiosk_enabled": False,
+                "max_kiosk_urls": 1,
+                "updated_at": now_iso,
+            })
+            .execute()
+        )
+
+    db.table("audit_logs").insert({
+        "actor_type": "admin",
+        "actor_id": ctx.admin_id,
+        "workspace_id": workspace_id,
+        "action": "kiosk.credits.topup",
+        "resource_type": "workspace_kiosk_settings",
+        "metadata": {"amount": body.amount},
+    }).execute()
 
     return ok(AdminKioskSettings(**res.data[0]))

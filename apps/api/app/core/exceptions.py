@@ -46,6 +46,11 @@ class ConflictError(AppError):
     code = "CONFLICT"
 
 
+class KioskLimitError(AppError):
+    status_code = status.HTTP_402_PAYMENT_REQUIRED
+    code = "KIOSK_LIMIT_REACHED"
+
+
 class WorkspaceNotFoundError(NotFoundError):
     code = "WORKSPACE_NOT_FOUND"
 

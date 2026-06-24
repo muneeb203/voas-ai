@@ -145,11 +145,20 @@ export async function updateWorkspaceBillingAction(
 
 export async function updateAdminKioskSettingsAction(
   workspaceId: string,
-  body: { kiosk_enabled?: boolean; max_kiosk_urls?: number },
+  body: { kiosk_enabled?: boolean; max_kiosk_urls?: number; kiosk_monthly_limit?: number },
 ) {
   await requireAdminSession(`/admin/workspaces/${workspaceId}`);
   const { updateAdminKioskSettings } = await import('@/lib/api/admin');
   const res = await updateAdminKioskSettings(workspaceId, body);
+  if (isApiError(res)) return { error: res.error.message };
+  revalidatePath(`/admin/workspaces/${workspaceId}`);
+  return { error: null };
+}
+
+export async function topupKioskCreditsAction(workspaceId: string, amount: number) {
+  await requireAdminSession(`/admin/workspaces/${workspaceId}`);
+  const { topupKioskCredits } = await import('@/lib/api/admin');
+  const res = await topupKioskCredits(workspaceId, amount);
   if (isApiError(res)) return { error: res.error.message };
   revalidatePath(`/admin/workspaces/${workspaceId}`);
   return { error: null };

@@ -58,7 +58,7 @@ export default async function AdminWorkspaceDetailPage({
   const auditEntries = !isApiError(auditRes) ? auditRes.data : [];
   const kioskSettings = !isApiError(kioskRes)
     ? kioskRes.data
-    : { kiosk_enabled: false, max_kiosk_urls: 1, theme: 'gradient' as const, session_lock_enabled: false };
+    : { kiosk_enabled: false, max_kiosk_urls: 1, theme: 'gradient' as const, session_lock_enabled: false, kiosk_monthly_limit: 500, kiosk_credits_balance: 0, kiosk_credits_used_this_month: 0, kiosk_month_start: null };
   const defaultTab = searchParams.tab === 'billing' ? 'billing' : 'overview';
 
   return (
@@ -136,7 +136,7 @@ export default async function AdminWorkspaceDetailPage({
         </TabsContent>
 
         <TabsContent value="kiosk">
-          <AdminKioskSettingsCard workspaceId={workspace.id} settings={kioskSettings} />
+          <AdminKioskSettingsCard workspaceId={workspace.id} settings={kioskSettings} plan={workspace.plan} />
         </TabsContent>
 
         <TabsContent value="members">
