@@ -24,9 +24,14 @@ class Workspace(BaseModel):
 class WorkspaceCreate(BaseModel):
     name: str = Field(..., min_length=2, max_length=120)
     vertical: WorkspaceVertical = "restaurant"
-    location_name: str = Field(..., min_length=2, max_length=200)
+    location_name: str | None = Field(default=None, max_length=200)
     location_address: str | None = Field(default=None, max_length=300)
+    location_city: str | None = Field(default=None, max_length=100)
+    location_state: str | None = Field(default=None, max_length=100)
+    location_zip: str | None = Field(default=None, max_length=20)
     location_phone: str | None = Field(default=None, max_length=50)
+    location_timezone: str | None = Field(default=None, max_length=100)
+    location_hours: dict | None = None
 
 
 class WorkspaceUpdate(BaseModel):

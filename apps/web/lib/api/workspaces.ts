@@ -5,9 +5,14 @@ import type { CurrentUserProfile, Workspace } from '@/lib/types';
 export interface WorkspaceCreatePayload {
   name: string;
   vertical: string;
-  location_name: string;
-  location_address?: string;
-  location_phone?: string;
+  location_name?: string | null;
+  location_address?: string | null;
+  location_city?: string | null;
+  location_state?: string | null;
+  location_zip?: string | null;
+  location_phone?: string | null;
+  location_timezone?: string | null;
+  location_hours?: Record<string, unknown> | null;
 }
 
 export interface WorkspaceUpdatePayload {

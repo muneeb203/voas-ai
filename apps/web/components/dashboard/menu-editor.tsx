@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Plus, Pencil, Trash2, ChevronRight, GripVertical } from 'lucide-react';
+import { Plus, Pencil, Trash2, ChevronRight, GripVertical, Sparkles } from 'lucide-react';
 import { toast } from 'sonner';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -49,6 +49,7 @@ export function MenuEditor({ categories, itemsByCategory, isOwner }: MenuEditorP
   const [showNewItem, setShowNewItem] = useState(false);
   const [editingItem, setEditingItem] = useState<MenuItem | null>(null);
   const [confirmDeleteCategory, setConfirmDeleteCategory] = useState<MenuCategory | null>(null);
+  const [showImportDialog, setShowImportDialog] = useState(false);
 
   const activeCategory = categories.find((c) => c.id === activeCategoryId) ?? null;
   const activeItems = activeCategoryId ? itemsByCategory[activeCategoryId] ?? [] : [];
@@ -61,23 +62,37 @@ export function MenuEditor({ categories, itemsByCategory, isOwner }: MenuEditorP
             <h2 className="text-lg font-semibold">No menu yet</h2>
             <p className="max-w-sm text-sm text-muted-foreground">
               Start by adding a category — say "Pizzas" or "Drinks". Items go inside categories.
+              Or paste your full menu and let AI build it instantly.
             </p>
             {isOwner && (
-              <Button onClick={() => setShowNewCategory(true)}>
-                <Plus className="h-4 w-4" /> Add first category
-              </Button>
+              <div className="flex gap-2">
+                <Button onClick={() => setShowNewCategory(true)}>
+                  <Plus className="h-4 w-4" /> Add first category
+                </Button>
+                <Button variant="outline" onClick={() => setShowImportDialog(true)}>
+                  <Sparkles className="h-4 w-4" /> Import from text
+                </Button>
+              </div>
             )}
           </CardContent>
         </Card>
         {showNewCategory && (
           <CategoryDialog open={showNewCategory} onOpenChange={setShowNewCategory} />
         )}
+        <ImportComingSoonDialog open={showImportDialog} onOpenChange={setShowImportDialog} />
       </>
     );
   }
 
   return (
     <>
+      {isOwner && (
+        <div className="mb-4 flex justify-end">
+          <Button variant="outline" size="sm" onClick={() => setShowImportDialog(true)}>
+            <Sparkles className="h-4 w-4" /> Import from text
+          </Button>
+        </div>
+      )}
       <div className="grid gap-6 lg:grid-cols-[240px_1fr]">
         {/* Categories sidebar */}
         <Card className="h-fit">
@@ -211,7 +226,50 @@ export function MenuEditor({ categories, itemsByCategory, isOwner }: MenuEditorP
           }}
         />
       )}
+
+      <ImportComingSoonDialog open={showImportDialog} onOpenChange={setShowImportDialog} />
     </>
+  );
+}
+
+function ImportComingSoonDialog({
+  open,
+  onOpenChange,
+}: {
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+}) {
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Sparkles className="h-5 w-5 text-accent" />
+            AI Menu Import — Coming Soon
+          </DialogTitle>
+          <DialogDescription>This feature is not yet active.</DialogDescription>
+        </DialogHeader>
+        <div className="space-y-3 text-sm text-muted-foreground">
+          <p>
+            Soon you&apos;ll be able to paste any menu text — from ChatGPT, Claude, or anywhere
+            else — and the AI will automatically extract and add:
+          </p>
+          <ul className="ml-4 list-disc space-y-1">
+            <li>Categories (Starters, Mains, Desserts…)</li>
+            <li>Items with names, descriptions, and prices</li>
+            <li>Modifier groups (Size, Toppings…)</li>
+            <li>Modifier options with price differences</li>
+          </ul>
+          <p>
+            Imported items are added on top of your existing menu. You can review and
+            edit everything after import.
+          </p>
+        </div>
+        <DialogFooter>
+          <Button onClick={() => onOpenChange(false)}>Got it</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 
