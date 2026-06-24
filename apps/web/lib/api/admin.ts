@@ -268,6 +268,10 @@ export interface AdminKioskSettings {
   max_kiosk_urls: number;
   theme: 'warm' | 'light' | 'gradient';
   session_lock_enabled: boolean;
+  kiosk_monthly_limit: number;
+  kiosk_credits_balance: number;
+  kiosk_credits_used_this_month: number;
+  kiosk_month_start: string | null;
 }
 
 export function getAdminKioskSettings(workspaceId: string) {
@@ -279,10 +283,17 @@ export function getAdminKioskSettings(workspaceId: string) {
 
 export function updateAdminKioskSettings(
   workspaceId: string,
-  body: { kiosk_enabled?: boolean; max_kiosk_urls?: number },
+  body: { kiosk_enabled?: boolean; max_kiosk_urls?: number; kiosk_monthly_limit?: number },
 ) {
   return apiCall<AdminKioskSettings>(`/v1/admin/workspaces/${workspaceId}/kiosk-settings`, {
     method: 'PATCH',
     body,
+  });
+}
+
+export function topupKioskCredits(workspaceId: string, amount: number) {
+  return apiCall<AdminKioskSettings>(`/v1/admin/workspaces/${workspaceId}/kiosk-topup`, {
+    method: 'POST',
+    body: { amount },
   });
 }

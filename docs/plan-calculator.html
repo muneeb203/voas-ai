@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>VOAS AI — Plan & Margin Calculator</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: Inter, sans-serif; background: #f8f9fa; color: #1a1a1a; padding: 32px 24px; min-height: 100vh; }
+    h1 { font-size: 20px; font-weight: 600; margin-bottom: 4px; }
+    .subtitle { font-size: 13px; color: #666; margin-bottom: 20px; }
+    .global-bar {
+      display: flex; gap: 12px; flex-wrap: wrap; align-items: center;
+      padding: 12px 16px; background: #fff; border: 1px solid #e5e7eb;
+      border-radius: 10px; margin-bottom: 20px;
+    }
+    .global-bar label { font-size: 12px; color: #555; display: flex; align-items: center; gap: 6px; }
+    .global-bar input { width: 76px; font-size: 12px; padding: 5px 7px; border: 1px solid #d1d5db; border-radius: 6px; font-family: Inter, sans-serif; }
+    .global-bar input:focus { outline: none; border-color: #6366f1; }
+    .global-label { font-size: 12px; font-weight: 500; color: #374151; margin-right: 4px; }
+    .plans-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 14px; }
+    .plan-card { background: #fff; border: 1px solid #e5e7eb; border-radius: 12px; overflow: hidden; }
+    .plan-card.enterprise { opacity: 0.75; }
+    .plan-head {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 12px 16px; background: #f9fafb; border-bottom: 1px solid #e5e7eb; gap: 8px;
+    }
+    input.name-input {
+      font-size: 15px; font-weight: 600; color: #111; border: none; background: transparent;
+      padding: 0; width: 130px; font-family: Inter, sans-serif;
+    }
+    input.name-input:focus { outline: 1px solid #d1d5db; border-radius: 4px; padding: 2px 4px; }
+    .price-wrap { display: flex; align-items: baseline; gap: 3px; }
+    .price-prefix { font-size: 15px; color: #6b7280; }
+    input.price-input {
+      font-size: 22px; font-weight: 600; color: #111; border: none; background: transparent;
+      padding: 0; width: 80px; text-align: right; font-family: Inter, sans-serif;
+    }
+    input.price-input:focus { outline: 1px solid #d1d5db; border-radius: 4px; padding: 2px 4px; }
+    .plan-body { padding: 14px 16px; display: flex; flex-direction: column; gap: 12px; }
+    .section-lbl { font-size: 10px; text-transform: uppercase; letter-spacing: 0.07em; color: #9ca3af; margin-bottom: 7px; }
+    .field-row { display: flex; justify-content: space-between; align-items: center; font-size: 12px; padding: 2px 0; }
+    .field-label { display: flex; align-items: center; gap: 5px; color: #6b7280; }
+    input.limit-input {
+      width: 76px; font-size: 12px; padding: 4px 7px; border: 1px solid #e5e7eb;
+      border-radius: 6px; text-align: right; font-family: Inter, sans-serif;
+    }
+    input.limit-input:focus { outline: none; border-color: #6366f1; }
+    .divider { border: none; border-top: 1px solid #f3f4f6; }
+    .calc-row { display: flex; justify-content: space-between; font-size: 12px; padding: 2px 0; color: #6b7280; }
+    .calc-total { display: flex; justify-content: space-between; font-size: 12px; font-weight: 600; color: #111; padding: 6px 0 0; margin-top: 3px; border-top: 1px solid #f3f4f6; }
+    .margin-block { background: #f9fafb; border-radius: 8px; padding: 11px 13px; }
+    .gp-row { display: flex; justify-content: space-between; align-items: baseline; }
+    .gp-usd { font-size: 18px; font-weight: 600; color: #111; }
+    .gp-pkr { font-size: 11px; color: #9ca3af; margin-top: 2px; }
+    .margin-pct { font-size: 15px; font-weight: 600; }
+    .bd-sub { display: flex; justify-content: space-between; font-size: 11px; color: #9ca3af; margin-top: 8px; padding-top: 8px; border-top: 1px solid #e5e7eb; }
+    .ent-body { padding: 14px 16px; font-size: 13px; color: #6b7280; line-height: 1.7; }
+    .note { font-size: 11px; color: #9ca3af; text-align: center; margin-top: 20px; }
+
+    /* Cost table */
+    .cost-note { font-size: 11px; color: #9ca3af; }
+
+    @media (max-width: 640px) {
+      .plans-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+<h1>VOAS AI — Plan & Margin Calculator</h1>
+<p class="subtitle">Edit any field live. Margins recalculate instantly. Rate: $1 = ₨<span id="pkr-display">270</span>.</p>
+
+<div class="global-bar">
+  <span class="global-label">Global rates:</span>
+  <label>Vapi $/min <input type="number" id="g-vapi" value="0.11" step="0.01" min="0" oninput="recalcAll()"></label>
+  <label>WA $/msg <input type="number" id="g-wa" value="0.00514" step="0.001" min="0" oninput="recalcAll()"></label>
+  <label>BD % <input type="number" id="g-bd" value="10" step="0.5" min="0" max="100" oninput="recalcAll()"></label>
+  <label>PKR/$ <input type="number" id="g-pkr" value="270" step="1" min="1" oninput="recalcAll()"></label>
+  <label style="margin-left:auto;">Kiosk $/interaction <input type="number" id="g-kiosk" value="0" step="0.001" min="0" oninput="recalcAll()" title="Set to ~0.010 once Anthropic key is active"></label>
+</div>
+
+<div class="plans-grid" id="plans-grid">
+
+  <!-- Essential -->
+  <div class="plan-card" id="card-0">
+    <div class="plan-head">
+      <input class="name-input" value="Essential" oninput="recalcAll()">
+      <div class="price-wrap"><span class="price-prefix">$</span><input class="price-input" type="number" value="90" min="0" step="1" oninput="recalcCard(0)"></div>
+    </div>
+    <div class="plan-body">
+      <div>
+        <p class="section-lbl">Channel limits</p>
+        <div class="field-row"><span class="field-label">🎙 Voice min/mo</span><input class="limit-input" type="number" value="150" min="0" step="10" oninput="recalcCard(0)"></div>
+        <div class="field-row"><span class="field-label">💬 WhatsApp msg/mo</span><input class="limit-input" type="number" value="500" min="0" step="100" oninput="recalcCard(0)"></div>
+        <div class="field-row"><span class="field-label">🖥 Kiosk URLs</span><input class="limit-input" type="number" value="1" min="0" step="1" oninput="recalcCard(0)"></div>
+        <div class="field-row"><span class="field-label">🏪 Kiosk interact/mo</span><input class="limit-input" type="number" value="0" min="0" step="100" oninput="recalcCard(0)" title="Set when kiosk API is active"></div>
+        <div class="field-row"><span class="field-label">📍 Locations</span><input class="limit-input" type="number" value="1" min="1" step="1" oninput="recalcCard(0)"></div>
+      </div>
+      <hr class="divider">
+      <div>
+        <p class="section-lbl">API costs (auto-calculated)</p>
+        <div class="calc-row"><span>Voice</span><span id="c0-voice">$16.50</span></div>
+        <div class="calc-row"><span>WhatsApp</span><span id="c0-wa">$2.57</span></div>
+        <div class="calc-row"><span>Kiosk AI</span><span id="c0-kiosk">$0.00</span></div>
+        <div class="calc-row"><span>BD commission</span><span id="c0-bd">$9.00</span></div>
+        <div class="calc-total"><span>Total out</span><span id="c0-total">$28.07</span></div>
+      </div>
+      <hr class="divider">
+      <div class="margin-block">
+        <p class="section-lbl" style="margin-bottom:8px">Gross profit after BD</p>
+        <div class="gp-row">
+          <div><div class="gp-usd" id="c0-gp">$61.93</div><div class="gp-pkr" id="c0-gp-pkr">₨16,721</div></div>
+          <span class="margin-pct" id="c0-pct">69%</span>
+        </div>
+        <div class="bd-sub">
+          <span>BD earns / mo</span>
+          <div style="text-align:right"><span id="c0-bd-usd">$9.00</span> &nbsp; <span id="c0-bd-pkr">₨2,430</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Professional -->
+  <div class="plan-card" id="card-1">
+    <div class="plan-head">
+      <input class="name-input" value="Professional" oninput="recalcAll()">
+      <div class="price-wrap"><span class="price-prefix">$</span><input class="price-input" type="number" value="179" min="0" step="1" oninput="recalcCard(1)"></div>
+    </div>
+    <div class="plan-body">
+      <div>
+        <p class="section-lbl">Channel limits</p>
+        <div class="field-row"><span class="field-label">🎙 Voice min/mo</span><input class="limit-input" type="number" value="400" min="0" step="10" oninput="recalcCard(1)"></div>
+        <div class="field-row"><span class="field-label">💬 WhatsApp msg/mo</span><input class="limit-input" type="number" value="1500" min="0" step="100" oninput="recalcCard(1)"></div>
+        <div class="field-row"><span class="field-label">🖥 Kiosk URLs</span><input class="limit-input" type="number" value="3" min="0" step="1" oninput="recalcCard(1)"></div>
+        <div class="field-row"><span class="field-label">🏪 Kiosk interact/mo</span><input class="limit-input" type="number" value="0" min="0" step="100" oninput="recalcCard(1)" title="Set when kiosk API is active"></div>
+        <div class="field-row"><span class="field-label">📍 Locations</span><input class="limit-input" type="number" value="1" min="1" step="1" oninput="recalcCard(1)"></div>
+      </div>
+      <hr class="divider">
+      <div>
+        <p class="section-lbl">API costs (auto-calculated)</p>
+        <div class="calc-row"><span>Voice</span><span id="c1-voice">$44.00</span></div>
+        <div class="calc-row"><span>WhatsApp</span><span id="c1-wa">$7.71</span></div>
+        <div class="calc-row"><span>Kiosk AI</span><span id="c1-kiosk">$0.00</span></div>
+        <div class="calc-row"><span>BD commission</span><span id="c1-bd">$17.90</span></div>
+        <div class="calc-total"><span>Total out</span><span id="c1-total">$69.61</span></div>
+      </div>
+      <hr class="divider">
+      <div class="margin-block">
+        <p class="section-lbl" style="margin-bottom:8px">Gross profit after BD</p>
+        <div class="gp-row">
+          <div><div class="gp-usd" id="c1-gp">$109.39</div><div class="gp-pkr" id="c1-gp-pkr">₨29,535</div></div>
+          <span class="margin-pct" id="c1-pct">61%</span>
+        </div>
+        <div class="bd-sub">
+          <span>BD earns / mo</span>
+          <div style="text-align:right"><span id="c1-bd-usd">$17.90</span> &nbsp; <span id="c1-bd-pkr">₨4,833</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Business -->
+  <div class="plan-card" id="card-2">
+    <div class="plan-head">
+      <input class="name-input" value="Business" oninput="recalcAll()">
+      <div class="price-wrap"><span class="price-prefix">$</span><input class="price-input" type="number" value="329" min="0" step="1" oninput="recalcCard(2)"></div>
+    </div>
+    <div class="plan-body">
+      <div>
+        <p class="section-lbl">Channel limits</p>
+        <div class="field-row"><span class="field-label">🎙 Voice min/mo</span><input class="limit-input" type="number" value="1000" min="0" step="10" oninput="recalcCard(2)"></div>
+        <div class="field-row"><span class="field-label">💬 WhatsApp msg/mo</span><input class="limit-input" type="number" value="4000" min="0" step="100" oninput="recalcCard(2)"></div>
+        <div class="field-row"><span class="field-label">🖥 Kiosk URLs</span><input class="limit-input" type="number" value="6" min="0" step="1" oninput="recalcCard(2)"></div>
+        <div class="field-row"><span class="field-label">🏪 Kiosk interact/mo</span><input class="limit-input" type="number" value="0" min="0" step="100" oninput="recalcCard(2)" title="Set when kiosk API is active"></div>
+        <div class="field-row"><span class="field-label">📍 Locations</span><input class="limit-input" type="number" value="5" min="1" step="1" oninput="recalcCard(2)"></div>
+      </div>
+      <hr class="divider">
+      <div>
+        <p class="section-lbl">API costs (auto-calculated)</p>
+        <div class="calc-row"><span>Voice</span><span id="c2-voice">$110.00</span></div>
+        <div class="calc-row"><span>WhatsApp</span><span id="c2-wa">$20.57</span></div>
+        <div class="calc-row"><span>Kiosk AI</span><span id="c2-kiosk">$0.00</span></div>
+        <div class="calc-row"><span>BD commission</span><span id="c2-bd">$32.90</span></div>
+        <div class="calc-total"><span>Total out</span><span id="c2-total">$163.47</span></div>
+      </div>
+      <hr class="divider">
+      <div class="margin-block">
+        <p class="section-lbl" style="margin-bottom:8px">Gross profit after BD</p>
+        <div class="gp-row">
+          <div><div class="gp-usd" id="c2-gp">$165.53</div><div class="gp-pkr" id="c2-gp-pkr">₨44,693</div></div>
+          <span class="margin-pct" id="c2-pct">50%</span>
+        </div>
+        <div class="bd-sub">
+          <span>BD earns / mo</span>
+          <div style="text-align:right"><span id="c2-bd-usd">$32.90</span> &nbsp; <span id="c2-bd-pkr">₨8,883</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Enterprise -->
+  <div class="plan-card enterprise">
+    <div class="plan-head">
+      <input class="name-input" value="Enterprise" oninput="recalcAll()">
+      <div style="font-size:13px;color:#9ca3af;font-weight:500;">Custom</div>
+    </div>
+    <div class="ent-body">
+      Unlimited locations · custom voice, WhatsApp &amp; kiosk limits · dedicated support · SLA · custom integrations (Toast, Square, etc.)<br><br>
+      BD commission negotiated per deal. Price and limits set per contract.<br><br>
+      <span style="font-size:11px;color:#d1d5db;">Cost model identical to above — multiply limits × rates in global bar.</span>
+    </div>
+  </div>
+
+</div>
+
+<p class="note">
+  Vapi: $0.11/min (bundles Deepgram STT + ElevenLabs TTS + GPT-4o-mini) &nbsp;·&nbsp;
+  WhatsApp: Twilio $0.005/msg + OpenAI ~$0.000135/msg &nbsp;·&nbsp;
+  Kiosk (when active): Whisper ~$0.009 + Claude Haiku ~$0.001 per interaction &nbsp;·&nbsp;
+  BD commission: recurring monthly on plan price
+</p>
+
+<script>
+  const CARDS = [0, 1, 2];
+
+  function getGlobal() {
+    return {
+      vapi:  parseFloat(document.getElementById('g-vapi').value)  || 0.11,
+      wa:    parseFloat(document.getElementById('g-wa').value)    || 0.00514,
+      bd:    parseFloat(document.getElementById('g-bd').value)    || 10,
+      pkr:   parseFloat(document.getElementById('g-pkr').value)   || 270,
+      kiosk: parseFloat(document.getElementById('g-kiosk').value) || 0,
+    };
+  }
+
+  function fmt(v)  { return '$' + v.toFixed(2); }
+  function fmtP(v) { return '₨' + Math.round(v).toLocaleString(); }
+
+  function pctColor(pct) {
+    if (pct >= 60) return '#059669';
+    if (pct >= 45) return '#d97706';
+    return '#dc2626';
+  }
+
+  function recalcCard(i) {
+    const g = getGlobal();
+    const card = document.getElementById('card-' + i);
+    const inputs = card.querySelectorAll('.limit-input');
+    const price = parseFloat(card.querySelector('.price-input').value) || 0;
+
+    const voiceMin   = parseFloat(inputs[0].value) || 0;
+    const waMsg      = parseFloat(inputs[1].value) || 0;
+    const kioskInter = parseFloat(inputs[3].value) || 0;
+
+    const voiceCost  = voiceMin   * g.vapi;
+    const waCost     = waMsg      * g.wa;
+    const kioskCost  = kioskInter * g.kiosk;
+    const bdAmt      = price * (g.bd / 100);
+    const totalOut   = voiceCost + waCost + kioskCost + bdAmt;
+    const gp         = price - totalOut;
+    const margin     = price > 0 ? (gp / price) * 100 : 0;
+
+    document.getElementById('c' + i + '-voice').textContent    = fmt(voiceCost);
+    document.getElementById('c' + i + '-wa').textContent       = fmt(waCost);
+    document.getElementById('c' + i + '-kiosk').textContent    = fmt(kioskCost);
+    document.getElementById('c' + i + '-bd').textContent       = fmt(bdAmt);
+    document.getElementById('c' + i + '-total').textContent    = fmt(totalOut);
+    document.getElementById('c' + i + '-gp').textContent       = fmt(gp);
+    document.getElementById('c' + i + '-gp-pkr').textContent   = fmtP(gp * g.pkr);
+    document.getElementById('c' + i + '-pct').textContent      = Math.round(margin) + '%';
+    document.getElementById('c' + i + '-pct').style.color      = pctColor(margin);
+    document.getElementById('c' + i + '-bd-usd').textContent   = fmt(bdAmt);
+    document.getElementById('c' + i + '-bd-pkr').textContent   = fmtP(bdAmt * g.pkr);
+
+    document.getElementById('pkr-display').textContent = Math.round(g.pkr);
+  }
+
+  function recalcAll() {
+    CARDS.forEach(recalcCard);
+    document.getElementById('pkr-display').textContent = Math.round(getGlobal().pkr);
+  }
+
+  recalcAll();
+</script>
+</body>
+</html>
