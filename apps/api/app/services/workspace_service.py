@@ -80,14 +80,20 @@ def create_workspace(payload: WorkspaceCreate, user_id: str, user_email: str | N
         }
     ).execute()
 
-    db.table("locations").insert(
-        {
-            "workspace_id": workspace_id,
-            "name": payload.location_name,
-            "address": payload.location_address,
-            "phone": payload.location_phone,
-        }
-    ).execute()
+    if payload.location_name:
+        db.table("locations").insert(
+            {
+                "workspace_id": workspace_id,
+                "name": payload.location_name,
+                "address": payload.location_address,
+                "city": payload.location_city,
+                "state": payload.location_state,
+                "postal_code": payload.location_zip,
+                "phone": payload.location_phone,
+                "timezone": payload.location_timezone or "America/New_York",
+                "hours": payload.location_hours,
+            }
+        ).execute()
 
     audit_service.write(
         actor_type="user",
