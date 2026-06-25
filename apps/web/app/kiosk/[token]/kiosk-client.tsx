@@ -125,6 +125,8 @@ export function KioskClient({
   const messagesRef = useRef<KioskChatMessage[]>([]);
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const audioCtxRef = useRef<AudioContext | null>(null);
+  const audioSrcRef = useRef<AudioBufferSourceNode | null>(null);
   const resetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const heartbeatRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -146,6 +148,10 @@ export function KioskClient({
 
     stopRecognition();
 
+    if (audioSrcRef.current) {
+      try { audioSrcRef.current.stop(); } catch { /* already ended */ }
+      audioSrcRef.current = null;
+    }
     if (audioRef.current) {
       audioRef.current.pause(); // triggers onpause → resolves any pending speakText promise
       audioRef.current = null;
@@ -219,8 +225,10 @@ export function KioskClient({
     return () => {
       if (resetTimerRef.current) clearTimeout(resetTimerRef.current);
       if (countdownRef.current) clearInterval(countdownRef.current);
+      if (audioSrcRef.current) { try { audioSrcRef.current.stop(); } catch { /* ok */ } }
       if (audioRef.current) audioRef.current.pause();
       if ('speechSynthesis' in window) window.speechSynthesis.cancel();
+      if (audioCtxRef.current) audioCtxRef.current.close().catch(() => {});
       stopRecognition();
     };
   }, [stopRecognition]);
@@ -229,18 +237,30 @@ export function KioskClient({
 
   function playAudioBlob(blob: Blob): Promise<void> {
     return new Promise<void>((resolve) => {
-      const url = URL.createObjectURL(blob);
-      const audio = new Audio(url);
-      audioRef.current = audio;
-      const cleanup = () => {
-        URL.revokeObjectURL(url);
-        audioRef.current = null;
-      };
-      audio.onended = () => { cleanup(); resolve(); };
-      audio.onerror = () => { cleanup(); resolve(); };
-      // Resolve early when paused externally (reset / endSession)
-      audio.onpause = () => { if (!audio.ended) { cleanup(); resolve(); } };
-      audio.play().catch(() => { cleanup(); resolve(); });
+      const ctx = audioCtxRef.current;
+      if (ctx && ctx.state !== 'closed') {
+        // Web Audio path — works regardless of autoplay policy once AudioContext is unlocked
+        blob.arrayBuffer().then((ab) =>
+          ctx.decodeAudioData(ab).then((decoded) => {
+            const src = ctx.createBufferSource();
+            src.buffer = decoded;
+            src.connect(ctx.destination);
+            audioSrcRef.current = src;
+            src.onended = () => { audioSrcRef.current = null; resolve(); };
+            src.start(0);
+          }).catch(() => resolve())
+        ).catch(() => resolve());
+      } else {
+        // HTMLAudioElement fallback (no AudioContext available)
+        const url = URL.createObjectURL(blob);
+        const audio = new Audio(url);
+        audioRef.current = audio;
+        const cleanup = () => { URL.revokeObjectURL(url); audioRef.current = null; };
+        audio.onended = () => { cleanup(); resolve(); };
+        audio.onerror = () => { cleanup(); resolve(); };
+        audio.onpause = () => { if (!audio.ended) { cleanup(); resolve(); } };
+        audio.play().catch(() => { cleanup(); resolve(); });
+      }
     });
   }
 
@@ -370,6 +390,25 @@ export function KioskClient({
 
   async function startOrder() {
     if (kioskStateRef.current !== 'idle') return;
+
+    // Unlock AudioContext on this user gesture — must happen before any await
+    // so the browser grants audio playback for all subsequent speakText calls.
+    try {
+      type ACConstructor = typeof AudioContext;
+      const AC = (
+        window.AudioContext ??
+        (window as Window & { webkitAudioContext?: ACConstructor }).webkitAudioContext
+      ) as ACConstructor | undefined;
+      if (AC) {
+        if (!audioCtxRef.current || audioCtxRef.current.state === 'closed') {
+          audioCtxRef.current = new AC();
+        }
+        if (audioCtxRef.current.state === 'suspended') {
+          await audioCtxRef.current.resume();
+        }
+      }
+    } catch { /* AudioContext not supported — falls back to HTMLAudioElement */ }
+
     messagesRef.current = [];
     setLastTranscript('');
     setAiResponse('');
@@ -377,6 +416,7 @@ export function KioskClient({
   }
 
   function endSession() {
+    if (audioSrcRef.current) { try { audioSrcRef.current.stop(); } catch { /* ok */ } }
     if (audioRef.current) audioRef.current.pause();
     if ('speechSynthesis' in window) window.speechSynthesis.cancel();
     stopRecognition();
