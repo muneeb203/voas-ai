@@ -604,6 +604,58 @@ def grant_credits(
     return CreditGrant.model_validate(res.data[0])
 
 
+def deduct_credits(
+    workspace_id: str,
+    credit_type: CreditType,
+    amount: int,
+    reason: str | None,
+    admin_id: str,
+) -> int:
+    """Reduce a workspace's credit balance by `amount`, oldest grants first.
+
+    Returns the actual amount deducted (may be less than requested if the
+    workspace has fewer credits remaining than `amount`).
+    """
+    _get_workspace_row(workspace_id)
+    db = get_supabase_admin()
+    grants = (
+        db.table("credit_grants")
+        .select("id, amount_remaining")
+        .eq("workspace_id", workspace_id)
+        .eq("credit_type", credit_type)
+        .gt("amount_remaining", 0)
+        .order("created_at")
+        .execute()
+    )
+    remaining = amount
+    actually_deducted = 0
+    for grant in grants.data or []:
+        if remaining <= 0:
+            break
+        avail = int(grant["amount_remaining"])
+        take = min(avail, remaining)
+        db.table("credit_grants").update({"amount_remaining": avail - take}).eq(
+            "id", grant["id"]
+        ).execute()
+        remaining -= take
+        actually_deducted += take
+
+    audit_service.write(
+        actor_type="admin",
+        actor_id=admin_id,
+        workspace_id=workspace_id,
+        action="billing.credits_deducted",
+        resource_type="credit_grant",
+        metadata={
+            "credit_type": credit_type,
+            "requested": amount,
+            "deducted": actually_deducted,
+            "reason": reason,
+        },
+    )
+    return actually_deducted
+
+
 def update_workspace_billing(
     workspace_id: str,
     payload: AdminBillingUpdate,

@@ -128,6 +128,19 @@ export async function grantWorkspaceCreditsAction(
   return { error: null };
 }
 
+export async function deductWorkspaceCreditsAction(
+  workspaceId: string,
+  body: { credit_type: import('@/lib/types').CreditType; amount: number; reason?: string },
+) {
+  await requireAdminSession(`/admin/workspaces/${workspaceId}`);
+  const { deductWorkspaceCredits } = await import('@/lib/api/admin');
+  const res = await deductWorkspaceCredits(workspaceId, body);
+  if (isApiError(res)) return { error: res.error.message };
+  revalidatePath(`/admin/workspaces/${workspaceId}`);
+  revalidatePath('/admin/usage');
+  return { error: null, deducted: res.data.deducted };
+}
+
 export async function updateWorkspaceBillingAction(
   workspaceId: string,
   body: { plan?: import('@/lib/types').PlanId; usage_enforcement_disabled?: boolean },

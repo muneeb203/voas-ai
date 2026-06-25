@@ -250,6 +250,17 @@ export function grantWorkspaceCredits(
   });
 }
 
+export function deductWorkspaceCredits(
+  workspaceId: string,
+  body: { credit_type: CreditType; amount: number; reason?: string },
+) {
+  return apiCall<{ deducted: number }>(`/v1/admin/workspaces/${workspaceId}/billing/deduct`, {
+    method: 'POST',
+    body,
+    cache: 'no-store',
+  });
+}
+
 export function updateAdminWorkspaceBilling(
   workspaceId: string,
   body: { plan?: PlanId; usage_enforcement_disabled?: boolean },

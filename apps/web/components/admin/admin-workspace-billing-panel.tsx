@@ -18,6 +18,7 @@ import {
 import { Switch } from '@/components/ui/switch';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import {
+  deductWorkspaceCreditsAction,
   grantWorkspaceCreditsAction,
   updateWorkspaceBillingAction,
 } from '@/app/actions/admin-action';
@@ -72,6 +73,26 @@ export function AdminWorkspaceBillingPanel({
       if (res?.error) toast.error(res.error);
       else {
         toast.success('Credits granted');
+        setReason('');
+      }
+    });
+  }
+
+  function deductCredits() {
+    const n = parseInt(amount, 10);
+    if (!n || n < 1) {
+      toast.error('Enter a valid amount');
+      return;
+    }
+    startTransition(async () => {
+      const res = await deductWorkspaceCreditsAction(workspaceId, {
+        credit_type: creditType,
+        amount: n,
+        reason: reason.trim() || undefined,
+      });
+      if (res?.error) toast.error(res.error);
+      else {
+        toast.success(`Deducted ${res.deducted} ${creditType.replace('_', ' ')}`);
         setReason('');
       }
     });
@@ -150,9 +171,14 @@ export function AdminWorkspaceBillingPanel({
                 <Input value={reason} onChange={(e) => setReason(e.target.value)} />
               </div>
             </div>
-            <Button variant="secondary" className="mt-3" onClick={grantCredits} disabled={pending}>
-              Grant credits
-            </Button>
+            <div className="mt-3 flex gap-2">
+              <Button variant="secondary" onClick={grantCredits} disabled={pending}>
+                Grant credits
+              </Button>
+              <Button variant="destructive" onClick={deductCredits} disabled={pending}>
+                Deduct credits
+              </Button>
+            </div>
           </div>
         </CardContent>
       </Card>
