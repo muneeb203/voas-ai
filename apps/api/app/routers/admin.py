@@ -288,6 +288,31 @@ async def grant_workspace_credits(
     return ok(billing_service.grant_credits(workspace_id, payload, ctx.admin_id))
 
 
+class CreditDeductBody(BaseModel):
+    credit_type: str
+    amount: int = Field(gt=0)
+    reason: str | None = None
+
+
+class CreditDeductResult(BaseModel):
+    deducted: int
+
+
+@router.post(
+    "/workspaces/{workspace_id}/billing/deduct",
+    response_model=DataResponse[CreditDeductResult],
+)
+async def deduct_workspace_credits(
+    workspace_id: str,
+    payload: CreditDeductBody,
+    ctx: AdminContextDep,
+) -> DataResponse[CreditDeductResult]:
+    deducted = billing_service.deduct_credits(
+        workspace_id, payload.credit_type, payload.amount, payload.reason, ctx.admin_id
+    )
+    return ok(CreditDeductResult(deducted=deducted))
+
+
 @router.patch(
     "/workspaces/{workspace_id}/billing",
     response_model=DataResponse[UsageSummary],
