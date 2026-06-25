@@ -363,9 +363,7 @@ export function KioskClient({
   function endSession() {
     if (audioRef.current) audioRef.current.pause();
     if ('speechSynthesis' in window) window.speechSynthesis.cancel();
-    if (recorderRef.current && recorderRef.current.state !== 'inactive') {
-      try { recorderRef.current.stop(); } catch { /* ok */ }
-    }
+    stopRecognition();
     reset();
   }
 
