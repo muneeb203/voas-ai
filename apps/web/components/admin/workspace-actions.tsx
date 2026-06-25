@@ -1,7 +1,8 @@
 'use client';
 
-import { useState } from 'react';
-import { ChevronDown, Eye, PauseCircle, PlayCircle, Trash2 } from 'lucide-react';
+import { useState, useTransition } from 'react';
+import { ChevronDown, Eye, PauseCircle, PlayCircle, RefreshCw, Trash2 } from 'lucide-react';
+import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import {
@@ -27,6 +28,12 @@ interface WorkspaceActionsProps {
 
 export function WorkspaceActions({ workspaceId, workspaceName, status }: WorkspaceActionsProps) {
   const [confirmOpen, setConfirmOpen] = useState<null | 'suspend' | 'restore' | 'delete'>(null);
+  const router = useRouter();
+  const [refreshing, startRefresh] = useTransition();
+
+  function handleRefresh() {
+    startRefresh(() => { router.refresh(); });
+  }
 
   async function onImpersonate() {
     const res = await startImpersonationAction(workspaceId);
@@ -73,6 +80,10 @@ export function WorkspaceActions({ workspaceId, workspaceName, status }: Workspa
   return (
     <>
       <div className="flex items-center gap-2">
+        <Button variant="outline" size="icon" onClick={handleRefresh} disabled={refreshing} title="Refresh">
+          <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
+        </Button>
+
         <Button variant="accent" onClick={onImpersonate}>
           <Eye className="h-4 w-4" /> View as workspace
         </Button>
