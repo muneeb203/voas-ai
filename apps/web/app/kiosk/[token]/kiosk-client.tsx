@@ -10,6 +10,18 @@ import {
   type KioskChatMessage,
 } from '@/lib/api/kiosk-public';
 
+interface SpeechRecognitionLike {
+  lang: string;
+  interimResults: boolean;
+  maxAlternatives: number;
+  continuous: boolean;
+  onresult: ((e: { results: ArrayLike<ArrayLike<{ transcript: string }>> }) => void) | null;
+  onerror: (() => void) | null;
+  onend: (() => void) | null;
+  start(): void;
+  abort(): void;
+}
+
 interface KioskClientProps {
   token: string;
   locationName: string;
@@ -111,7 +123,7 @@ export function KioskClient({
   const kioskStateRef = useRef<KioskState>('idle');
   const sessionIdRef = useRef<string>('');
   const messagesRef = useRef<KioskChatMessage[]>([]);
-  const recognitionRef = useRef<SpeechRecognition | null>(null);
+  const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const resetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -255,7 +267,7 @@ export function KioskClient({
 
   function listenWithBrowser(): Promise<string> {
     return new Promise<string>((resolve) => {
-      type SRConstructor = new () => SpeechRecognition;
+      type SRConstructor = new () => SpeechRecognitionLike;
       const win = window as Window & {
         SpeechRecognition?: SRConstructor;
         webkitSpeechRecognition?: SRConstructor;
@@ -278,8 +290,8 @@ export function KioskClient({
         resolve(text);
       };
 
-      recognition.onresult = (e: SpeechRecognitionEvent) =>
-        done(e.results[0]?.[0]?.transcript ?? '');
+      recognition.onresult = (e) =>
+        done((e.results[0]?.[0]?.transcript) ?? '');
       recognition.onerror = () => done('');
       recognition.onend = () => done('');
       recognition.start();
