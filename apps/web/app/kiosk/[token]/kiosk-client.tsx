@@ -111,7 +111,7 @@ export function KioskClient({
   const kioskStateRef = useRef<KioskState>('idle');
   const sessionIdRef = useRef<string>('');
   const messagesRef = useRef<KioskChatMessage[]>([]);
-  const recognitionRef = useRef<any>(null);
+  const recognitionRef = useRef<SpeechRecognition | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const resetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -255,9 +255,12 @@ export function KioskClient({
 
   function listenWithBrowser(): Promise<string> {
     return new Promise<string>((resolve) => {
-      const SR =
-        (window as any).SpeechRecognition ||
-        (window as any).webkitSpeechRecognition;
+      type SRConstructor = new () => SpeechRecognition;
+      const win = window as Window & {
+        SpeechRecognition?: SRConstructor;
+        webkitSpeechRecognition?: SRConstructor;
+      };
+      const SR = win.SpeechRecognition ?? win.webkitSpeechRecognition;
       if (!SR) { resolve(''); return; }
 
       const recognition = new SR();
@@ -275,7 +278,8 @@ export function KioskClient({
         resolve(text);
       };
 
-      recognition.onresult = (e: any) => done(e.results[0]?.[0]?.transcript ?? '');
+      recognition.onresult = (e: SpeechRecognitionEvent) =>
+        done(e.results[0]?.[0]?.transcript ?? '');
       recognition.onerror = () => done('');
       recognition.onend = () => done('');
       recognition.start();
