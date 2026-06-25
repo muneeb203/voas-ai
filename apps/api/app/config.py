@@ -57,7 +57,7 @@ class Settings(BaseSettings):
 
     # --- Free trial credits granted automatically on workspace creation. ---
     # Admin can raise/lower this per-workspace via the admin credit-grant panel.
-    free_trial_voice_minutes: int = Field(default=30, ge=0)
+    free_trial_voice_minutes: int = Field(default=10, ge=0)
 
     # --- Kiosk direct voice pipeline. No-op without these keys. ---
     # ANTHROPIC_API_KEY → Claude Haiku for kiosk AI chat

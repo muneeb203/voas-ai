@@ -4,7 +4,7 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 WorkspaceVertical = Literal["restaurant", "dental", "salon", "auto", "other"]
-WorkspacePlan = Literal["essentials", "professional", "business", "enterprise"]
+WorkspacePlan = Literal["trial", "essentials", "professional", "business", "enterprise"]
 WorkspaceStatus = Literal["active", "suspended", "deleted"]
 MemberRole = Literal["owner", "manager", "staff"]
 

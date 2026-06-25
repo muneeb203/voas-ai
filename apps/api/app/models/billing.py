@@ -10,7 +10,7 @@ UsageEventType = Literal[
     "help_bot_turns",
 ]
 CreditType = Literal["voice_minutes", "whatsapp_messages", "help_bot_turns"]
-BillingPlanSlug = Literal["essentials", "professional", "business", "enterprise"]
+BillingPlanSlug = Literal["trial", "essentials", "professional", "business", "enterprise"]
 
 
 class BillingPlan(BaseModel):
