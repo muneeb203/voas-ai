@@ -4,6 +4,7 @@ import { listCategories, listItems } from '@/lib/api/menu';
 import { isApiError, type MenuItem } from '@/lib/types';
 import { PageHeader } from '@/components/dashboard/page-header';
 import { MenuEditor } from '@/components/dashboard/menu-editor';
+import { KnowledgeBaseRefreshButton } from '@/components/dashboard/knowledge-base-refresh-button';
 
 export const metadata: Metadata = { title: 'Knowledge Base' };
 
@@ -31,6 +32,7 @@ export default async function KnowledgeBasePage() {
         eyebrow="Setup"
         title="Knowledge Base"
         description="Menu, modifiers, and pricing. This is what your AI agent knows."
+        action={<KnowledgeBaseRefreshButton />}
       />
       <MenuEditor
         categories={categories}
