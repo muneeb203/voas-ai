@@ -61,7 +61,7 @@ def create_workspace(payload: WorkspaceCreate, user_id: str, user_email: str | N
                 "name": payload.name,
                 "slug": slug,
                 "vertical": payload.vertical,
-                "plan": "professional",
+                "plan": "trial",
             }
         )
         .execute()
