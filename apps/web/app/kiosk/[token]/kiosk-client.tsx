@@ -7,7 +7,6 @@ import {
   heartbeatKioskSession,
   kioskChat,
   kioskSpeak,
-  transcribeAudio,
   type KioskChatMessage,
 } from '@/lib/api/kiosk-public';
 
@@ -112,29 +111,18 @@ export function KioskClient({
   const kioskStateRef = useRef<KioskState>('idle');
   const sessionIdRef = useRef<string>('');
   const messagesRef = useRef<KioskChatMessage[]>([]);
-  const streamRef = useRef<MediaStream | null>(null);
-  const recorderRef = useRef<MediaRecorder | null>(null);
-  const audioCtxRef = useRef<AudioContext | null>(null);
-  const rafRef = useRef<number | null>(null);
+  const recognitionRef = useRef<any>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const resetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const heartbeatRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // ── Stream cleanup ────────────────────────────────────────────────────────────
+  // ── Recognition cleanup ───────────────────────────────────────────────────────
 
-  const stopStream = useCallback(() => {
-    if (rafRef.current !== null) {
-      cancelAnimationFrame(rafRef.current);
-      rafRef.current = null;
-    }
-    if (audioCtxRef.current) {
-      audioCtxRef.current.close().catch(() => {});
-      audioCtxRef.current = null;
-    }
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach((t) => t.stop());
-      streamRef.current = null;
+  const stopRecognition = useCallback(() => {
+    if (recognitionRef.current) {
+      try { recognitionRef.current.abort(); } catch { /* already stopped */ }
+      recognitionRef.current = null;
     }
   }, []);
 
@@ -144,11 +132,7 @@ export function KioskClient({
     if (resetTimerRef.current) clearTimeout(resetTimerRef.current);
     if (countdownRef.current) clearInterval(countdownRef.current);
 
-    if (recorderRef.current && recorderRef.current.state !== 'inactive') {
-      try { recorderRef.current.stop(); } catch { /* already stopped */ }
-    }
-    recorderRef.current = null;
-    stopStream();
+    stopRecognition();
 
     if (audioRef.current) {
       audioRef.current.pause(); // triggers onpause → resolves any pending speakText promise
@@ -165,7 +149,7 @@ export function KioskClient({
     setErrorMsg('');
     setLastTranscript('');
     setAiResponse('');
-  }, [stopStream]);
+  }, [stopRecognition]);
 
   // ── Session lock ──────────────────────────────────────────────────────────────
 
@@ -225,9 +209,9 @@ export function KioskClient({
       if (countdownRef.current) clearInterval(countdownRef.current);
       if (audioRef.current) audioRef.current.pause();
       if ('speechSynthesis' in window) window.speechSynthesis.cancel();
-      stopStream();
+      stopRecognition();
     };
-  }, [stopStream]);
+  }, [stopRecognition]);
 
   // ── Audio helpers ─────────────────────────────────────────────────────────────
 
@@ -267,69 +251,37 @@ export function KioskClient({
     await speakWithBrowser(text);
   }
 
-  // ── Capture audio until silence (MediaRecorder + AudioContext) ────────────────
+  // ── Browser SpeechRecognition (no API cost) ───────────────────────────────────
 
-  function captureUntilSilence(
-    stream: MediaStream,
-    audioCtx: AudioContext,
-  ): Promise<Blob | null> {
-    return new Promise<Blob | null>((resolve) => {
-      const chunks: Blob[] = [];
-      let recorder: MediaRecorder;
-      try {
-        recorder = new MediaRecorder(stream);
-      } catch {
-        resolve(null);
-        return;
-      }
-      recorderRef.current = recorder;
-      recorder.ondataavailable = (e) => { if (e.data.size > 0) chunks.push(e.data); };
-      recorder.onstop = () => {
-        resolve(
-          chunks.length > 0
-            ? new Blob(chunks, { type: recorder.mimeType || 'audio/webm' })
-            : null,
-        );
+  function listenWithBrowser(): Promise<string> {
+    return new Promise<string>((resolve) => {
+      const SR =
+        (window as any).SpeechRecognition ||
+        (window as any).webkitSpeechRecognition;
+      if (!SR) { resolve(''); return; }
+
+      const recognition = new SR();
+      recognition.lang = 'en-US';
+      recognition.interimResults = false;
+      recognition.maxAlternatives = 1;
+      recognition.continuous = false;
+      recognitionRef.current = recognition;
+
+      let settled = false;
+      const done = (text: string) => {
+        if (settled) return;
+        settled = true;
+        recognitionRef.current = null;
+        resolve(text);
       };
-      recorder.onerror = () => resolve(null);
-      recorder.start(250);
 
-      const analyser = audioCtx.createAnalyser();
-      analyser.fftSize = 1024;
-      audioCtx.createMediaStreamSource(stream).connect(analyser);
-
-      const SILENCE_THRESHOLD = 0.01;
-      const SILENCE_DURATION_MS = 1500;
-      const MIN_RECORD_MS = 800;
-      const recordStart = Date.now();
-      let silenceStart: number | null = null;
-
-      function tick() {
-        // State changed externally → abort
-        if (kioskStateRef.current !== 'recording') {
-          if (recorder.state !== 'inactive') recorder.stop();
-          return;
-        }
-        const data = new Float32Array(analyser.fftSize);
-        analyser.getFloatTimeDomainData(data);
-        const rms = Math.sqrt(data.reduce((s, v) => s + v * v, 0) / data.length);
-
-        if (Date.now() - recordStart > MIN_RECORD_MS) {
-          if (rms < SILENCE_THRESHOLD) {
-            if (!silenceStart) silenceStart = Date.now();
-            else if (Date.now() - silenceStart >= SILENCE_DURATION_MS) {
-              if (recorder.state !== 'inactive') recorder.stop();
-              return;
-            }
-          } else {
-            silenceStart = null;
-          }
-        }
-        rafRef.current = requestAnimationFrame(tick);
-      }
-      rafRef.current = requestAnimationFrame(tick);
+      recognition.onresult = (e: any) => done(e.results[0]?.[0]?.transcript ?? '');
+      recognition.onerror = () => done('');
+      recognition.onend = () => done('');
+      recognition.start();
     });
   }
+
 
   // ── Conversation loop ─────────────────────────────────────────────────────────
 
@@ -344,40 +296,18 @@ export function KioskClient({
     // Each iteration = one recording turn.
     // After every await we check the expected state; if wrong, someone called reset/endSession.
     while (true) {
-      // ── Record ──────────────────────────────────────────────────────────────
+      // ── Record + transcribe (browser SpeechRecognition, no API cost) ──────────
       kioskStateRef.current = 'recording';
       setKioskState('recording');
 
-      let stream: MediaStream;
-      try {
-        stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      } catch {
-        showError('Microphone access denied. Please allow mic and try again.');
-        return;
-      }
-      if (kioskStateRef.current !== 'recording') return; // cancelled during getUserMedia
+      const transcript = await listenWithBrowser();
 
-      streamRef.current = stream;
-      const audioCtx = new AudioContext();
-      audioCtxRef.current = audioCtx;
+      if (kioskStateRef.current !== 'recording') return;
+      if (!transcript.trim()) continue; // nothing heard → loop back
 
-      const blob = await captureUntilSilence(stream, audioCtx);
-      stopStream();
-
-      if (kioskStateRef.current !== 'recording') return; // cancelled during recording
-      if (!blob) continue; // nothing recorded → try again
-
-      // ── Transcribe ──────────────────────────────────────────────────────────
+      // ── Processing ──────────────────────────────────────────────────────────
       kioskStateRef.current = 'processing';
       setKioskState('processing');
-
-      const transcribeRes = await transcribeAudio(token, blob);
-      if (kioskStateRef.current !== 'processing') return;
-
-      const transcript =
-        'error' in transcribeRes ? '' : transcribeRes.data.transcript.trim();
-
-      if (!transcript) continue; // nothing heard → loop back to recording
 
       setLastTranscript(transcript);
       messagesRef.current.push({ role: 'user', content: transcript });
@@ -433,9 +363,7 @@ export function KioskClient({
   function endSession() {
     if (audioRef.current) audioRef.current.pause();
     if ('speechSynthesis' in window) window.speechSynthesis.cancel();
-    if (recorderRef.current && recorderRef.current.state !== 'inactive') {
-      try { recorderRef.current.stop(); } catch { /* ok */ }
-    }
+    stopRecognition();
     reset();
   }
 
