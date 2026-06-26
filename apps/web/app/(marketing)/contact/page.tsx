@@ -11,7 +11,7 @@ const INFO = [
   {
     icon: Mail,
     title: 'Email',
-    body: 'hello@voas.ai',
+    body: 'info@convosol.com',
   },
   {
     icon: MessageCircle,
@@ -21,7 +21,7 @@ const INFO = [
   {
     icon: MapPin,
     title: 'Where we are',
-    body: 'Built in Islamabad, with operators across the US.',
+    body: 'Built in Islamabad, with operators across the Globe.',
   },
 ] as const;
 
