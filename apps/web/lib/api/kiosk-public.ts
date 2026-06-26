@@ -35,29 +35,6 @@ export function heartbeatKioskSession(
   });
 }
 
-export async function transcribeAudio(
-  token: string,
-  audioBlob: Blob,
-): Promise<ApiResponse<{ transcript: string }>> {
-  const formData = new FormData();
-  const mimeType = audioBlob.type || 'audio/webm';
-  const ext = mimeType.includes('mp4') ? 'm4a' : 'webm';
-  formData.append('audio', audioBlob, `recording.${ext}`);
-
-  try {
-    const res = await fetch(`${API_BASE}/v1/kiosk/${token}/transcribe`, {
-      method: 'POST',
-      body: formData,
-      // No Content-Type header — browser sets multipart/form-data boundary automatically
-    });
-    const json = await res.json().catch(() => null);
-    if (!json) return { error: { code: 'NETWORK_ERROR', message: 'Transcription failed' } };
-    return json as ApiResponse<{ transcript: string }>;
-  } catch {
-    return { error: { code: 'NETWORK_ERROR', message: 'Connection failed' } };
-  }
-}
-
 export interface KioskChatMessage {
   role: 'user' | 'assistant';
   content: string;
