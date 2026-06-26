@@ -3,7 +3,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Annotated, Literal
 
 import httpx
-from fastapi import APIRouter, File, Path, UploadFile, status
+from fastapi import APIRouter, Path, status
 from fastapi.responses import Response
 from pydantic import BaseModel
 
@@ -405,41 +405,6 @@ async def heartbeat_kiosk_session(
 
 
 @public_router.post(
-    "/kiosk/{token}/transcribe",
-    response_model=DataResponse[dict],
-)
-async def transcribe_kiosk_audio(
-    token: Annotated[str, Path()],
-    audio: UploadFile = File(...),
-) -> DataResponse[dict]:
-    """Receive audio blob from the kiosk, run Whisper STT, return transcript."""
-    db = get_supabase_admin()
-    row = _get_token_row(db, token)
-    _require_kiosk_enabled(db, row["workspace_id"])
-
-    cfg = get_settings()
-    if not cfg.openai_api_key:
-        raise NotFoundError("Speech-to-text not configured")
-
-    audio_bytes = await audio.read()
-    content_type = audio.content_type or "audio/webm"
-    filename = audio.filename or "recording.webm"
-
-    async with httpx.AsyncClient(timeout=30.0) as client:
-        resp = await client.post(
-            "https://api.openai.com/v1/audio/transcriptions",
-            headers={"Authorization": f"Bearer {cfg.openai_api_key}"},
-            files={"file": (filename, audio_bytes, content_type)},
-            data={"model": "whisper-1", "language": "en"},
-        )
-
-    if resp.status_code != 200:
-        raise AppError(f"Transcription failed: {resp.text[:200]}")
-
-    return ok({"transcript": resp.json().get("text", "")})
-
-
-@public_router.post(
     "/kiosk/{token}/chat",
     response_model=DataResponse[KioskChatResponse],
 )
@@ -530,26 +495,27 @@ async def kiosk_speak(
     token: Annotated[str, Path()],
     body: KioskSpeakBody,
 ) -> Response:
-    """Convert text to speech via ElevenLabs and return raw audio bytes."""
+    """Convert text to speech via OpenAI tts-1 and return raw audio bytes."""
     db = get_supabase_admin()
     row = _get_token_row(db, token)
     _require_kiosk_enabled(db, row["workspace_id"])
 
     cfg = get_settings()
-    if not cfg.elevenlabs_api_key:
+    if not cfg.openai_api_key:
         raise NotFoundError("TTS not configured")
 
     async with httpx.AsyncClient(timeout=30.0) as client:
         resp = await client.post(
-            f"https://api.elevenlabs.io/v1/text-to-speech/{cfg.elevenlabs_voice_id}",
+            f"{cfg.openai_base_url}/audio/speech",
             headers={
-                "xi-api-key": cfg.elevenlabs_api_key,
+                "Authorization": f"Bearer {cfg.openai_api_key}",
                 "Content-Type": "application/json",
             },
             json={
-                "text": body.text,
-                "model_id": "eleven_flash_v2_5",
-                "voice_settings": {"stability": 0.5, "similarity_boost": 0.75},
+                "model": "tts-1",
+                "input": body.text,
+                "voice": cfg.openai_tts_voice,
+                "response_format": "mp3",
             },
         )
 
