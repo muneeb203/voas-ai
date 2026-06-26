@@ -530,26 +530,27 @@ async def kiosk_speak(
     token: Annotated[str, Path()],
     body: KioskSpeakBody,
 ) -> Response:
-    """Convert text to speech via ElevenLabs and return raw audio bytes."""
+    """Convert text to speech via OpenAI tts-1 and return raw audio bytes."""
     db = get_supabase_admin()
     row = _get_token_row(db, token)
     _require_kiosk_enabled(db, row["workspace_id"])
 
     cfg = get_settings()
-    if not cfg.elevenlabs_api_key:
+    if not cfg.openai_api_key:
         raise NotFoundError("TTS not configured")
 
     async with httpx.AsyncClient(timeout=30.0) as client:
         resp = await client.post(
-            f"https://api.elevenlabs.io/v1/text-to-speech/{cfg.elevenlabs_voice_id}",
+            f"{cfg.openai_base_url}/audio/speech",
             headers={
-                "xi-api-key": cfg.elevenlabs_api_key,
+                "Authorization": f"Bearer {cfg.openai_api_key}",
                 "Content-Type": "application/json",
             },
             json={
-                "text": body.text,
-                "model_id": "eleven_flash_v2_5",
-                "voice_settings": {"stability": 0.5, "similarity_boost": 0.75},
+                "model": "tts-1",
+                "input": body.text,
+                "voice": cfg.openai_tts_voice,
+                "response_format": "mp3",
             },
         )
 

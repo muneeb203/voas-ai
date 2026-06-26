@@ -60,12 +60,14 @@ class Settings(BaseSettings):
     free_trial_voice_minutes: int = Field(default=10, ge=0)
 
     # --- Kiosk direct voice pipeline. No-op without these keys. ---
-    # ANTHROPIC_API_KEY → Claude Haiku for kiosk AI chat
-    # OPENAI_API_KEY    → Whisper STT (shared with WhatsApp)
-    # ELEVENLABS_*      → optional TTS; kiosk falls back to browser speech synthesis
+    # ANTHROPIC_API_KEY  → Claude Haiku for kiosk AI chat
+    # OPENAI_API_KEY     → TTS via tts-1 (shared key with WhatsApp); falls back to browser TTS
+    # OPENAI_TTS_VOICE   → alloy | echo | fable | onyx | nova | shimmer (default: nova)
+    # ELEVENLABS_*       → kept for reference, no longer used by kiosk
     anthropic_api_key: str | None = None
+    openai_tts_voice: str = "nova"
     elevenlabs_api_key: str | None = None
-    elevenlabs_voice_id: str = "21m00Tcm4TlvDq8ikWAM"  # ElevenLabs "Rachel"
+    elevenlabs_voice_id: str = "21m00Tcm4TlvDq8ikWAM"
 
     # --- Dashboard help bot (Gemini). No-op without GEMINI_API_KEY. ---
     gemini_api_key: str | None = None
