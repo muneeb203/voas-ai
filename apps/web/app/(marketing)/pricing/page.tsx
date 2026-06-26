@@ -34,7 +34,7 @@ const FAQ = [
   },
   {
     q: "How does the free trial work?",
-    a: "Sign up and you get 30 free voice minutes immediately — no card needed. Test your agent on real calls, and when you are ready to go fully live, contact us to pick a plan.",
+    a: "Sign up and you get 10 free voice minutes immediately — no card needed. Test your agent on real calls, and when you are ready to go fully live, contact us to pick a plan.",
   },
 ] as const;
 
