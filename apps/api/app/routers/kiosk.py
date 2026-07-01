@@ -5,7 +5,7 @@ from typing import Annotated, Literal
 
 import httpx
 from fastapi import APIRouter, Path, status
-from fastapi.responses import Response
+from fastapi.responses import Response, StreamingResponse
 from pydantic import BaseModel
 
 from app.config import get_settings
@@ -19,6 +19,7 @@ from app.core.exceptions import (
 from app.core.supabase import get_supabase_admin
 from app.deps import OwnerContextDep, WorkspaceContextDep
 from app.models.voice import DEFAULT_SYSTEM_PROMPT
+from app.services import voice_order_service
 from app.services.voice_service import _menu_context_for_workspace
 from app.utils.responses import DataResponse, ok
 
@@ -126,6 +127,9 @@ class KioskChatResponse(BaseModel):
 
 class KioskSpeakBody(BaseModel):
     text: str
+    # 'pcm' streams raw 24kHz/16-bit/mono audio as OpenAI generates it (low latency,
+    # played on the client's unlocked AudioContext). 'mp3' returns the full clip.
+    format: Literal["mp3", "pcm"] = "mp3"
 
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
@@ -506,13 +510,59 @@ async def kiosk_chat(
     for block in content_blocks:
         if block.get("type") == "tool_use" and block.get("name") == "confirm_order":
             order_input: dict = block.get("input", {})
-            if not order_input.get("order_number"):
-                order_input["order_number"] = f"#{1000 + (abs(hash(token)) % 9000)}"
+
+            # Persist the order so it lands in the dashboard Orders tab, priced
+            # against the workspace menu (same path as voice/WhatsApp). Kiosk is
+            # counter-pickup, so there's no phone / conversation / customer.
+            mapped_items = [
+                {"name": it.get("name"), "quantity": it.get("qty") or 1}
+                for it in (order_input.get("items") or [])
+                if it.get("name")
+            ]
+            placed = voice_order_service.place_order_from_tool_call(
+                workspace_id=workspace_id,
+                location_id=row["location_id"],
+                conversation_id=None,
+                customer_id=None,
+                customer_phone=None,
+                arguments={
+                    "items": mapped_items,
+                    "fulfillment": "pickup",
+                    "special_instructions": "Placed at kiosk",
+                },
+            )
+            if not placed.get("success"):
+                return ok(
+                    KioskChatResponse(
+                        response=placed.get(
+                            "message",
+                            "Sorry, I couldn't save that — could you repeat your order?",
+                        ),
+                        order_confirmed=False,
+                    )
+                )
+
+            order_id = str(placed.get("order_id") or "")
+            order_number = order_input.get("order_number") or (
+                f"#{order_id[:6].upper()}" if order_id else f"#{1000 + (abs(hash(token)) % 9000)}"
+            )
+            order_display = {
+                "items": [
+                    {
+                        "name": i.get("name"),
+                        "qty": i.get("quantity"),
+                        "price": f"${(i.get('unit_price_cents') or 0) / 100:.2f}",
+                    }
+                    for i in (placed.get("items_json") or [])
+                ],
+                "order_number": order_number,
+                "total": f"${(placed.get('total_cents') or 0) / 100:.2f}",
+            }
             return ok(
                 KioskChatResponse(
                     response="Your order has been confirmed! We're preparing it now.",
                     order_confirmed=True,
-                    order=order_input,
+                    order=order_display,
                 )
             )
 
@@ -537,13 +587,40 @@ async def kiosk_speak(
     if not cfg.openai_api_key:
         raise NotFoundError("TTS not configured")
 
+    tts_headers = {
+        "Authorization": f"Bearer {cfg.openai_api_key}",
+        "Content-Type": "application/json",
+    }
+
+    if body.format == "pcm":
+        # Proxy OpenAI's audio through as it's generated so the client can start
+        # playing on the first chunk instead of waiting for the whole clip.
+        async def _pcm_stream():
+            async with (
+                httpx.AsyncClient(timeout=30.0) as client,
+                client.stream(
+                    "POST",
+                    f"{cfg.openai_base_url}/audio/speech",
+                    headers=tts_headers,
+                    json={
+                        "model": "tts-1",
+                        "input": body.text,
+                        "voice": cfg.openai_tts_voice,
+                        "response_format": "pcm",
+                    },
+                ) as resp,
+            ):
+                if resp.status_code != 200:
+                    return  # empty stream → client falls back to mp3 / browser TTS
+                async for chunk in resp.aiter_bytes():
+                    yield chunk
+
+        return StreamingResponse(_pcm_stream(), media_type="application/octet-stream")
+
     async with httpx.AsyncClient(timeout=30.0) as client:
         resp = await client.post(
             f"{cfg.openai_base_url}/audio/speech",
-            headers={
-                "Authorization": f"Bearer {cfg.openai_api_key}",
-                "Content-Type": "application/json",
-            },
+            headers=tts_headers,
             json={
                 "model": "tts-1",
                 "input": body.text,
