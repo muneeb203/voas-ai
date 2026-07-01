@@ -12,7 +12,9 @@
       "Bash(git push *)",
       "Read(//e/convosol/voas-ai/frontend/**)",
       "Bash(pnpm --filter @voas/web add next-intl)",
-      "mcp__visualize__show_widget"
+      "mcp__visualize__show_widget",
+      "Bash(command -v node)",
+      "Bash(command -v pnpm)"
     ]
   }
 }
