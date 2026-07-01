@@ -71,7 +71,7 @@ export function MarketingFooter() {
 
       <div className="border-t border-white/10">
         <div className="container flex flex-col items-start justify-between gap-3 py-6 text-xs text-white/50 sm:flex-row sm:items-center">
-          <p>© {year} Convosol. All rights reserved.</p>
+          <p>© {year} VOAS AI. All rights reserved.</p>
           <p>Built in Islamabad, serving the world.</p>
         </div>
       </div>
