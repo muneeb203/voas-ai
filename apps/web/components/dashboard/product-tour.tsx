@@ -25,29 +25,6 @@ const STEPS = [
     },
   },
   {
-    element: '[data-tour="conversations"]',
-    popover: {
-      title: 'Conversations',
-      description:
-        'Every call and chat — voice, WhatsApp, and kiosk — transcribed, tagged, and searchable by channel.',
-    },
-  },
-  {
-    element: '[data-tour="orders"]',
-    popover: {
-      title: 'Orders',
-      description:
-        'Orders your AI captured across every channel land here, priced against your menu.',
-    },
-  },
-  {
-    element: '[data-tour="customers"]',
-    popover: {
-      title: 'Customers',
-      description: 'Profiles built automatically from who contacts you — history, spend, and more.',
-    },
-  },
-  {
     element: '[data-tour="knowledgeBase"]',
     popover: {
       title: 'Knowledge Base',
@@ -60,6 +37,29 @@ const STEPS = [
     popover: {
       title: 'Integrations',
       description: 'Connect your phone (Voice), WhatsApp, and set up the in-store kiosk here.',
+    },
+  },
+  {
+    element: '[data-tour="orders"]',
+    popover: {
+      title: 'Orders',
+      description:
+        'Orders your AI captured across every channel land here, priced against your menu.',
+    },
+  },
+  {
+    element: '[data-tour="conversations"]',
+    popover: {
+      title: 'Conversations',
+      description:
+        'Every call and chat — voice, WhatsApp, and kiosk — transcribed, tagged, and searchable by channel.',
+    },
+  },
+  {
+    element: '[data-tour="customers"]',
+    popover: {
+      title: 'Customers',
+      description: 'Profiles built automatically from who contacts you — history, spend, and more.',
     },
   },
   {

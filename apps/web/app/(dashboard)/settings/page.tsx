@@ -10,6 +10,7 @@ import { WorkspaceForm } from '@/components/dashboard/workspace-form';
 import { ProfileForm } from '@/components/dashboard/profile-form';
 import { DangerZone } from '@/components/dashboard/danger-zone';
 import { BillingUsagePanel } from '@/components/dashboard/billing-usage-panel';
+import { RestartTourButton } from '@/components/dashboard/restart-tour-button';
 
 export const metadata: Metadata = {
   title: 'Settings',
@@ -67,7 +68,7 @@ export default async function SettingsPage({
           {isOwner && <DangerZone workspaceName={ws.name} />}
         </TabsContent>
 
-        <TabsContent value="profile">
+        <TabsContent value="profile" className="space-y-6">
           <Card>
             <CardHeader>
               <CardTitle>Your profile</CardTitle>
@@ -80,6 +81,18 @@ export default async function SettingsPage({
                 defaultName={session.user.full_name ?? ''}
                 email={session.user.email ?? ''}
               />
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Product tour</CardTitle>
+              <CardDescription>
+                New here, or want a refresher? Replay the guided walkthrough of the dashboard.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <RestartTourButton />
             </CardContent>
           </Card>
         </TabsContent>
