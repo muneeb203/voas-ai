@@ -30,6 +30,7 @@ const CHANNELS: { id: 'all' | ConversationChannel; label: string }[] = [
   { id: 'whatsapp', label: 'WhatsApp' },
   { id: 'chat', label: 'Chat' },
   { id: 'sms', label: 'SMS' },
+  { id: 'kiosk', label: 'Kiosk' },
 ];
 
 const STATUSES: { id: 'all' | ConversationStatus; label: string }[] = [

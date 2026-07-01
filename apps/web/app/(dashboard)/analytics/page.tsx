@@ -56,6 +56,7 @@ const CHANNEL_LABELS: Record<string, string> = {
   whatsapp: 'WhatsApp 💬',
   chat: 'Web chat',
   sms: 'SMS',
+  kiosk: 'Kiosk 🖥️',
 };
 
 const OUTCOME_LABELS: Record<string, string> = {

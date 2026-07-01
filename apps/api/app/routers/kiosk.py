@@ -210,6 +210,51 @@ def _get_kiosk_system_prompt(db, workspace_id: str) -> str:
     return prompt
 
 
+def _create_kiosk_conversation(
+    db, workspace_id: str, location_id: str | None, messages: list[KioskChatMessage]
+) -> str | None:
+    """Record the kiosk order as a 'kiosk'-channel conversation (with transcript)
+    so it shows in the Conversations tab and analytics channel breakdown.
+
+    Best-effort: any failure (e.g. the kiosk-channel migration not applied yet)
+    returns None so the order is still created without a conversation link.
+    """
+    try:
+        now_iso = datetime.now(UTC).isoformat()
+        conv_res = (
+            db.table("conversations")
+            .insert(
+                {
+                    "workspace_id": workspace_id,
+                    "location_id": location_id,
+                    "channel": "kiosk",
+                    "status": "ended",
+                    "started_at": now_iso,
+                    "ended_at": now_iso,
+                }
+            )
+            .execute()
+        )
+        if not conv_res.data:
+            return None
+        conversation_id = conv_res.data[0]["id"]
+
+        rows = [
+            {
+                "conversation_id": conversation_id,
+                "role": "customer" if m.role == "user" else "agent",
+                "content": m.content.strip(),
+            }
+            for m in messages
+            if m.content.strip()
+        ]
+        if rows:
+            db.table("conversation_messages").insert(rows).execute()
+        return conversation_id
+    except Exception:
+        return None
+
+
 # ── Authenticated routes ───────────────────────────────────────────────────────
 
 
@@ -511,18 +556,21 @@ async def kiosk_chat(
         if block.get("type") == "tool_use" and block.get("name") == "confirm_order":
             order_input: dict = block.get("input", {})
 
-            # Persist the order so it lands in the dashboard Orders tab, priced
-            # against the workspace menu (same path as voice/WhatsApp). Kiosk is
-            # counter-pickup, so there's no phone / conversation / customer.
+            # Record a kiosk-channel conversation (for Conversations + analytics),
+            # then persist the order priced against the workspace menu (same path
+            # as voice/WhatsApp). Kiosk is counter-pickup, so there's no customer.
             mapped_items = [
                 {"name": it.get("name"), "quantity": it.get("qty") or 1}
                 for it in (order_input.get("items") or [])
                 if it.get("name")
             ]
+            conversation_id = _create_kiosk_conversation(
+                db, workspace_id, row["location_id"], body.messages
+            )
             placed = voice_order_service.place_order_from_tool_call(
                 workspace_id=workspace_id,
                 location_id=row["location_id"],
-                conversation_id=None,
+                conversation_id=conversation_id,
                 customer_id=None,
                 customer_phone=None,
                 arguments={

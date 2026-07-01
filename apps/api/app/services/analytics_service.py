@@ -8,8 +8,9 @@ per-workspace and time-bounded, so this stays cheap.
 """
 
 from collections import defaultdict
-from datetime import UTC, date, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta, tzinfo
 from typing import Any
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from app.core.logging import get_logger
 from app.core.supabase import get_supabase_admin
@@ -42,6 +43,30 @@ def _day_key(value: str | None) -> str | None:
     return dt.date().isoformat() if dt else None
 
 
+def _workspace_tz(db, workspace_id: str) -> tzinfo:
+    """Timezone to bucket analytics by — the workspace's first location's
+    timezone (SMBs have one). So "busiest hours", daily buckets, and "today"
+    reflect local time, not UTC. Falls back to America/New_York, then UTC."""
+    res = (
+        db.table("locations")
+        .select("timezone")
+        .eq("workspace_id", workspace_id)
+        .order("created_at")
+        .limit(1)
+        .execute()
+    )
+    tz_name = (res.data[0].get("timezone") if res.data else None) or "America/New_York"
+    try:
+        return ZoneInfo(tz_name)
+    except (ZoneInfoNotFoundError, ValueError):
+        return UTC
+
+
+def _local(value: str | None, tz: tzinfo) -> datetime | None:
+    dt = _parse_dt(value)
+    return dt.astimezone(tz) if dt else None
+
+
 def _empty_daily_range(since: datetime, now: datetime) -> list[str]:
     """Inclusive list of YYYY-MM-DD strings from `since` to `now` (UTC dates)."""
     start: date = since.date()
@@ -56,6 +81,7 @@ def _empty_daily_range(since: datetime, now: datetime) -> list[str]:
 
 def get_summary(workspace_id: str, since: datetime) -> AnalyticsSummary:
     db = get_supabase_admin()
+    tz = _workspace_tz(db, workspace_id)
     now = datetime.now(UTC)
     since_iso = since.isoformat()
 
@@ -88,7 +114,7 @@ def get_summary(workspace_id: str, since: datetime) -> AnalyticsSummary:
         if row.get("outcome"):
             by_outcome[row["outcome"]] += 1
 
-        started = _parse_dt(row.get("started_at"))
+        started = _local(row.get("started_at"), tz)
         if started:
             daily_conv_counts[started.date().isoformat()] += 1
             hourly_counts[started.hour] += 1
@@ -125,7 +151,7 @@ def get_summary(workspace_id: str, since: datetime) -> AnalyticsSummary:
         status_val = row.get("status") or "pending"
         orders_by_status[status_val] += 1
 
-        created = _parse_dt(row.get("created_at"))
+        created = _local(row.get("created_at"), tz)
         if created:
             daily_order_counts[created.date().isoformat()] += 1
 
@@ -177,7 +203,7 @@ def get_summary(workspace_id: str, since: datetime) -> AnalyticsSummary:
     returning_customers = total_customers - new_customers
 
     # --- Time series (fill gaps so charts span the full range) -------------
-    day_range = _empty_daily_range(since, now)
+    day_range = _empty_daily_range(since.astimezone(tz), now.astimezone(tz))
     daily_conversations = [DailyCount(date=d, count=daily_conv_counts.get(d, 0)) for d in day_range]
     daily_orders = [DailyCount(date=d, count=daily_order_counts.get(d, 0)) for d in day_range]
     daily_revenue_cents = [DailyRevenue(date=d, cents=daily_revenue.get(d, 0)) for d in day_range]
@@ -211,8 +237,9 @@ def get_today_stats(workspace_id: str) -> TodayStats:
     """Lightweight stats for the current UTC day — used by the dashboard home
     stat cards. Fetches only today's rows."""
     db = get_supabase_admin()
-    start_of_day = datetime.now(UTC).replace(hour=0, minute=0, second=0, microsecond=0)
-    start_iso = start_of_day.isoformat()
+    tz = _workspace_tz(db, workspace_id)
+    start_of_day = datetime.now(tz).replace(hour=0, minute=0, second=0, microsecond=0)
+    start_iso = start_of_day.astimezone(UTC).isoformat()
 
     conv_res = (
         db.table("conversations")

@@ -5,7 +5,7 @@ from pydantic import BaseModel, Field
 
 from app.models.customer import Customer
 
-ConversationChannel = Literal["voice", "whatsapp", "chat", "sms"]
+ConversationChannel = Literal["voice", "whatsapp", "chat", "sms", "kiosk"]
 ConversationStatus = Literal["active", "ended", "abandoned", "escalated"]
 ConversationOutcome = Literal[
     "order_placed", "question_answered", "booking_made", "escalated", "no_resolution"
