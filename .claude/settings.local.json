@@ -11,7 +11,8 @@
       "Bash(git commit *)",
       "Bash(git push *)",
       "Read(//e/convosol/voas-ai/frontend/**)",
-      "Bash(pnpm --filter @voas/web add next-intl)"
+      "Bash(pnpm --filter @voas/web add next-intl)",
+      "mcp__visualize__show_widget"
     ]
   }
 }
