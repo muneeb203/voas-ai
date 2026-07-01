@@ -45,7 +45,7 @@ export function MarketingNav() {
             <Link href="/login">Sign in</Link>
           </Button>
           <Button asChild size="sm">
-            <Link href="/signup">Get started</Link>
+            <Link href="/signup">Start free</Link>
           </Button>
         </div>
 
@@ -83,7 +83,7 @@ export function MarketingNav() {
                 <Link href="/login">Sign in</Link>
               </Button>
               <Button asChild size="sm">
-                <Link href="/signup">Get started</Link>
+                <Link href="/signup">Start free</Link>
               </Button>
             </div>
           </nav>
