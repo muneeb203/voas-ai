@@ -1,13 +1,6 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
-import {
-  Phone,
-  MessageSquare,
-  CreditCard,
-  Calendar,
-  ShoppingBag,
-  AlertCircle,
-} from 'lucide-react';
+import { Phone, MessageSquare, Sparkles, AlertCircle } from 'lucide-react';
 import { requireDashboardSession } from '@/lib/auth/workspace';
 import { getVoiceCapabilities, getVoiceSettings } from '@/lib/api/voice';
 import { getWhatsAppCapabilities, getWhatsAppSettings, getLocationWhatsAppConfig } from '@/lib/api/whatsapp';
@@ -68,30 +61,7 @@ export default async function IntegrationsPage() {
           hasLiveLocation={hasLiveWhatsAppLocation}
           openaiConfigured={waCaps?.openai_configured ?? false}
         />
-        <ComingSoonCard
-          icon={ShoppingBag}
-          title="Toast POS"
-          description="OAuth + menu sync + two-way order push."
-          arrivesIn="V2 Sprint 4"
-        />
-        <ComingSoonCard
-          icon={ShoppingBag}
-          title="Square POS"
-          description="OAuth + menu sync + two-way order push."
-          arrivesIn="V2 Sprint 4"
-        />
-        <ComingSoonCard
-          icon={CreditCard}
-          title="Stripe billing"
-          description="Subscriptions + usage-based overages."
-          arrivesIn="V2 Sprint 5"
-        />
-        <ComingSoonCard
-          icon={Calendar}
-          title="Google Calendar"
-          description="Bookings for dental, salon, auto verticals."
-          arrivesIn="V3"
-        />
+        <MoreIntegrationsCard />
       </div>
     </div>
   );
@@ -207,29 +177,19 @@ function WhatsAppCard({
   );
 }
 
-function ComingSoonCard({
-  icon: Icon,
-  title,
-  description,
-  arrivesIn,
-}: {
-  icon: React.ComponentType<{ className?: string }>;
-  title: string;
-  description: string;
-  arrivesIn: string;
-}) {
+function MoreIntegrationsCard() {
   return (
-    <Card className="opacity-60">
-      <CardContent className="space-y-3 p-5">
-        <div className="flex items-start justify-between">
-          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-muted">
-            <Icon className="h-5 w-5 text-muted-foreground" />
-          </div>
-          <Badge variant="secondary">Coming in {arrivesIn}</Badge>
+    <Card className="border-dashed">
+      <CardContent className="flex h-full flex-col justify-center space-y-3 p-5">
+        <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-accent/10">
+          <Sparkles className="h-5 w-5 text-accent" />
         </div>
         <div>
-          <h3 className="text-base font-semibold">{title}</h3>
-          <p className="mt-1 text-sm text-muted-foreground">{description}</p>
+          <h3 className="text-base font-semibold">More integrations on the way</h3>
+          <p className="mt-1 text-sm text-muted-foreground">
+            POS, payments, and calendar bookings are next — so your orders, payments, and
+            appointments flow end-to-end.
+          </p>
         </div>
       </CardContent>
     </Card>
