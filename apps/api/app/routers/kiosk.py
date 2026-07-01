@@ -1,4 +1,5 @@
 import secrets
+import time
 from datetime import UTC, datetime, timedelta
 from typing import Annotated, Literal
 
@@ -8,7 +9,13 @@ from fastapi.responses import Response
 from pydantic import BaseModel
 
 from app.config import get_settings
-from app.core.exceptions import AppError, ConflictError, ForbiddenError, KioskLimitError, NotFoundError
+from app.core.exceptions import (
+    AppError,
+    ConflictError,
+    ForbiddenError,
+    KioskLimitError,
+    NotFoundError,
+)
 from app.core.supabase import get_supabase_admin
 from app.deps import OwnerContextDep, WorkspaceContextDep
 from app.models.voice import DEFAULT_SYSTEM_PROMPT
@@ -19,6 +26,11 @@ router = APIRouter(tags=["kiosk"])
 public_router = APIRouter(tags=["kiosk"])
 
 SESSION_LOCK_TTL_SECONDS = 60
+SYSTEM_PROMPT_TTL_SECONDS = 120
+
+# workspace_id → (expires_at_monotonic, system_prompt). Per-process cache; each
+# uvicorn worker warms independently. Menu/prompt edits appear after at most the TTL.
+_system_prompt_cache: dict[str, tuple[float, str]] = {}
 
 KIOSK_MODIFIER = """
 KIOSK MODE — in-store self-service kiosk. Rules:
@@ -167,6 +179,31 @@ def _require_kiosk_enabled(db, workspace_id: str) -> KioskSettings:
     if not cfg.kiosk_enabled:
         raise ForbiddenError("Kiosk is not enabled for this workspace")
     return cfg
+
+
+def _build_kiosk_system_prompt(db, workspace_id: str) -> str:
+    voice_res = (
+        db.table("voice_settings")
+        .select("system_prompt")
+        .eq("workspace_id", workspace_id)
+        .limit(1)
+        .execute()
+    )
+    base_prompt = voice_res.data[0]["system_prompt"] if voice_res.data else DEFAULT_SYSTEM_PROMPT
+    menu_md = _menu_context_for_workspace(workspace_id)
+    return f"{base_prompt}\n\n{menu_md}\n\n{KIOSK_MODIFIER}".strip()
+
+
+def _get_kiosk_system_prompt(db, workspace_id: str) -> str:
+    """Cached per workspace for SYSTEM_PROMPT_TTL_SECONDS to avoid rebuilding the
+    voice-settings + menu context (2 DB round trips) on every kiosk turn."""
+    now = time.monotonic()
+    cached = _system_prompt_cache.get(workspace_id)
+    if cached and cached[0] > now:
+        return cached[1]
+    prompt = _build_kiosk_system_prompt(db, workspace_id)
+    _system_prompt_cache[workspace_id] = (now + SYSTEM_PROMPT_TTL_SECONDS, prompt)
+    return prompt
 
 
 # ── Authenticated routes ───────────────────────────────────────────────────────
@@ -435,17 +472,7 @@ async def kiosk_chat(
                 "Contact the restaurant to add more credits."
             )
 
-    voice_res = (
-        db.table("voice_settings")
-        .select("system_prompt")
-        .eq("workspace_id", workspace_id)
-        .limit(1)
-        .execute()
-    )
-    base_prompt = voice_res.data[0]["system_prompt"] if voice_res.data else DEFAULT_SYSTEM_PROMPT
-    menu_md = _menu_context_for_workspace(workspace_id)
-    system_prompt = f"{base_prompt}\n\n{menu_md}\n\n{KIOSK_MODIFIER}".strip()
-
+    system_prompt = _get_kiosk_system_prompt(db, workspace_id)
     messages_payload = [m.model_dump() for m in body.messages]
 
     async with httpx.AsyncClient(timeout=30.0) as client:
@@ -459,7 +486,13 @@ async def kiosk_chat(
             json={
                 "model": "claude-haiku-4-5-20251001",
                 "max_tokens": 80,
-                "system": system_prompt,
+                "system": [
+                    {
+                        "type": "text",
+                        "text": system_prompt,
+                        "cache_control": {"type": "ephemeral"},
+                    }
+                ],
                 "messages": messages_payload,
                 "tools": [CONFIRM_ORDER_TOOL],
             },
