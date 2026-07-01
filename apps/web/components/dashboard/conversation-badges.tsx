@@ -1,13 +1,14 @@
 import { Badge } from '@/components/ui/badge';
-import { Phone, MessageSquare, MessageCircle, Smartphone } from 'lucide-react';
+import { Phone, MessageSquare, MessageCircle, Smartphone, Monitor } from 'lucide-react';
 import type { ConversationChannel, ConversationStatus } from '@/lib/types';
 
-const ICONS = {
+const ICONS: Record<ConversationChannel, typeof Phone> = {
   voice: Phone,
   whatsapp: MessageSquare,
   chat: MessageCircle,
   sms: Smartphone,
-} as const;
+  kiosk: Monitor,
+};
 
 export function ChannelBadge({ channel }: { channel: ConversationChannel }) {
   const Icon = ICONS[channel];
