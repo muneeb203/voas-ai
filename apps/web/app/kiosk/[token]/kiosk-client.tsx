@@ -345,8 +345,7 @@ export function KioskClient({
 
         const aligned = bytes.slice(); // fresh buffer at offset 0 for Int16Array
         const int16 = new Int16Array(aligned.buffer);
-        const f32 = new Float32Array(int16.length);
-        for (let i = 0; i < int16.length; i++) f32[i] = int16[i] / 32768;
+        const f32 = Float32Array.from(int16, (sample) => sample / 32768);
 
         const buffer = ctx.createBuffer(1, f32.length, TTS_SAMPLE_RATE);
         buffer.getChannelData(0).set(f32);
