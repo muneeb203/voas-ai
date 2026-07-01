@@ -131,9 +131,15 @@ export function KioskClient({
   const audioSrcRef = useRef<AudioBufferSourceNode | null>(null);
   const streamSourcesRef = useRef<AudioBufferSourceNode[]>([]);
   const audioAbortRef = useRef<AbortController | null>(null);
+  const debugRef = useRef(false);
   const resetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const heartbeatRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Enable per-turn timing logs by adding ?debug to the kiosk URL.
+  useEffect(() => {
+    debugRef.current = new URLSearchParams(window.location.search).has('debug');
+  }, []);
 
   // ── Recognition cleanup ───────────────────────────────────────────────────────
 
@@ -302,6 +308,7 @@ export function KioskClient({
     const controller = new AbortController();
     audioAbortRef.current = controller;
     streamSourcesRef.current = [];
+    const fetchStart = performance.now();
 
     let res: Response;
     try {
@@ -356,6 +363,10 @@ export function KioskClient({
         src.start(startAt);
         nextStart = startAt + buffer.duration;
         streamSourcesRef.current.push(src);
+        if (!played && debugRef.current) {
+          // eslint-disable-next-line no-console
+          console.log(`[kiosk] tts_first_audio=${Math.round(performance.now() - fetchStart)}ms`);
+        }
         played = true;
       }
     } catch {
@@ -441,7 +452,9 @@ export function KioskClient({
       kioskStateRef.current = 'recording';
       setKioskState('recording');
 
+      const sttStart = performance.now();
       const transcript = await listenWithBrowser();
+      const sttMs = Math.round(performance.now() - sttStart);
 
       if (kioskStateRef.current !== 'recording') return;
       if (!transcript.trim()) continue; // nothing heard → loop back
@@ -454,7 +467,12 @@ export function KioskClient({
       messagesRef.current.push({ role: 'user', content: transcript });
 
       // ── Chat ────────────────────────────────────────────────────────────────
+      const chatStart = performance.now();
       const chatRes = await kioskChat(token, messagesRef.current);
+      if (debugRef.current) {
+        // eslint-disable-next-line no-console
+        console.log(`[kiosk] stt=${sttMs}ms chat=${Math.round(performance.now() - chatStart)}ms`);
+      }
       if (kioskStateRef.current !== 'processing') return;
 
       if ('error' in chatRes) {
