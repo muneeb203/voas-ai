@@ -16,10 +16,12 @@ import {
   Users,
   Settings,
   LifeBuoy,
+  Compass,
   type LucideIcon,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Logo } from '@/components/shared/logo';
+import { START_TOUR_EVENT } from '@/components/dashboard/product-tour';
 
 interface NavItem {
   href: string;
@@ -94,6 +96,7 @@ export function Sidebar({ className, onNavigate }: SidebarProps) {
                     <Link
                       href={item.href}
                       onClick={onNavigate}
+                      data-tour={item.labelKey}
                       className={cn(
                         'flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors',
                         active
@@ -117,8 +120,16 @@ export function Sidebar({ className, onNavigate }: SidebarProps) {
         ))}
       </nav>
 
-      <div className="border-t border-border p-4 text-xs text-muted-foreground">
-        {t('footer')}
+      <div className="space-y-2 border-t border-border p-3">
+        <button
+          type="button"
+          onClick={() => window.dispatchEvent(new Event(START_TOUR_EVENT))}
+          className="flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-secondary/60 hover:text-foreground"
+        >
+          <Compass className="h-4 w-4 shrink-0" />
+          <span>Take a tour</span>
+        </button>
+        <p className="px-3 text-xs text-muted-foreground">{t('footer')}</p>
       </div>
     </aside>
   );
