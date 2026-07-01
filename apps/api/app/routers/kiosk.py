@@ -19,6 +19,7 @@ from app.core.exceptions import (
 from app.core.supabase import get_supabase_admin
 from app.deps import OwnerContextDep, WorkspaceContextDep
 from app.models.voice import DEFAULT_SYSTEM_PROMPT
+from app.services import voice_order_service
 from app.services.voice_service import _menu_context_for_workspace
 from app.utils.responses import DataResponse, ok
 
@@ -509,13 +510,59 @@ async def kiosk_chat(
     for block in content_blocks:
         if block.get("type") == "tool_use" and block.get("name") == "confirm_order":
             order_input: dict = block.get("input", {})
-            if not order_input.get("order_number"):
-                order_input["order_number"] = f"#{1000 + (abs(hash(token)) % 9000)}"
+
+            # Persist the order so it lands in the dashboard Orders tab, priced
+            # against the workspace menu (same path as voice/WhatsApp). Kiosk is
+            # counter-pickup, so there's no phone / conversation / customer.
+            mapped_items = [
+                {"name": it.get("name"), "quantity": it.get("qty") or 1}
+                for it in (order_input.get("items") or [])
+                if it.get("name")
+            ]
+            placed = voice_order_service.place_order_from_tool_call(
+                workspace_id=workspace_id,
+                location_id=row["location_id"],
+                conversation_id=None,
+                customer_id=None,
+                customer_phone=None,
+                arguments={
+                    "items": mapped_items,
+                    "fulfillment": "pickup",
+                    "special_instructions": "Placed at kiosk",
+                },
+            )
+            if not placed.get("success"):
+                return ok(
+                    KioskChatResponse(
+                        response=placed.get(
+                            "message",
+                            "Sorry, I couldn't save that — could you repeat your order?",
+                        ),
+                        order_confirmed=False,
+                    )
+                )
+
+            order_id = str(placed.get("order_id") or "")
+            order_number = order_input.get("order_number") or (
+                f"#{order_id[:6].upper()}" if order_id else f"#{1000 + (abs(hash(token)) % 9000)}"
+            )
+            order_display = {
+                "items": [
+                    {
+                        "name": i.get("name"),
+                        "qty": i.get("quantity"),
+                        "price": f"${(i.get('unit_price_cents') or 0) / 100:.2f}",
+                    }
+                    for i in (placed.get("items_json") or [])
+                ],
+                "order_number": order_number,
+                "total": f"${(placed.get('total_cents') or 0) / 100:.2f}",
+            }
             return ok(
                 KioskChatResponse(
                     response="Your order has been confirmed! We're preparing it now.",
                     order_confirmed=True,
-                    order=order_input,
+                    order=order_display,
                 )
             )
 
