@@ -3,8 +3,10 @@ import { getMessages, getLocale } from 'next-intl/server';
 import { Sidebar } from '@/components/dashboard/sidebar';
 import { Topbar } from '@/components/dashboard/topbar';
 import { HelpBot } from '@/components/dashboard/help-bot';
+import { ProductTour } from '@/components/dashboard/product-tour';
 import { ImpersonationBanner } from '@/components/admin/impersonation-banner';
 import { requireDashboardSession } from '@/lib/auth/workspace';
+import { createSupabaseServerClient } from '@/lib/supabase/server';
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   const [session, messages, locale] = await Promise.all([
@@ -12,6 +14,13 @@ export default async function DashboardLayout({ children }: { children: React.Re
     getMessages(),
     getLocale(),
   ]);
+
+  const { data: onboarding } = await createSupabaseServerClient()
+    .from('user_onboarding')
+    .select('tour_completed_at')
+    .eq('user_id', session.user.id)
+    .maybeSingle();
+  const tourCompleted = Boolean(onboarding?.tour_completed_at);
 
   return (
     <NextIntlClientProvider messages={messages} locale={locale}>
@@ -36,6 +45,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
           </div>
         </div>
       </div>
+      <ProductTour userId={session.user.id} tourCompleted={tourCompleted} />
     </NextIntlClientProvider>
   );
 }
