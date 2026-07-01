@@ -5,7 +5,7 @@ from typing import Annotated, Literal
 
 import httpx
 from fastapi import APIRouter, Path, status
-from fastapi.responses import Response
+from fastapi.responses import Response, StreamingResponse
 from pydantic import BaseModel
 
 from app.config import get_settings
@@ -126,6 +126,9 @@ class KioskChatResponse(BaseModel):
 
 class KioskSpeakBody(BaseModel):
     text: str
+    # 'pcm' streams raw 24kHz/16-bit/mono audio as OpenAI generates it (low latency,
+    # played on the client's unlocked AudioContext). 'mp3' returns the full clip.
+    format: Literal["mp3", "pcm"] = "mp3"
 
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
@@ -537,13 +540,40 @@ async def kiosk_speak(
     if not cfg.openai_api_key:
         raise NotFoundError("TTS not configured")
 
+    tts_headers = {
+        "Authorization": f"Bearer {cfg.openai_api_key}",
+        "Content-Type": "application/json",
+    }
+
+    if body.format == "pcm":
+        # Proxy OpenAI's audio through as it's generated so the client can start
+        # playing on the first chunk instead of waiting for the whole clip.
+        async def _pcm_stream():
+            async with (
+                httpx.AsyncClient(timeout=30.0) as client,
+                client.stream(
+                    "POST",
+                    f"{cfg.openai_base_url}/audio/speech",
+                    headers=tts_headers,
+                    json={
+                        "model": "tts-1",
+                        "input": body.text,
+                        "voice": cfg.openai_tts_voice,
+                        "response_format": "pcm",
+                    },
+                ) as resp,
+            ):
+                if resp.status_code != 200:
+                    return  # empty stream → client falls back to mp3 / browser TTS
+                async for chunk in resp.aiter_bytes():
+                    yield chunk
+
+        return StreamingResponse(_pcm_stream(), media_type="application/octet-stream")
+
     async with httpx.AsyncClient(timeout=30.0) as client:
         resp = await client.post(
             f"{cfg.openai_base_url}/audio/speech",
-            headers={
-                "Authorization": f"Bearer {cfg.openai_api_key}",
-                "Content-Type": "application/json",
-            },
+            headers=tts_headers,
             json={
                 "model": "tts-1",
                 "input": body.text,

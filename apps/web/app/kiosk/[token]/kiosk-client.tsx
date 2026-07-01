@@ -49,6 +49,8 @@ interface OrderItem {
 
 const SOUND_BAR_HEIGHTS = [30, 55, 80, 100, 80, 55, 30, 55, 80, 55];
 const HEARTBEAT_INTERVAL_MS = 25_000;
+const API_BASE = (process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000').replace(/\/+$/, '');
+const TTS_SAMPLE_RATE = 24000; // OpenAI tts-1 pcm: 24kHz, 16-bit signed LE, mono
 
 // ── Theme config ───────────────────────────────────────────────────────────────
 
@@ -127,6 +129,8 @@ export function KioskClient({
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const audioCtxRef = useRef<AudioContext | null>(null);
   const audioSrcRef = useRef<AudioBufferSourceNode | null>(null);
+  const streamSourcesRef = useRef<AudioBufferSourceNode[]>([]);
+  const audioAbortRef = useRef<AbortController | null>(null);
   const resetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const heartbeatRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -140,6 +144,19 @@ export function KioskClient({
     }
   }, []);
 
+  // ── Streaming TTS cleanup ───────────────────────────────────────────────────────
+
+  const stopStreamAudio = useCallback(() => {
+    if (audioAbortRef.current) {
+      try { audioAbortRef.current.abort(); } catch { /* ok */ }
+      audioAbortRef.current = null;
+    }
+    for (const src of streamSourcesRef.current) {
+      try { src.stop(); } catch { /* already ended */ }
+    }
+    streamSourcesRef.current = [];
+  }, []);
+
   // ── Reset to idle ─────────────────────────────────────────────────────────────
 
   const reset = useCallback(() => {
@@ -147,6 +164,7 @@ export function KioskClient({
     if (countdownRef.current) clearInterval(countdownRef.current);
 
     stopRecognition();
+    stopStreamAudio();
 
     if (audioSrcRef.current) {
       try { audioSrcRef.current.stop(); } catch { /* already ended */ }
@@ -167,7 +185,7 @@ export function KioskClient({
     setErrorMsg('');
     setLastTranscript('');
     setAiResponse('');
-  }, [stopRecognition]);
+  }, [stopRecognition, stopStreamAudio]);
 
   // ── Session lock ──────────────────────────────────────────────────────────────
 
@@ -229,9 +247,10 @@ export function KioskClient({
       if (audioRef.current) audioRef.current.pause();
       if ('speechSynthesis' in window) window.speechSynthesis.cancel();
       if (audioCtxRef.current) audioCtxRef.current.close().catch(() => {});
+      stopStreamAudio();
       stopRecognition();
     };
-  }, [stopRecognition]);
+  }, [stopRecognition, stopStreamAudio]);
 
   // ── Audio helpers ─────────────────────────────────────────────────────────────
 
@@ -276,8 +295,95 @@ export function KioskClient({
     });
   }
 
+  // Stream raw PCM from the backend and schedule chunks on the unlocked
+  // AudioContext as they arrive — playback starts on the first chunk instead of
+  // waiting for the full clip. Returns false to signal a fallback is needed.
+  async function streamSpeak(text: string, ctx: AudioContext): Promise<boolean> {
+    const controller = new AbortController();
+    audioAbortRef.current = controller;
+    streamSourcesRef.current = [];
+
+    let res: Response;
+    try {
+      res = await fetch(`${API_BASE}/v1/kiosk/${token}/speak`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text, format: 'pcm' }),
+        signal: controller.signal,
+      });
+    } catch {
+      return false;
+    }
+    if (!res.ok || !res.body) return false;
+
+    const reader = res.body.getReader();
+    let nextStart = ctx.currentTime + 0.06; // small lead so the first chunk isn't clipped
+    let leftover = new Uint8Array(0);
+    let played = false;
+
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        if (!value || value.length === 0) continue;
+
+        let bytes: Uint8Array;
+        if (leftover.length) {
+          bytes = new Uint8Array(leftover.length + value.length);
+          bytes.set(leftover);
+          bytes.set(value, leftover.length);
+          leftover = new Uint8Array(0);
+        } else {
+          bytes = value;
+        }
+        const odd = bytes.length % 2; // 16-bit samples — carry a stray byte to next chunk
+        if (odd) {
+          leftover = bytes.slice(bytes.length - odd);
+          bytes = bytes.subarray(0, bytes.length - odd);
+        }
+        if (bytes.length === 0) continue;
+
+        const aligned = bytes.slice(); // fresh buffer at offset 0 for Int16Array
+        const int16 = new Int16Array(aligned.buffer);
+        const f32 = new Float32Array(int16.length);
+        for (let i = 0; i < int16.length; i++) f32[i] = int16[i] / 32768;
+
+        const buffer = ctx.createBuffer(1, f32.length, TTS_SAMPLE_RATE);
+        buffer.getChannelData(0).set(f32);
+        const src = ctx.createBufferSource();
+        src.buffer = buffer;
+        src.connect(ctx.destination);
+        const startAt = Math.max(nextStart, ctx.currentTime);
+        src.start(startAt);
+        nextStart = startAt + buffer.duration;
+        streamSourcesRef.current.push(src);
+        played = true;
+      }
+    } catch {
+      return played; // aborted/read error — if some played, treat as handled
+    } finally {
+      if (audioAbortRef.current === controller) audioAbortRef.current = null;
+    }
+
+    if (!played) return false;
+
+    const remainingMs = (nextStart - ctx.currentTime) * 1000 + 80;
+    if (remainingMs > 0) await new Promise((r) => setTimeout(r, remainingMs));
+    return true;
+  }
+
   async function speakText(text: string): Promise<void> {
     if (!text.trim()) return;
+
+    // Preferred path: stream on the already-unlocked AudioContext.
+    const ctx = audioCtxRef.current;
+    if (ctx && ctx.state !== 'closed') {
+      try {
+        if (await streamSpeak(text, ctx)) return;
+      } catch { /* fall through to full-clip playback */ }
+    }
+
+    // Fallbacks: full mp3 blob, then the browser's built-in speech synthesis.
     const blob = await kioskSpeak(token, text);
     if (blob) { await playAudioBlob(blob); return; }
     await speakWithBrowser(text);
@@ -416,6 +522,7 @@ export function KioskClient({
   }
 
   function endSession() {
+    stopStreamAudio();
     if (audioSrcRef.current) { try { audioSrcRef.current.stop(); } catch { /* ok */ } }
     if (audioRef.current) audioRef.current.pause();
     if ('speechSynthesis' in window) window.speechSynthesis.cancel();
