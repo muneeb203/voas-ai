@@ -16,6 +16,7 @@ from app.core.exceptions import (
     KioskLimitError,
     NotFoundError,
 )
+from app.core.logging import get_logger
 from app.core.supabase import get_supabase_admin
 from app.deps import OwnerContextDep, WorkspaceContextDep
 from app.models.voice import DEFAULT_SYSTEM_PROMPT
@@ -25,6 +26,8 @@ from app.utils.responses import DataResponse, ok
 
 router = APIRouter(tags=["kiosk"])
 public_router = APIRouter(tags=["kiosk"])
+
+log = get_logger(__name__)
 
 SESSION_LOCK_TTL_SECONDS = 60
 SYSTEM_PROMPT_TTL_SECONDS = 120
@@ -524,6 +527,7 @@ async def kiosk_chat(
     system_prompt = _get_kiosk_system_prompt(db, workspace_id)
     messages_payload = [m.model_dump() for m in body.messages]
 
+    chat_t0 = time.perf_counter()
     async with httpx.AsyncClient(timeout=30.0) as client:
         resp = await client.post(
             "https://api.anthropic.com/v1/messages",
@@ -547,10 +551,22 @@ async def kiosk_chat(
             },
         )
 
+    anthropic_ms = int((time.perf_counter() - chat_t0) * 1000)
+
     if resp.status_code != 200:
         raise AppError(f"AI request failed ({resp.status_code}): {resp.text[:300]}")
 
-    content_blocks = resp.json().get("content", [])
+    body_json = resp.json()
+    usage = body_json.get("usage") or {}
+    log.info(
+        "kiosk_chat_timing",
+        anthropic_ms=anthropic_ms,
+        input_tokens=usage.get("input_tokens"),
+        cache_read=usage.get("cache_read_input_tokens"),
+        cache_write=usage.get("cache_creation_input_tokens"),
+        output_tokens=usage.get("output_tokens"),
+    )
+    content_blocks = body_json.get("content", [])
 
     for block in content_blocks:
         if block.get("type") == "tool_use" and block.get("name") == "confirm_order":
@@ -644,6 +660,8 @@ async def kiosk_speak(
         # Proxy OpenAI's audio through as it's generated so the client can start
         # playing on the first chunk instead of waiting for the whole clip.
         async def _pcm_stream():
+            tts_t0 = time.perf_counter()
+            first = True
             async with (
                 httpx.AsyncClient(timeout=30.0) as client,
                 client.stream(
@@ -661,6 +679,11 @@ async def kiosk_speak(
                 if resp.status_code != 200:
                     return  # empty stream → client falls back to mp3 / browser TTS
                 async for chunk in resp.aiter_bytes():
+                    if first:
+                        first = False
+                        log.info(
+                            "kiosk_tts_ttfb_ms", ms=int((time.perf_counter() - tts_t0) * 1000)
+                        )
                     yield chunk
 
         return StreamingResponse(_pcm_stream(), media_type="application/octet-stream")
