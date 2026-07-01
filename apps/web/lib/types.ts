@@ -142,7 +142,7 @@ export interface SupportTicketWithMessages extends SupportTicket {
 
 // --- V2: conversations / customers / orders / menu ------------------------
 
-export type ConversationChannel = 'voice' | 'whatsapp' | 'chat' | 'sms';
+export type ConversationChannel = 'voice' | 'whatsapp' | 'chat' | 'sms' | 'kiosk';
 export type ConversationStatus = 'active' | 'ended' | 'abandoned' | 'escalated';
 export type ConversationOutcome =
   | 'order_placed'
