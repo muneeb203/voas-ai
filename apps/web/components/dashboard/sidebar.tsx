@@ -48,7 +48,7 @@ const SECTIONS: NavSection[] = [
     items: [
       { href: '/knowledge-base', labelKey: 'knowledgeBase', icon: BookOpen },
       { href: '/integrations', labelKey: 'integrations', icon: Plug },
-      { href: '/analytics', labelKey: 'analytics', icon: BarChart3, comingSoon: true },
+      { href: '/analytics', labelKey: 'analytics', icon: BarChart3 },
     ],
   },
   {
