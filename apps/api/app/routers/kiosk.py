@@ -31,10 +31,16 @@ log = get_logger(__name__)
 
 SESSION_LOCK_TTL_SECONDS = 60
 SYSTEM_PROMPT_TTL_SECONDS = 120
+KIOSK_CTX_TTL_SECONDS = 60
 
 # workspace_id → (expires_at_monotonic, system_prompt). Per-process cache; each
 # uvicorn worker warms independently. Menu/prompt edits appear after at most the TTL.
 _system_prompt_cache: dict[str, tuple[float, str]] = {}
+
+# token → (expires_at_monotonic, {workspace_id, location_id}). Skips the token +
+# kiosk-enabled validation queries on the hot chat/speak path (revocation and
+# kiosk-disable take effect within the TTL).
+_kiosk_ctx_cache: dict[str, tuple[float, dict]] = {}
 
 KIOSK_MODIFIER = """
 KIOSK MODE — in-store self-service kiosk. Rules:
@@ -212,6 +218,22 @@ def _get_kiosk_system_prompt(db, workspace_id: str) -> str:
     prompt = _build_kiosk_system_prompt(db, workspace_id)
     _system_prompt_cache[workspace_id] = (now + SYSTEM_PROMPT_TTL_SECONDS, prompt)
     return prompt
+
+
+def _get_kiosk_chat_context(db, token: str) -> dict:
+    """Cached token → {workspace_id, location_id} (incl. the kiosk-enabled check)
+    for the hot /chat and /speak paths, so their two validation queries don't run
+    on every turn."""
+    now = time.monotonic()
+    cached = _kiosk_ctx_cache.get(token)
+    if cached and cached[0] > now:
+        return cached[1]
+    row = _get_token_row(db, token)
+    workspace_id = row["workspace_id"]
+    _require_kiosk_enabled(db, workspace_id)
+    ctx = {"workspace_id": workspace_id, "location_id": row["location_id"]}
+    _kiosk_ctx_cache[token] = (now + KIOSK_CTX_TTL_SECONDS, ctx)
+    return ctx
 
 
 def _create_kiosk_conversation(
@@ -504,9 +526,8 @@ async def kiosk_chat(
 ) -> DataResponse[KioskChatResponse]:
     """Send conversation messages to Claude Haiku, get back a response (or order confirmation)."""
     db = get_supabase_admin()
-    row = _get_token_row(db, token)
-    workspace_id = row["workspace_id"]
-    _require_kiosk_enabled(db, workspace_id)
+    ctx = _get_kiosk_chat_context(db, token)
+    workspace_id = ctx["workspace_id"]
 
     cfg = get_settings()
     if not cfg.anthropic_api_key:
@@ -589,11 +610,11 @@ async def kiosk_chat(
                 if it.get("name")
             ]
             conversation_id = _create_kiosk_conversation(
-                db, workspace_id, row["location_id"], body.messages
+                db, workspace_id, ctx["location_id"], body.messages
             )
             placed = voice_order_service.place_order_from_tool_call(
                 workspace_id=workspace_id,
-                location_id=row["location_id"],
+                location_id=ctx["location_id"],
                 conversation_id=conversation_id,
                 customer_id=None,
                 customer_phone=None,
@@ -654,8 +675,7 @@ async def kiosk_speak(
 ) -> Response:
     """Convert text to speech via OpenAI tts-1 and return raw audio bytes."""
     db = get_supabase_admin()
-    row = _get_token_row(db, token)
-    _require_kiosk_enabled(db, row["workspace_id"])
+    _get_kiosk_chat_context(db, token)
 
     cfg = get_settings()
     if not cfg.openai_api_key:
