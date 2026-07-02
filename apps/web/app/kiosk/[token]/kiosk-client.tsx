@@ -120,6 +120,14 @@ export function KioskClient({
   const [errorMsg, setErrorMsg] = useState('');
   const [lastTranscript, setLastTranscript] = useState('');
   const [aiResponse, setAiResponse] = useState('');
+  const [dbg, setDbg] = useState<{
+    stt: number;
+    chat: number;
+    anthropicMs: number | null;
+    cacheRead: number | null;
+    cacheWrite: number | null;
+    tts: number | null;
+  } | null>(null);
 
   // Refs — stable across renders, safe to read/write inside async loops
   const kioskStateRef = useRef<KioskState>('idle');
@@ -132,6 +140,7 @@ export function KioskClient({
   const streamSourcesRef = useRef<AudioBufferSourceNode[]>([]);
   const audioAbortRef = useRef<AbortController | null>(null);
   const debugRef = useRef(false);
+  const ttsFirstAudioRef = useRef<number | null>(null);
   const resetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const heartbeatRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -363,9 +372,12 @@ export function KioskClient({
         src.start(startAt);
         nextStart = startAt + buffer.duration;
         streamSourcesRef.current.push(src);
-        if (!played && debugRef.current) {
-          // eslint-disable-next-line no-console
-          console.log(`[kiosk] tts_first_audio=${Math.round(performance.now() - fetchStart)}ms`);
+        if (!played) {
+          ttsFirstAudioRef.current = Math.round(performance.now() - fetchStart);
+          if (debugRef.current) {
+            // eslint-disable-next-line no-console
+            console.log(`[kiosk] tts_first_audio=${ttsFirstAudioRef.current}ms`);
+          }
         }
         played = true;
       }
@@ -469,9 +481,10 @@ export function KioskClient({
       // ── Chat ────────────────────────────────────────────────────────────────
       const chatStart = performance.now();
       const chatRes = await kioskChat(token, messagesRef.current);
+      const chatMs = Math.round(performance.now() - chatStart);
       if (debugRef.current) {
         // eslint-disable-next-line no-console
-        console.log(`[kiosk] stt=${sttMs}ms chat=${Math.round(performance.now() - chatStart)}ms`);
+        console.log(`[kiosk] stt=${sttMs}ms chat=${chatMs}ms`);
       }
       if (kioskStateRef.current !== 'processing') return;
 
@@ -485,9 +498,23 @@ export function KioskClient({
         return;
       }
 
-      const { response, order_confirmed, order } = chatRes.data;
+      const { response, order_confirmed, order, debug } = chatRes.data;
       messagesRef.current.push({ role: 'assistant', content: response });
       setAiResponse(response);
+
+      ttsFirstAudioRef.current = null;
+      const recordTiming = () => {
+        if (!debugRef.current) return;
+        setDbg({
+          stt: sttMs,
+          chat: chatMs,
+          anthropicMs: debug?.anthropic_ms ?? null,
+          cacheRead: debug?.cache_read ?? null,
+          cacheWrite: debug?.cache_write ?? null,
+          tts: ttsFirstAudioRef.current,
+        });
+      };
+      recordTiming();
 
       if (order_confirmed) {
         setOrderItems(order?.items ?? []);
@@ -497,6 +524,7 @@ export function KioskClient({
         kioskStateRef.current = 'confirmed';
         setKioskState('confirmed');
         await speakText(response);
+        recordTiming();
         startCountdown();
         return; // loop ends — countdown handles reset
       }
@@ -505,6 +533,7 @@ export function KioskClient({
       kioskStateRef.current = 'speaking';
       setKioskState('speaking');
       await speakText(response);
+      recordTiming();
 
       if (kioskStateRef.current !== 'speaking') return; // cancelled during playback
       // Loop → next recording turn
@@ -558,6 +587,22 @@ export function KioskClient({
       className={`relative flex min-h-screen flex-col overflow-hidden ${cfg.wrapperClass}`}
       style={cfg.wrapperStyle}
     >
+      {/* Temporary latency overlay — only when ?debug is in the URL */}
+      {dbg && (
+        <div className="pointer-events-none fixed left-2 top-2 z-50 rounded-lg bg-black/80 px-3 py-2 font-mono text-[11px] leading-relaxed text-white/90 shadow-lg">
+          <div className="mb-1 font-semibold text-emerald-300">⏱ latency (last turn)</div>
+          <div>stt: {dbg.stt}ms</div>
+          <div>
+            chat: {dbg.chat}ms
+            {dbg.anthropicMs != null && (
+              <> · api {dbg.anthropicMs}ms · net {Math.max(0, dbg.chat - dbg.anthropicMs)}ms</>
+            )}
+          </div>
+          <div>cache: read {dbg.cacheRead ?? 0} / write {dbg.cacheWrite ?? 0}</div>
+          <div>tts first audio: {dbg.tts != null ? `${dbg.tts}ms` : '…'}</div>
+        </div>
+      )}
+
       {/* Ambient glows — dark themes only */}
       {!isLight && (
         <div className="pointer-events-none absolute inset-0">

@@ -126,6 +126,7 @@ class KioskChatResponse(BaseModel):
     response: str
     order_confirmed: bool
     order: dict | None = None
+    debug: dict | None = None  # timing/token info for the ?debug overlay
 
 
 class KioskSpeakBody(BaseModel):
@@ -567,6 +568,13 @@ async def kiosk_chat(
         output_tokens=usage.get("output_tokens"),
     )
     content_blocks = body_json.get("content", [])
+    debug_info = {
+        "anthropic_ms": anthropic_ms,
+        "cache_read": usage.get("cache_read_input_tokens"),
+        "cache_write": usage.get("cache_creation_input_tokens"),
+        "input_tokens": usage.get("input_tokens"),
+        "output_tokens": usage.get("output_tokens"),
+    }
 
     for block in content_blocks:
         if block.get("type") == "tool_use" and block.get("name") == "confirm_order":
@@ -603,6 +611,7 @@ async def kiosk_chat(
                             "Sorry, I couldn't save that — could you repeat your order?",
                         ),
                         order_confirmed=False,
+                        debug=debug_info,
                     )
                 )
 
@@ -627,6 +636,7 @@ async def kiosk_chat(
                     response="Your order has been confirmed! We're preparing it now.",
                     order_confirmed=True,
                     order=order_display,
+                    debug=debug_info,
                 )
             )
 
@@ -634,7 +644,7 @@ async def kiosk_chat(
         (b["text"] for b in content_blocks if b.get("type") == "text"),
         "Sorry, could you repeat that?",
     )
-    return ok(KioskChatResponse(response=text, order_confirmed=False))
+    return ok(KioskChatResponse(response=text, order_confirmed=False, debug=debug_info))
 
 
 @public_router.post("/kiosk/{token}/speak")

@@ -48,6 +48,13 @@ export interface KioskChatResponse {
     order_number?: string;
     total?: string;
   };
+  debug?: {
+    anthropic_ms?: number | null;
+    cache_read?: number | null;
+    cache_write?: number | null;
+    input_tokens?: number | null;
+    output_tokens?: number | null;
+  };
 }
 
 export function kioskChat(
