@@ -5,6 +5,8 @@ from app.models.menu import (
     MenuCategory,
     MenuCategoryCreate,
     MenuCategoryUpdate,
+    MenuImportRequest,
+    MenuImportResult,
     MenuItem,
     MenuItemCreate,
     MenuItemUpdate,
@@ -19,6 +21,19 @@ from app.services import menu_service
 from app.utils.responses import DataResponse, ok
 
 router = APIRouter(tags=["menu"])
+
+
+# --- AI import --------------------------------------------------------------
+
+
+@router.post(
+    "/workspaces/{workspace_id}/menu/import",
+    response_model=DataResponse[MenuImportResult],
+)
+async def import_menu(
+    payload: MenuImportRequest, ctx: OwnerContextDep
+) -> DataResponse[MenuImportResult]:
+    return ok(menu_service.import_from_text(ctx.workspace_id, payload.text, ctx.user.id))
 
 
 # --- Categories -------------------------------------------------------------

@@ -15,6 +15,18 @@ export function listCategories(workspaceId: string) {
   });
 }
 
+export function importMenu(workspaceId: string, text: string) {
+  return apiCall<{
+    categories_created: number;
+    items_created: number;
+    modifier_groups_created: number;
+    modifier_options_created: number;
+  }>(`/v1/workspaces/${workspaceId}/menu/import`, {
+    method: 'POST',
+    body: { text },
+  });
+}
+
 export function createCategory(
   workspaceId: string,
   payload: { name: string; description?: string; sort_order?: number },
