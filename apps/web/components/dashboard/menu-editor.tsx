@@ -249,8 +249,8 @@ function ImportDialog({
     setPending(true);
     const res = await importMenuAction(text);
     setPending(false);
-    if (res.error) {
-      toast.error(res.error);
+    if (res.error || !res.data) {
+      if (res.error) toast.error(res.error);
       return;
     }
     const c = res.data;
