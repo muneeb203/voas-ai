@@ -383,10 +383,13 @@ export function KioskClient({
         nextStart = startAt + buffer.duration;
         streamSourcesRef.current.push(src);
         if (!played) {
-          ttsFirstAudioRef.current = Math.round(performance.now() - fetchStart);
+          const ms = Math.round(performance.now() - fetchStart);
+          ttsFirstAudioRef.current = ms;
           if (debugRef.current) {
             // eslint-disable-next-line no-console
-            console.log(`[kiosk] tts_first_audio=${ttsFirstAudioRef.current}ms`);
+            console.log(`[kiosk] tts_first_audio=${ms}ms`);
+            // Reflect it in the overlay immediately, not after the clip ends.
+            setDbg((prev) => (prev ? { ...prev, tts: ms } : prev));
           }
         }
         played = true;

@@ -579,6 +579,14 @@ async def kiosk_chat(
         "output_tokens": usage.get("output_tokens"),
     }
 
+    tool_calls = [b.get("name") for b in content_blocks if b.get("type") == "tool_use"]
+    log.info(
+        "kiosk_chat_result",
+        stop_reason=body_json.get("stop_reason"),
+        tool_calls=tool_calls,
+        has_text=any(b.get("type") == "text" for b in content_blocks),
+    )
+
     for block in content_blocks:
         if block.get("type") == "tool_use" and block.get("name") == "place_order":
             order_input: dict = block.get("input", {})
@@ -605,6 +613,14 @@ async def kiosk_chat(
                     "fulfillment": "pickup",
                     "special_instructions": "Placed at kiosk",
                 },
+            )
+            log.info(
+                "kiosk_place_order",
+                items_in=len(order_input.get("items") or []),
+                items_mapped=len(mapped_items),
+                success=placed.get("success"),
+                order_id=placed.get("order_id"),
+                message=placed.get("message"),
             )
             if not placed.get("success"):
                 return ok(
