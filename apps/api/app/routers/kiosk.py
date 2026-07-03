@@ -18,7 +18,6 @@ from app.core.exceptions import (
 from app.core.logging import get_logger
 from app.core.supabase import get_supabase_admin
 from app.deps import OwnerContextDep, WorkspaceContextDep
-from app.models.voice import DEFAULT_SYSTEM_PROMPT
 from app.services import voice_order_service
 from app.services.voice_service import _menu_context_for_workspace
 from app.utils.responses import DataResponse, ok
@@ -52,12 +51,21 @@ def _get_http() -> httpx.AsyncClient:
         _shared_http = httpx.AsyncClient(timeout=30.0)
     return _shared_http
 
-KIOSK_MODIFIER = """
-KIOSK MODE — in-store self-service kiosk. Rules:
-- Reply in 1 sentence only. Maximum 15 words. Never exceed this.
-- No phone number, name, or delivery address — always in-person counter pickup.
-- No filler words ("Sure!", "Of course!", "Great choice!") — go straight to the point.
-- When order is complete and confirmed, immediately call the place_order tool.
+KIOSK_SYSTEM_PROMPT = """You are the ordering assistant on an in-store self-service kiosk for a restaurant. Customers walk up and speak their order; you take it and place it.
+
+How you work:
+- Offer ONLY items from the MENU below. If asked for something not on it, say it isn't available and suggest the closest match.
+- Keep every reply to ONE short sentence, 15 words maximum. No filler ("Sure!", "Great choice!", "Of course!").
+- This is in-person counter pickup. NEVER ask for a name, phone number, or delivery address — you do not need them.
+
+Placing the order (critical):
+- The order is placed ONLY when you call the place_order tool. There is no other way.
+- As soon as the customer indicates they are done or confirms — e.g. "that's it", "that's all", "yes", "confirm", "place it" — your response for that turn MUST be a place_order tool call, not text.
+- Saying "your order is placed" (or similar) in text WITHOUT calling the tool in the same turn is a failure. Never do it.
+- Pass every ordered item with its quantity to the tool.
+- After the tool call, the kiosk automatically shows the confirmation screen — you don't announce it.
+
+MENU:
 """
 
 PLACE_ORDER_TOOL: dict = {
@@ -199,16 +207,12 @@ def _is_lock_held(row: dict, session_id: str) -> bool:
 
 
 def _build_kiosk_system_prompt(db, workspace_id: str) -> str:
-    voice_res = (
-        db.table("voice_settings")
-        .select("system_prompt")
-        .eq("workspace_id", workspace_id)
-        .limit(1)
-        .execute()
-    )
-    base_prompt = voice_res.data[0]["system_prompt"] if voice_res.data else DEFAULT_SYSTEM_PROMPT
+    # Self-contained kiosk prompt. We deliberately do NOT reuse the voice
+    # system prompt: it requires collecting name/phone and confirming
+    # delivery, which a walk-up kiosk never has — that contradiction made the
+    # model acknowledge orders verbally instead of calling place_order.
     menu_md = _menu_context_for_workspace(workspace_id)
-    return f"{base_prompt}\n\n{menu_md}\n\n{KIOSK_MODIFIER}".strip()
+    return f"{KIOSK_SYSTEM_PROMPT}{menu_md}".strip()
 
 
 def _get_kiosk_system_prompt(db, workspace_id: str) -> str:
@@ -542,7 +546,7 @@ async def kiosk_chat(
         },
         json={
             "model": "claude-haiku-4-5-20251001",
-            "max_tokens": 80,
+            "max_tokens": 400,
             "system": [
                 {
                     "type": "text",
