@@ -57,11 +57,11 @@ KIOSK MODE — in-store self-service kiosk. Rules:
 - Reply in 1 sentence only. Maximum 15 words. Never exceed this.
 - No phone number, name, or delivery address — always in-person counter pickup.
 - No filler words ("Sure!", "Of course!", "Great choice!") — go straight to the point.
-- When order is complete and confirmed, immediately call the confirm_order tool.
+- When order is complete and confirmed, immediately call the place_order tool.
 """
 
-CONFIRM_ORDER_TOOL: dict = {
-    "name": "confirm_order",
+PLACE_ORDER_TOOL: dict = {
+    "name": "place_order",
     "description": "Call this when the customer has confirmed their complete order and is ready to proceed.",
     "input_schema": {
         "type": "object",
@@ -551,7 +551,7 @@ async def kiosk_chat(
                 }
             ],
             "messages": messages_payload,
-            "tools": [CONFIRM_ORDER_TOOL],
+            "tools": [PLACE_ORDER_TOOL],
         },
     )
 
@@ -580,14 +580,14 @@ async def kiosk_chat(
     }
 
     for block in content_blocks:
-        if block.get("type") == "tool_use" and block.get("name") == "confirm_order":
+        if block.get("type") == "tool_use" and block.get("name") == "place_order":
             order_input: dict = block.get("input", {})
 
             # Record a kiosk-channel conversation (for Conversations + analytics),
             # then persist the order priced against the workspace menu (same path
             # as voice/WhatsApp). Kiosk is counter-pickup, so there's no customer.
             mapped_items = [
-                {"name": it.get("name"), "quantity": it.get("qty") or 1}
+                {"name": it.get("name"), "quantity": it.get("qty") or it.get("quantity") or 1}
                 for it in (order_input.get("items") or [])
                 if it.get("name")
             ]
