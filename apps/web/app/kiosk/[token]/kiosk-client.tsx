@@ -58,7 +58,7 @@ interface OrderItem {
 
 const SOUND_BAR_HEIGHTS = [30, 55, 80, 100, 80, 55, 30, 55, 80, 55];
 const HEARTBEAT_INTERVAL_MS = 25_000;
-const STT_SILENCE_MS = 1200; // finalize the transcript after this much silence
+const STT_SILENCE_MS = 900; // finalize the transcript after this much silence
 const API_BASE = (process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000').replace(/\/+$/, '');
 const TTS_SAMPLE_RATE = 24000; // OpenAI tts-1 pcm: 24kHz, 16-bit signed LE, mono
 

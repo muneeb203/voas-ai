@@ -36,10 +36,21 @@ KIOSK_CTX_TTL_SECONDS = 60
 # uvicorn worker warms independently. Menu/prompt edits appear after at most the TTL.
 _system_prompt_cache: dict[str, tuple[float, str]] = {}
 
-# token → (expires_at_monotonic, {workspace_id, location_id}). Skips the token +
-# kiosk-enabled validation queries on the hot chat/speak path (revocation and
-# kiosk-disable take effect within the TTL).
+# token → (expires_at_monotonic, {workspace_id, location_id}). Skips the token
+# validation query on the hot chat/speak path (revocation takes effect within
+# the TTL).
 _kiosk_ctx_cache: dict[str, tuple[float, dict]] = {}
+
+# Shared async HTTP client so calls to Anthropic / OpenAI reuse pooled keep-alive
+# connections instead of paying a fresh DNS+TCP+TLS handshake every turn.
+_shared_http: httpx.AsyncClient | None = None
+
+
+def _get_http() -> httpx.AsyncClient:
+    global _shared_http
+    if _shared_http is None:
+        _shared_http = httpx.AsyncClient(timeout=30.0)
+    return _shared_http
 
 KIOSK_MODIFIER = """
 KIOSK MODE — in-store self-service kiosk. Rules:
@@ -522,28 +533,27 @@ async def kiosk_chat(
     messages_payload = [m.model_dump() for m in body.messages]
 
     chat_t0 = time.perf_counter()
-    async with httpx.AsyncClient(timeout=30.0) as client:
-        resp = await client.post(
-            "https://api.anthropic.com/v1/messages",
-            headers={
-                "x-api-key": cfg.anthropic_api_key,
-                "anthropic-version": "2023-06-01",
-                "content-type": "application/json",
-            },
-            json={
-                "model": "claude-haiku-4-5-20251001",
-                "max_tokens": 80,
-                "system": [
-                    {
-                        "type": "text",
-                        "text": system_prompt,
-                        "cache_control": {"type": "ephemeral"},
-                    }
-                ],
-                "messages": messages_payload,
-                "tools": [CONFIRM_ORDER_TOOL],
-            },
-        )
+    resp = await _get_http().post(
+        "https://api.anthropic.com/v1/messages",
+        headers={
+            "x-api-key": cfg.anthropic_api_key,
+            "anthropic-version": "2023-06-01",
+            "content-type": "application/json",
+        },
+        json={
+            "model": "claude-haiku-4-5-20251001",
+            "max_tokens": 80,
+            "system": [
+                {
+                    "type": "text",
+                    "text": system_prompt,
+                    "cache_control": {"type": "ephemeral"},
+                }
+            ],
+            "messages": messages_payload,
+            "tools": [CONFIRM_ORDER_TOOL],
+        },
+    )
 
     anthropic_ms = int((time.perf_counter() - chat_t0) * 1000)
 
@@ -667,20 +677,17 @@ async def kiosk_speak(
         async def _pcm_stream():
             tts_t0 = time.perf_counter()
             first = True
-            async with (
-                httpx.AsyncClient(timeout=30.0) as client,
-                client.stream(
-                    "POST",
-                    f"{cfg.openai_base_url}/audio/speech",
-                    headers=tts_headers,
-                    json={
-                        "model": "tts-1",
-                        "input": body.text,
-                        "voice": cfg.openai_tts_voice,
-                        "response_format": "pcm",
-                    },
-                ) as resp,
-            ):
+            async with _get_http().stream(
+                "POST",
+                f"{cfg.openai_base_url}/audio/speech",
+                headers=tts_headers,
+                json={
+                    "model": "tts-1",
+                    "input": body.text,
+                    "voice": cfg.openai_tts_voice,
+                    "response_format": "pcm",
+                },
+            ) as resp:
                 if resp.status_code != 200:
                     return  # empty stream → client falls back to mp3 / browser TTS
                 async for chunk in resp.aiter_bytes():
@@ -693,17 +700,16 @@ async def kiosk_speak(
 
         return StreamingResponse(_pcm_stream(), media_type="application/octet-stream")
 
-    async with httpx.AsyncClient(timeout=30.0) as client:
-        resp = await client.post(
-            f"{cfg.openai_base_url}/audio/speech",
-            headers=tts_headers,
-            json={
-                "model": "tts-1",
-                "input": body.text,
-                "voice": cfg.openai_tts_voice,
-                "response_format": "mp3",
-            },
-        )
+    resp = await _get_http().post(
+        f"{cfg.openai_base_url}/audio/speech",
+        headers=tts_headers,
+        json={
+            "model": "tts-1",
+            "input": body.text,
+            "voice": cfg.openai_tts_voice,
+            "response_format": "mp3",
+        },
+    )
 
     if resp.status_code != 200:
         raise AppError(f"TTS failed ({resp.status_code})")
