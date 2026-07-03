@@ -228,7 +228,7 @@ export function MenuEditor({ categories, itemsByCategory, isOwner }: MenuEditorP
         />
       )}
 
-      <ImportComingSoonDialog open={showImportDialog} onOpenChange={setShowImportDialog} />
+      <ImportDialog open={showImportDialog} onOpenChange={setShowImportDialog} />
     </>
   );
 }
