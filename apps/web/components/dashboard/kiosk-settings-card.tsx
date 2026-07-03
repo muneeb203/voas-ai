@@ -70,13 +70,8 @@ export function KioskSettingsCard({ initialSettings }: KioskSettingsCardProps) {
 
   const isDirty = theme !== initialSettings.theme;
 
-  const used = initialSettings.kiosk_credits_used_this_month;
-  const limit = initialSettings.kiosk_monthly_limit;
   const balance = initialSettings.kiosk_credits_balance;
-  const isUnlimited = limit === 0;
-  const isAtLimit = !isUnlimited && balance <= 0;
-  const isNearLimit = !isUnlimited && limit > 0 && used >= limit * 0.8 && !isAtLimit;
-  const usagePct = !isUnlimited && limit > 0 ? Math.min(100, Math.round((used / limit) * 100)) : 0;
+  const outOfCredits = balance <= 0;
 
   async function handleSave() {
     setSaving(true);
@@ -95,46 +90,29 @@ export function KioskSettingsCard({ initialSettings }: KioskSettingsCardProps) {
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
-        {/* Monthly usage */}
-        {!isUnlimited && limit > 0 && (
-          <div className="rounded-lg border p-4 space-y-3">
-            <div className="flex items-center justify-between">
-              <p className="text-sm font-medium">Kiosk interactions this month</p>
-              <span className="text-sm tabular-nums text-muted-foreground">
-                {used.toLocaleString()} / {limit.toLocaleString()}
-              </span>
-            </div>
-            <div className="h-2 rounded-full bg-muted overflow-hidden">
-              <div
-                className={`h-full rounded-full transition-all ${
-                  isAtLimit
-                    ? 'bg-destructive'
-                    : isNearLimit
-                    ? 'bg-amber-500'
-                    : 'bg-emerald-500'
-                }`}
-                style={{ width: `${usagePct}%` }}
-              />
-            </div>
-            {isAtLimit && (
-              <p className="text-xs font-medium text-destructive">
-                Monthly interaction limit reached. Kiosk is temporarily unavailable until your
-                credits are replenished. Contact support to add more.
-              </p>
-            )}
-            {isNearLimit && (
-              <p className="text-xs text-amber-600">
-                You&apos;ve used {usagePct}% of your monthly kiosk interactions. Contact support to
-                add more credits before your limit is reached.
-              </p>
-            )}
-            {!isAtLimit && !isNearLimit && (
-              <p className="text-xs text-muted-foreground">
-                Credits roll over — unused interactions accumulate indefinitely.
-              </p>
-            )}
+        {/* Kiosk credits */}
+        <div className="rounded-lg border p-4">
+          <div className="flex items-center justify-between">
+            <p className="text-sm font-medium">Kiosk credits</p>
+            <span
+              className={`text-sm font-semibold tabular-nums ${
+                outOfCredits ? 'text-destructive' : ''
+              }`}
+            >
+              {balance.toLocaleString()} remaining
+            </span>
           </div>
-        )}
+          {outOfCredits ? (
+            <p className="mt-2 text-xs font-medium text-destructive">
+              Out of credits — the kiosk is inactive until more are added. Contact support to add
+              credits.
+            </p>
+          ) : (
+            <p className="mt-2 text-xs text-muted-foreground">
+              Each completed order uses 1 credit. Contact support to add more when you run low.
+            </p>
+          )}
+        </div>
 
         {/* Theme picker */}
         <div>
