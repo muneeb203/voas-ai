@@ -852,6 +852,14 @@ export function KioskClient({
                 </ul>
               )}
               <p className={`mt-6 text-sm ${cfg.textSecondary}`}>Your order is being prepared</p>
+              <button
+                type="button"
+                onClick={reset}
+                className="mt-6 w-full rounded-2xl px-6 py-4 text-base font-bold text-white transition active:scale-[0.98]"
+                style={{ backgroundColor: cfg.accentColor }}
+              >
+                Go Back Now
+              </button>
               <p className={`mt-3 text-xs ${cfg.textSecondary} opacity-60`}>
                 Returning to home in {countdown}s
               </p>
