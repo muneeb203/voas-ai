@@ -112,3 +112,14 @@ class MenuCategoryUpdate(BaseModel):
     description: str | None = Field(default=None, max_length=500)
     sort_order: int | None = None
     is_active: bool | None = None
+
+
+class MenuImportRequest(BaseModel):
+    text: str = Field(..., min_length=1, max_length=20000)
+
+
+class MenuImportResult(BaseModel):
+    categories_created: int
+    items_created: int
+    modifier_groups_created: int
+    modifier_options_created: int

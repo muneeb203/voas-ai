@@ -29,6 +29,7 @@ import {
   deleteItemAction,
   deleteModifierGroupAction,
   deleteModifierOptionAction,
+  importMenuAction,
   updateItemAction,
 } from '@/app/actions/menu-action';
 import type { MenuCategory, MenuItem } from '@/lib/types';
@@ -79,7 +80,7 @@ export function MenuEditor({ categories, itemsByCategory, isOwner }: MenuEditorP
         {showNewCategory && (
           <CategoryDialog open={showNewCategory} onOpenChange={setShowNewCategory} />
         )}
-        <ImportComingSoonDialog open={showImportDialog} onOpenChange={setShowImportDialog} />
+        <ImportDialog open={showImportDialog} onOpenChange={setShowImportDialog} />
       </>
     );
   }
@@ -232,41 +233,61 @@ export function MenuEditor({ categories, itemsByCategory, isOwner }: MenuEditorP
   );
 }
 
-function ImportComingSoonDialog({
+function ImportDialog({
   open,
   onOpenChange,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
 }) {
+  const router = useRouter();
+  const [text, setText] = useState('');
+  const [pending, setPending] = useState(false);
+
+  async function handleImport() {
+    if (!text.trim()) return;
+    setPending(true);
+    const res = await importMenuAction(text);
+    setPending(false);
+    if (res.error) {
+      toast.error(res.error);
+      return;
+    }
+    const c = res.data;
+    toast.success(`Imported ${c.categories_created} categories and ${c.items_created} items.`);
+    setText('');
+    onOpenChange(false);
+    router.refresh();
+  }
+
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
+    <Dialog open={open} onOpenChange={(v) => !pending && onOpenChange(v)}>
+      <DialogContent className="max-w-2xl">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Sparkles className="h-5 w-5 text-accent" />
-            AI Menu Import — Coming Soon
+            Import menu from text
           </DialogTitle>
-          <DialogDescription>This feature is not yet active.</DialogDescription>
+          <DialogDescription>
+            Paste any menu text — a copied menu, a ChatGPT/Claude output, anything. AI extracts
+            categories, items, prices, and modifiers and adds them on top of your existing menu.
+          </DialogDescription>
         </DialogHeader>
-        <div className="space-y-3 text-sm text-muted-foreground">
-          <p>
-            Soon you&apos;ll be able to paste any menu text — from ChatGPT, Claude, or anywhere
-            else — and the AI will automatically extract and add:
-          </p>
-          <ul className="ml-4 list-disc space-y-1">
-            <li>Categories (Starters, Mains, Desserts…)</li>
-            <li>Items with names, descriptions, and prices</li>
-            <li>Modifier groups (Size, Toppings…)</li>
-            <li>Modifier options with price differences</li>
-          </ul>
-          <p>
-            Imported items are added on top of your existing menu. You can review and
-            edit everything after import.
-          </p>
-        </div>
+        <Textarea
+          placeholder="Paste your menu text here…"
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          rows={12}
+          disabled={pending}
+          className="font-mono text-sm"
+        />
         <DialogFooter>
-          <Button onClick={() => onOpenChange(false)}>Got it</Button>
+          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={pending}>
+            Cancel
+          </Button>
+          <Button onClick={handleImport} disabled={pending || !text.trim()}>
+            {pending ? 'Importing…' : 'Import menu'}
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

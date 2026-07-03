@@ -12,6 +12,7 @@ import {
   deleteItem,
   deleteModifierGroup,
   deleteModifierOption,
+  importMenu,
   updateCategory,
   updateItem,
   updateModifierGroup,
@@ -29,6 +30,15 @@ async function requireOwner(path: string) {
     return { error: 'Only workspace owners can edit the menu.' as const, session: null };
   }
   return { error: null as null, session };
+}
+
+export async function importMenuAction(text: string) {
+  const { error, session } = await requireOwner('/knowledge-base');
+  if (error || !session) return { error: error ?? 'Unauthorized', data: null };
+  const res = await importMenu(session.active.workspace_id, text);
+  if (isApiError(res)) return { error: res.error.message, data: null };
+  revalidatePath('/knowledge-base');
+  return { error: null, data: res.data };
 }
 
 const CategoryCreateSchema = z.object({

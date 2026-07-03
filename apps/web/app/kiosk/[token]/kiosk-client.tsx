@@ -10,12 +10,21 @@ import {
   type KioskChatMessage,
 } from '@/lib/api/kiosk-public';
 
+interface SpeechRecognitionResultLike extends ArrayLike<{ transcript: string }> {
+  readonly isFinal: boolean;
+}
+
+interface SpeechRecognitionEventLike {
+  readonly resultIndex: number;
+  readonly results: ArrayLike<SpeechRecognitionResultLike>;
+}
+
 interface SpeechRecognitionLike {
   lang: string;
   interimResults: boolean;
   maxAlternatives: number;
   continuous: boolean;
-  onresult: ((e: { results: ArrayLike<ArrayLike<{ transcript: string }>> }) => void) | null;
+  onresult: ((e: SpeechRecognitionEventLike) => void) | null;
   onerror: (() => void) | null;
   onend: (() => void) | null;
   start(): void;
@@ -49,6 +58,7 @@ interface OrderItem {
 
 const SOUND_BAR_HEIGHTS = [30, 55, 80, 100, 80, 55, 30, 55, 80, 55];
 const HEARTBEAT_INTERVAL_MS = 25_000;
+const STT_SILENCE_MS = 1200; // finalize the transcript after this much silence
 const API_BASE = (process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000').replace(/\/+$/, '');
 const TTS_SAMPLE_RATE = 24000; // OpenAI tts-1 pcm: 24kHz, 16-bit signed LE, mono
 
@@ -425,23 +435,43 @@ export function KioskClient({
 
       const recognition = new SR();
       recognition.lang = 'en-US';
-      recognition.interimResults = false;
+      recognition.interimResults = true; // stream partials so we end on our own silence timer
       recognition.maxAlternatives = 1;
-      recognition.continuous = false;
+      recognition.continuous = true;
       recognitionRef.current = recognition;
 
       let settled = false;
-      const done = (text: string) => {
+      let finalText = '';
+      let interimText = '';
+      let silenceTimer: ReturnType<typeof setTimeout> | null = null;
+
+      const finish = () => {
         if (settled) return;
         settled = true;
+        if (silenceTimer) clearTimeout(silenceTimer);
         recognitionRef.current = null;
-        resolve(text);
+        try { recognition.abort(); } catch { /* already stopped */ }
+        resolve(`${finalText} ${interimText}`.trim());
       };
 
-      recognition.onresult = (e) =>
-        done((e.results[0]?.[0]?.transcript) ?? '');
-      recognition.onerror = () => done('');
-      recognition.onend = () => done('');
+      // Reset the end-of-speech countdown on any speech activity.
+      const armSilence = () => {
+        if (silenceTimer) clearTimeout(silenceTimer);
+        silenceTimer = setTimeout(finish, STT_SILENCE_MS);
+      };
+
+      recognition.onresult = (e) => {
+        interimText = '';
+        for (let i = e.resultIndex; i < e.results.length; i++) {
+          const result = e.results[i];
+          const txt = result?.[0]?.transcript ?? '';
+          if (result?.isFinal) finalText += txt;
+          else interimText += txt;
+        }
+        armSilence();
+      };
+      recognition.onerror = () => finish();
+      recognition.onend = () => finish();
       recognition.start();
     });
   }

@@ -1,6 +1,6 @@
 # AI Menu Import — Implementation Plan
 
-> Status: **Coming Soon** — UI placeholder is live. Blocked on `ANTHROPIC_API_KEY` being added to the backend environment. Once added, remove the coming-soon dialog and wire up the endpoint.
+> Status: **Implemented** ✅ — `POST /v1/workspaces/{id}/menu/import` (owner-only) → `menu_service.import_from_text` (calls Claude Haiku via httpx, appends to the menu). Frontend: `importMenu` / `importMenuAction` + the `ImportDialog` in `menu-editor.tsx`. Requires `ANTHROPIC_API_KEY` on the backend (shared with the kiosk).
 
 ---
 

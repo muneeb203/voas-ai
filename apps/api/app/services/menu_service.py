@@ -1,3 +1,8 @@
+import json
+
+import httpx
+
+from app.config import get_settings
 from app.core.exceptions import AppError, NotFoundError
 from app.core.supabase import get_supabase_admin
 from app.models.menu import (
@@ -437,3 +442,200 @@ def delete_modifier_option(workspace_id: str, option_id: str, actor_id: str) -> 
         resource_type="menu_modifier_option",
         resource_id=option_id,
     )
+
+
+# --- AI import from text -----------------------------------------------------
+
+_IMPORT_MODEL = "claude-haiku-4-5-20251001"
+
+# Text is appended (not .format-ed) so the JSON braces below need no escaping.
+_IMPORT_PROMPT = """You are a data extraction assistant. Extract a structured \
+restaurant menu from the text below.
+
+Return ONLY valid JSON in this exact shape — no markdown, no explanation:
+{
+  "categories": [
+    {
+      "name": "string",
+      "description": "string or null",
+      "items": [
+        {
+          "name": "string",
+          "description": "string or null",
+          "price_cents": 0,
+          "modifier_groups": [
+            {
+              "name": "string",
+              "min_select": 0,
+              "max_select": 1,
+              "required": false,
+              "options": [
+                { "name": "string", "price_delta_cents": 0, "is_default": false }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
+
+Rules:
+- Convert all prices to integer cents (e.g. $12.99 -> 1299). If unclear, use 0.
+- If an item has no modifiers, set modifier_groups to [].
+- Group items into sensible categories even if the source text has none.
+
+Menu text:
+"""
+
+
+def _extract_menu_json(raw: str) -> dict:
+    start = raw.find("{")
+    end = raw.rfind("}")
+    if start == -1 or end == -1 or end < start:
+        raise AppError("Couldn't read a menu from that text — add clearer item names and prices.")
+    try:
+        return json.loads(raw[start : end + 1])
+    except json.JSONDecodeError as exc:
+        raise AppError("Couldn't parse a menu from that text — try simplifying it.") from exc
+
+
+def import_from_text(workspace_id: str, text: str, actor_id: str) -> dict:
+    """Extract a menu from free text via Claude and append it to the workspace
+    menu (categories -> items -> modifier groups -> options). Never replaces
+    existing menu data."""
+    cfg = get_settings()
+    if not cfg.anthropic_api_key:
+        raise AppError("AI import isn't configured — add ANTHROPIC_API_KEY to the backend.")
+
+    with httpx.Client(timeout=60.0) as client:
+        resp = client.post(
+            "https://api.anthropic.com/v1/messages",
+            headers={
+                "x-api-key": cfg.anthropic_api_key,
+                "anthropic-version": "2023-06-01",
+                "content-type": "application/json",
+            },
+            json={
+                "model": _IMPORT_MODEL,
+                "max_tokens": 4096,
+                "messages": [{"role": "user", "content": _IMPORT_PROMPT + text}],
+            },
+        )
+    if resp.status_code != 200:
+        raise AppError(f"AI import failed ({resp.status_code}). Please try again.")
+
+    blocks = resp.json().get("content", [])
+    raw = next((b["text"] for b in blocks if b.get("type") == "text"), "")
+    parsed = _extract_menu_json(raw)
+
+    db = get_supabase_admin()
+    existing = (
+        db.table("menu_categories")
+        .select("sort_order")
+        .eq("workspace_id", workspace_id)
+        .order("sort_order", desc=True)
+        .limit(1)
+        .execute()
+    )
+    cat_sort = (existing.data[0]["sort_order"] + 1) if existing.data else 0
+
+    counts = {
+        "categories_created": 0,
+        "items_created": 0,
+        "modifier_groups_created": 0,
+        "modifier_options_created": 0,
+    }
+
+    for cat in parsed.get("categories", []):
+        cat_name = str(cat.get("name") or "").strip()
+        if not cat_name:
+            continue
+        cat_res = (
+            db.table("menu_categories")
+            .insert(
+                {
+                    "workspace_id": workspace_id,
+                    "name": cat_name,
+                    "description": cat.get("description") or None,
+                    "sort_order": cat_sort,
+                }
+            )
+            .execute()
+        )
+        cat_sort += 1
+        if not cat_res.data:
+            continue
+        category_id = cat_res.data[0]["id"]
+        counts["categories_created"] += 1
+
+        for item_sort, item in enumerate(cat.get("items", [])):
+            item_name = str(item.get("name") or "").strip()
+            if not item_name:
+                continue
+            item_res = (
+                db.table("menu_items")
+                .insert(
+                    {
+                        "workspace_id": workspace_id,
+                        "category_id": category_id,
+                        "name": item_name,
+                        "description": item.get("description") or None,
+                        "price_cents": int(item.get("price_cents") or 0),
+                        "sort_order": item_sort,
+                    }
+                )
+                .execute()
+            )
+            if not item_res.data:
+                continue
+            item_id = item_res.data[0]["id"]
+            counts["items_created"] += 1
+
+            for grp_sort, grp in enumerate(item.get("modifier_groups", [])):
+                grp_name = str(grp.get("name") or "").strip()
+                if not grp_name:
+                    continue
+                grp_res = (
+                    db.table("menu_modifier_groups")
+                    .insert(
+                        {
+                            "item_id": item_id,
+                            "name": grp_name,
+                            "min_select": int(grp.get("min_select") or 0),
+                            "max_select": int(grp.get("max_select") or 1),
+                            "required": bool(grp.get("required") or False),
+                            "sort_order": grp_sort,
+                        }
+                    )
+                    .execute()
+                )
+                if not grp_res.data:
+                    continue
+                group_id = grp_res.data[0]["id"]
+                counts["modifier_groups_created"] += 1
+
+                for opt_sort, opt in enumerate(grp.get("options", [])):
+                    opt_name = str(opt.get("name") or "").strip()
+                    if not opt_name:
+                        continue
+                    db.table("menu_modifier_options").insert(
+                        {
+                            "group_id": group_id,
+                            "name": opt_name,
+                            "price_delta_cents": int(opt.get("price_delta_cents") or 0),
+                            "is_default": bool(opt.get("is_default") or False),
+                            "sort_order": opt_sort,
+                        }
+                    ).execute()
+                    counts["modifier_options_created"] += 1
+
+    audit_service.write(
+        actor_type="user",
+        actor_id=actor_id,
+        workspace_id=workspace_id,
+        action="menu.imported",
+        resource_type="menu",
+        metadata=counts,
+    )
+    return counts
