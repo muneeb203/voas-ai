@@ -119,6 +119,14 @@ def create_workspace(payload: WorkspaceCreate, user_id: str, user_email: str | N
     except Exception as exc:
         log.error("trial_credits_grant_failed", workspace_id=workspace_id, error=str(exc))
 
+    # Grant 10 free kiosk credits — best-effort, never fails the signup
+    try:
+        db.table("workspace_kiosk_settings").insert(
+            {"workspace_id": workspace_id, "kiosk_credits_balance": 10}
+        ).execute()
+    except Exception as exc:
+        log.error("kiosk_credits_grant_failed", workspace_id=workspace_id, error=str(exc))
+
     if user_email:
         try:
             from app.services import email_service

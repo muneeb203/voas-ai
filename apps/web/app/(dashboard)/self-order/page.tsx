@@ -33,7 +33,8 @@ export default async function SelfOrderPage() {
 
   const tokenByLocation = Object.fromEntries(tokens.map((t) => [t.location_id, t]));
 
-  const kioskEnabled = kioskSettings.kiosk_enabled;
+  // Kiosk is always available now — access is gated only by the credit balance.
+  const kioskEnabled = true;
   const maxKioskUrls = kioskSettings.max_kiosk_urls;
   const activeCount = tokens.filter((t) => t.is_active).length;
 
@@ -99,8 +100,7 @@ export default async function SelfOrderPage() {
         <div className="space-y-4">
           {locations.map((loc) => {
             const token = tokenByLocation[loc.id] ?? null;
-            const hasActiveToken = token?.is_active === true;
-            const canGenerate = kioskEnabled && (hasActiveToken || activeCount < maxKioskUrls);
+            const canGenerate = true;
             return (
               <SelfOrderLocationCard
                 key={loc.id}

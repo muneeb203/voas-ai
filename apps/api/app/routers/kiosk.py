@@ -12,7 +12,6 @@ from app.config import get_settings
 from app.core.exceptions import (
     AppError,
     ConflictError,
-    ForbiddenError,
     KioskLimitError,
     NotFoundError,
 )
@@ -188,13 +187,6 @@ def _is_lock_held(row: dict, session_id: str) -> bool:
     return (datetime.now(UTC) - heartbeat_at) < timedelta(seconds=SESSION_LOCK_TTL_SECONDS)
 
 
-def _require_kiosk_enabled(db, workspace_id: str) -> KioskSettings:
-    cfg = _get_ws_kiosk_settings(db, workspace_id)
-    if not cfg.kiosk_enabled:
-        raise ForbiddenError("Kiosk is not enabled for this workspace")
-    return cfg
-
-
 def _build_kiosk_system_prompt(db, workspace_id: str) -> str:
     voice_res = (
         db.table("voice_settings")
@@ -221,17 +213,15 @@ def _get_kiosk_system_prompt(db, workspace_id: str) -> str:
 
 
 def _get_kiosk_chat_context(db, token: str) -> dict:
-    """Cached token → {workspace_id, location_id} (incl. the kiosk-enabled check)
-    for the hot /chat and /speak paths, so their two validation queries don't run
-    on every turn."""
+    """Cached token → {workspace_id, location_id} for the hot /chat and /speak
+    paths, so the token lookup doesn't run on every turn. The kiosk is always
+    available; access is gated only by the credit balance (checked in /chat)."""
     now = time.monotonic()
     cached = _kiosk_ctx_cache.get(token)
     if cached and cached[0] > now:
         return cached[1]
     row = _get_token_row(db, token)
-    workspace_id = row["workspace_id"]
-    _require_kiosk_enabled(db, workspace_id)
-    ctx = {"workspace_id": workspace_id, "location_id": row["location_id"]}
+    ctx = {"workspace_id": row["workspace_id"], "location_id": row["location_id"]}
     _kiosk_ctx_cache[token] = (now + KIOSK_CTX_TTL_SECONDS, ctx)
     return ctx
 
@@ -312,10 +302,6 @@ async def generate_kiosk_token(
 ) -> DataResponse[KioskToken]:
     db = get_supabase_admin()
 
-    cfg = _get_ws_kiosk_settings(db, ctx.workspace_id)
-    if not cfg.kiosk_enabled:
-        raise ForbiddenError("Kiosk is not enabled for this workspace")
-
     loc = (
         db.table("locations")
         .select("id")
@@ -333,19 +319,6 @@ async def generate_kiosk_token(
     ).eq("location_id", location_id).eq("workspace_id", ctx.workspace_id).is_(
         "revoked_at", "null"
     ).execute()
-
-    # Count remaining active tokens for workspace
-    active_res = (
-        db.table("kiosk_tokens")
-        .select("id")
-        .eq("workspace_id", ctx.workspace_id)
-        .eq("is_active", True)
-        .execute()
-    )
-    if len(active_res.data) >= cfg.max_kiosk_urls:
-        raise ConflictError(
-            f"Active kiosk URL limit reached ({cfg.max_kiosk_urls}). Revoke an existing URL first."
-        )
 
     token = secrets.token_hex(32)
     insert_res = (
@@ -450,7 +423,7 @@ async def get_kiosk_info(token: Annotated[str, Path()]) -> DataResponse[KioskInf
     workspace_id = row["workspace_id"]
     location_id = row["location_id"]
 
-    kiosk_cfg = _require_kiosk_enabled(db, workspace_id)
+    kiosk_cfg = _get_ws_kiosk_settings(db, workspace_id)
 
     db.table("kiosk_tokens").update({"last_used_at": datetime.now(UTC).isoformat()}).eq(
         "id", row["id"]
@@ -479,7 +452,6 @@ async def claim_kiosk_session(
 ) -> DataResponse[dict]:
     db = get_supabase_admin()
     row = _get_token_row(db, token)
-    _require_kiosk_enabled(db, row["workspace_id"])
 
     if _is_lock_held(row, body.session_id):
         raise ConflictError("Kiosk is already in use on another device")
@@ -504,7 +476,6 @@ async def heartbeat_kiosk_session(
 ) -> DataResponse[dict]:
     db = get_supabase_admin()
     row = _get_token_row(db, token)
-    _require_kiosk_enabled(db, row["workspace_id"])
 
     if row.get("active_session_id") != body.session_id:
         raise ConflictError("Session has been taken over by another device")
@@ -533,18 +504,19 @@ async def kiosk_chat(
     if not cfg.anthropic_api_key:
         raise NotFoundError("AI not configured")
 
-    # Atomic credit check + decrement (handles monthly rollover internally)
-    credit_res = db.rpc("decrement_kiosk_credit", {"p_workspace_id": workspace_id}).execute()
-    result = credit_res.data if credit_res.data else {}
-    if isinstance(result, list):
-        result = result[0] if result else {}
-    if not result.get("success"):
-        reason = result.get("reason", "KIOSK_LIMIT_REACHED")
-        if reason == "KIOSK_LIMIT_REACHED":
-            raise KioskLimitError(
-                "This kiosk has reached its monthly interaction limit. "
-                "Contact the restaurant to add more credits."
-            )
+    # Credits are consumed per completed order (not per turn) — just gate here.
+    bal_res = (
+        db.table("workspace_kiosk_settings")
+        .select("kiosk_credits_balance")
+        .eq("workspace_id", workspace_id)
+        .limit(1)
+        .execute()
+    )
+    balance = bal_res.data[0]["kiosk_credits_balance"] if bal_res.data else 0
+    if balance <= 0:
+        raise KioskLimitError(
+            "This kiosk is out of credits. Contact the restaurant to add more."
+        )
 
     system_prompt = _get_kiosk_system_prompt(db, workspace_id)
     messages_payload = [m.model_dump() for m in body.messages]
@@ -635,6 +607,9 @@ async def kiosk_chat(
                         debug=debug_info,
                     )
                 )
+
+            # Order placed — consume one kiosk credit.
+            db.rpc("decrement_kiosk_credit", {"p_workspace_id": workspace_id}).execute()
 
             order_id = str(placed.get("order_id") or "")
             order_number = order_input.get("order_number") or (
