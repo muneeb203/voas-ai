@@ -31,6 +31,21 @@ interface SpeechRecognitionLike {
   abort(): void;
 }
 
+interface SttTokenData {
+  access_token: string;
+  expires_in: number;
+  model: string;
+  endpointing_ms: number;
+  keywords: string[];
+}
+
+interface DeepgramResult {
+  type?: string;
+  is_final?: boolean;
+  speech_final?: boolean;
+  channel?: { alternatives?: { transcript?: string }[] };
+}
+
 interface KioskClientProps {
   token: string;
   locationName: string;
@@ -61,6 +76,18 @@ const HEARTBEAT_INTERVAL_MS = 25_000;
 const STT_SILENCE_MS = 900; // finalize the transcript after this much silence
 const API_BASE = (process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000').replace(/\/+$/, '');
 const TTS_SAMPLE_RATE = 24000; // OpenAI tts-1 pcm: 24kHz, 16-bit signed LE, mono
+
+// Rate a provider's response time for the ?debug overlay: green/amber/red.
+function rateMs(
+  ms: number | null,
+  goodMax: number,
+  okMax: number,
+): { label: string; cls: string } {
+  if (ms == null) return { label: '—', cls: 'text-white/50' };
+  if (ms <= goodMax) return { label: 'good', cls: 'text-emerald-300' };
+  if (ms <= okMax) return { label: 'ok', cls: 'text-amber-300' };
+  return { label: 'slow', cls: 'text-red-300' };
+}
 
 // ── Theme config ───────────────────────────────────────────────────────────────
 
@@ -137,6 +164,8 @@ export function KioskClient({
     cacheRead: number | null;
     cacheWrite: number | null;
     tts: number | null;
+    sttSource: 'deepgram' | 'browser' | null;
+    ttsSource: 'openai' | 'openai-mp3' | 'browser' | null;
   } | null>(null);
 
   // Refs — stable across renders, safe to read/write inside async loops
@@ -155,6 +184,20 @@ export function KioskClient({
   const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const heartbeatRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
+  // Deepgram streaming STT (falls back to the browser recogniser on any failure)
+  const dgCtxRef = useRef<AudioContext | null>(null);
+  const dgStreamRef = useRef<MediaStream | null>(null);
+  const dgWsRef = useRef<WebSocket | null>(null);
+  const dgNodeRef = useRef<AudioWorkletNode | null>(null);
+  const dgSrcRef = useRef<MediaStreamAudioSourceNode | null>(null);
+  const dgWorkletReadyRef = useRef(false);
+  const dgTokenRef = useRef<{ tok: SttTokenData; fetchedAt: number } | null>(null);
+  const dgUnavailableRef = useRef(false); // set once we know no Deepgram key is configured
+
+  // Which provider actually served the last turn (for the ?debug overlay)
+  const sttSourceRef = useRef<'deepgram' | 'browser' | null>(null);
+  const ttsSourceRef = useRef<'openai' | 'openai-mp3' | 'browser' | null>(null);
+
   // Enable per-turn timing logs by adding ?debug to the kiosk URL.
   useEffect(() => {
     debugRef.current = new URLSearchParams(window.location.search).has('debug');
@@ -168,6 +211,41 @@ export function KioskClient({
       recognitionRef.current = null;
     }
   }, []);
+
+  // ── Deepgram STT cleanup ────────────────────────────────────────────────────────
+
+  // Tear down the per-turn streaming graph + socket, but keep the mic stream and
+  // AudioContext warm so the next turn doesn't re-prompt / re-init.
+  const teardownDgTurn = useCallback(() => {
+    if (dgWsRef.current) {
+      try { dgWsRef.current.close(); } catch { /* ok */ }
+      dgWsRef.current = null;
+    }
+    if (dgNodeRef.current) {
+      try {
+        dgNodeRef.current.port.onmessage = null;
+        dgNodeRef.current.disconnect();
+      } catch { /* ok */ }
+      dgNodeRef.current = null;
+    }
+    if (dgSrcRef.current) {
+      try { dgSrcRef.current.disconnect(); } catch { /* ok */ }
+      dgSrcRef.current = null;
+    }
+  }, []);
+
+  const stopDeepgram = useCallback(() => {
+    teardownDgTurn();
+    if (dgStreamRef.current) {
+      for (const track of dgStreamRef.current.getTracks()) track.stop();
+      dgStreamRef.current = null;
+    }
+    if (dgCtxRef.current) {
+      dgCtxRef.current.close().catch(() => {});
+      dgCtxRef.current = null;
+    }
+    dgWorkletReadyRef.current = false;
+  }, [teardownDgTurn]);
 
   // ── Streaming TTS cleanup ───────────────────────────────────────────────────────
 
@@ -190,6 +268,7 @@ export function KioskClient({
 
     stopRecognition();
     stopStreamAudio();
+    stopDeepgram();
 
     if (audioSrcRef.current) {
       try { audioSrcRef.current.stop(); } catch { /* already ended */ }
@@ -210,7 +289,7 @@ export function KioskClient({
     setErrorMsg('');
     setLastTranscript('');
     setAiResponse('');
-  }, [stopRecognition, stopStreamAudio]);
+  }, [stopRecognition, stopStreamAudio, stopDeepgram]);
 
   // ── Session lock ──────────────────────────────────────────────────────────────
 
@@ -274,8 +353,9 @@ export function KioskClient({
       if (audioCtxRef.current) audioCtxRef.current.close().catch(() => {});
       stopStreamAudio();
       stopRecognition();
+      stopDeepgram();
     };
-  }, [stopRecognition, stopStreamAudio]);
+  }, [stopRecognition, stopStreamAudio, stopDeepgram]);
 
   // ── Audio helpers ─────────────────────────────────────────────────────────────
 
@@ -414,13 +494,14 @@ export function KioskClient({
     const ctx = audioCtxRef.current;
     if (ctx && ctx.state !== 'closed') {
       try {
-        if (await streamSpeak(text, ctx)) return;
+        if (await streamSpeak(text, ctx)) { ttsSourceRef.current = 'openai'; return; }
       } catch { /* fall through to full-clip playback */ }
     }
 
     // Fallbacks: full mp3 blob, then the browser's built-in speech synthesis.
     const blob = await kioskSpeak(token, text);
-    if (blob) { await playAudioBlob(blob); return; }
+    if (blob) { ttsSourceRef.current = 'openai-mp3'; await playAudioBlob(blob); return; }
+    ttsSourceRef.current = 'browser';
     await speakWithBrowser(text);
   }
 
@@ -479,6 +560,186 @@ export function KioskClient({
     });
   }
 
+  // ── Deepgram streaming STT (accurate; menu-aware) ─────────────────────────────
+
+  async function fetchSttToken(): Promise<SttTokenData | null> {
+    if (dgUnavailableRef.current) return null; // no key configured → don't keep asking
+    // Reuse the token while it's still valid (with a 10s safety margin) so we
+    // don't mint a new one every turn.
+    const cached = dgTokenRef.current;
+    if (cached && performance.now() - cached.fetchedAt < (cached.tok.expires_in - 10) * 1000) {
+      return cached.tok;
+    }
+    try {
+      const res = await fetch(`${API_BASE}/v1/kiosk/${token}/stt-token`, {
+        method: 'GET',
+        headers: { 'Content-Type': 'application/json' },
+      });
+      if (res.status === 503) {
+        dgUnavailableRef.current = true; // key not configured — use browser recogniser
+        return null;
+      }
+      if (!res.ok) return null; // transient failure → retry next turn
+      const json = (await res.json()) as { data?: SttTokenData };
+      const data = json.data?.access_token ? json.data : null;
+      if (data) dgTokenRef.current = { tok: data, fetchedAt: performance.now() };
+      return data;
+    } catch {
+      return null;
+    }
+  }
+
+  // Acquire the mic + AudioContext + worklet once, then reuse across turns.
+  async function ensureDgAudio(): Promise<AudioContext | null> {
+    try {
+      if (!dgStreamRef.current) {
+        dgStreamRef.current = await navigator.mediaDevices.getUserMedia({
+          audio: {
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: true,
+            channelCount: 1,
+          },
+        });
+      }
+      if (!dgCtxRef.current) {
+        const Ctx =
+          window.AudioContext ??
+          (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+        dgCtxRef.current = new Ctx();
+      }
+      const ctx = dgCtxRef.current;
+      if (ctx.state === 'suspended') await ctx.resume();
+      if (!dgWorkletReadyRef.current) {
+        await ctx.audioWorklet.addModule('/kiosk-stt-processor.js');
+        dgWorkletReadyRef.current = true;
+      }
+      return ctx;
+    } catch {
+      return null;
+    }
+  }
+
+  // Resolves with the transcript, '' when nothing was heard, or null to signal
+  // "fall back to the browser recogniser".
+  function listenWithDeepgram(tok: SttTokenData, ctx: AudioContext): Promise<string | null> {
+    return new Promise<string | null>((resolve) => {
+      let settled = false;
+      let finalText = '';
+      let interimText = '';
+      let heardSpeech = false;
+      let silenceTimer: ReturnType<typeof setTimeout> | null = null;
+      let hardCap: ReturnType<typeof setTimeout> | null = null;
+      let noSpeech: ReturnType<typeof setTimeout> | null = null;
+
+      const done = (result: string | null) => {
+        if (settled) return;
+        settled = true;
+        if (silenceTimer) clearTimeout(silenceTimer);
+        if (hardCap) clearTimeout(hardCap);
+        if (noSpeech) clearTimeout(noSpeech);
+        teardownDgTurn();
+        resolve(result);
+      };
+
+      const sr = Math.round(ctx.sampleRate);
+      const kw = (tok.keywords ?? [])
+        .map((k) => `&keywords=${encodeURIComponent(`${k}:2`)}`)
+        .join('');
+      const url =
+        `wss://api.deepgram.com/v1/listen?model=${encodeURIComponent(tok.model)}` +
+        `&encoding=linear16&sample_rate=${sr}&channels=1&interim_results=true` +
+        `&smart_format=true&punctuate=true&endpointing=${tok.endpointing_ms}${kw}`;
+
+      let ws: WebSocket;
+      try {
+        ws = new WebSocket(url, ['token', tok.access_token]);
+      } catch {
+        done(null);
+        return;
+      }
+      ws.binaryType = 'arraybuffer';
+      dgWsRef.current = ws;
+
+      const armSilence = () => {
+        if (silenceTimer) clearTimeout(silenceTimer);
+        silenceTimer = setTimeout(
+          () => done(`${finalText} ${interimText}`.trim()),
+          STT_SILENCE_MS + 500,
+        );
+      };
+
+      ws.onopen = () => {
+        try {
+          const source = ctx.createMediaStreamSource(dgStreamRef.current as MediaStream);
+          const node = new AudioWorkletNode(ctx, 'kiosk-stt-processor');
+          node.port.onmessage = (ev: MessageEvent<ArrayBuffer>) => {
+            if (ws.readyState === WebSocket.OPEN) ws.send(ev.data);
+          };
+          source.connect(node);
+          // Keep the graph pulling audio without making it audible.
+          const sink = ctx.createGain();
+          sink.gain.value = 0;
+          node.connect(sink).connect(ctx.destination);
+          dgSrcRef.current = source;
+          dgNodeRef.current = node;
+        } catch {
+          done(null);
+          return;
+        }
+        // Customer never spoke → give up so the loop can re-arm.
+        noSpeech = setTimeout(() => { if (!heardSpeech) done(''); }, 8000);
+        // Absolute ceiling on a single turn.
+        hardCap = setTimeout(() => done(`${finalText} ${interimText}`.trim()), 20000);
+      };
+
+      ws.onmessage = (ev: MessageEvent) => {
+        let msg: DeepgramResult;
+        try {
+          msg = JSON.parse(ev.data as string) as DeepgramResult;
+        } catch {
+          return;
+        }
+        const txt = msg.channel?.alternatives?.[0]?.transcript ?? '';
+        if (txt) {
+          heardSpeech = true;
+          if (msg.is_final) {
+            finalText = `${finalText} ${txt}`.trim();
+            interimText = '';
+          } else {
+            interimText = txt;
+          }
+          setLastTranscript(`${finalText} ${interimText}`.trim());
+          armSilence();
+        }
+        // Deepgram's endpointing fired → the customer finished speaking.
+        if (msg.speech_final && finalText.trim()) done(finalText.trim());
+      };
+      ws.onerror = () => done(finalText.trim() ? finalText.trim() : null);
+      ws.onclose = () => {
+        if (!settled) done(finalText.trim() ? `${finalText} ${interimText}`.trim() : null);
+      };
+    });
+  }
+
+  // Deepgram first (accurate, menu-aware); silently fall back to the free
+  // browser recogniser if the key isn't set or anything goes wrong.
+  async function listen(): Promise<string> {
+    const tok = await fetchSttToken();
+    if (tok) {
+      const ctx = await ensureDgAudio();
+      if (ctx) {
+        const result = await listenWithDeepgram(tok, ctx);
+        if (result !== null) {
+          sttSourceRef.current = 'deepgram';
+          return result;
+        }
+      }
+    }
+    sttSourceRef.current = 'browser';
+    return listenWithBrowser();
+  }
+
 
   // ── Conversation loop ─────────────────────────────────────────────────────────
 
@@ -493,12 +754,12 @@ export function KioskClient({
     // Each iteration = one recording turn.
     // After every await we check the expected state; if wrong, someone called reset/endSession.
     while (true) {
-      // ── Record + transcribe (browser SpeechRecognition, no API cost) ──────────
+      // ── Record + transcribe (Deepgram streaming; browser recogniser fallback) ──
       kioskStateRef.current = 'recording';
       setKioskState('recording');
 
       const sttStart = performance.now();
-      const transcript = await listenWithBrowser();
+      const transcript = await listen();
       const sttMs = Math.round(performance.now() - sttStart);
 
       if (kioskStateRef.current !== 'recording') return;
@@ -536,6 +797,7 @@ export function KioskClient({
       setAiResponse(response);
 
       ttsFirstAudioRef.current = null;
+      ttsSourceRef.current = null;
       const recordTiming = () => {
         if (!debugRef.current) return;
         setDbg({
@@ -545,6 +807,8 @@ export function KioskClient({
           cacheRead: debug?.cache_read ?? null,
           cacheWrite: debug?.cache_write ?? null,
           tts: ttsFirstAudioRef.current,
+          sttSource: sttSourceRef.current,
+          ttsSource: ttsSourceRef.current,
         });
       };
       recordTiming();
@@ -633,6 +897,46 @@ export function KioskClient({
           </div>
           <div>cache: read {dbg.cacheRead ?? 0} / write {dbg.cacheWrite ?? 0}</div>
           <div>tts first audio: {dbg.tts != null ? `${dbg.tts}ms` : '…'}</div>
+
+          <div className="mt-1 border-t border-white/20 pt-1 font-semibold text-sky-300">
+            providers
+          </div>
+          <div>
+            stt · {dbg.sttSource ?? '—'}{' '}
+            <span className={dbg.sttSource === 'deepgram' ? 'text-emerald-300' : 'text-amber-300'}>
+              {dbg.sttSource === 'deepgram'
+                ? '● deepgram (accurate)'
+                : dbg.sttSource === 'browser'
+                  ? '● browser (fallback)'
+                  : ''}
+            </span>
+          </div>
+          <div>
+            chat · claude{' '}
+            {(() => {
+              const r = rateMs(dbg.anthropicMs, 1000, 1800);
+              return (
+                <span className={r.cls}>
+                  ● {dbg.anthropicMs != null ? `${dbg.anthropicMs}ms` : '—'} {r.label}
+                </span>
+              );
+            })()}
+          </div>
+          <div>
+            tts · {dbg.ttsSource === 'browser' ? 'browser' : 'openai'}
+            {dbg.ttsSource === 'openai-mp3' ? ' (mp3)' : ''}{' '}
+            {(() => {
+              const r =
+                dbg.ttsSource === 'browser'
+                  ? { label: 'fallback', cls: 'text-amber-300' }
+                  : rateMs(dbg.tts, 1200, 2000);
+              return (
+                <span className={r.cls}>
+                  ● {dbg.tts != null ? `${dbg.tts}ms` : '—'} {r.label}
+                </span>
+              );
+            })()}
+          </div>
         </div>
       )}
 

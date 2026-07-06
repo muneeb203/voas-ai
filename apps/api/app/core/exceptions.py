@@ -51,6 +51,11 @@ class KioskLimitError(AppError):
     code = "KIOSK_LIMIT_REACHED"
 
 
+class ServiceUnavailableError(AppError):
+    status_code = status.HTTP_503_SERVICE_UNAVAILABLE
+    code = "SERVICE_UNAVAILABLE"
+
+
 class WorkspaceNotFoundError(NotFoundError):
     code = "WORKSPACE_NOT_FOUND"
 

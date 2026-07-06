@@ -14,6 +14,7 @@ from app.core.exceptions import (
     ConflictError,
     KioskLimitError,
     NotFoundError,
+    ServiceUnavailableError,
 )
 from app.core.logging import get_logger
 from app.core.supabase import get_supabase_admin
@@ -133,6 +134,16 @@ class KioskInfo(BaseModel):
     session_lock_enabled: bool
 
 
+class KioskSttToken(BaseModel):
+    # Short-lived Deepgram token the browser uses to open its own streaming
+    # STT socket. The real Deepgram key never leaves the server.
+    access_token: str
+    expires_in: int
+    model: str
+    endpointing_ms: int
+    keywords: list[str]
+
+
 class SessionBody(BaseModel):
     session_id: str
 
@@ -239,6 +250,28 @@ def _get_kiosk_chat_context(db, token: str) -> dict:
     ctx = {"workspace_id": row["workspace_id"], "location_id": row["location_id"]}
     _kiosk_ctx_cache[token] = (now + KIOSK_CTX_TTL_SECONDS, ctx)
     return ctx
+
+
+def _kiosk_stt_keywords(db, workspace_id: str) -> list[str]:
+    """Menu item names, passed to Deepgram as keyword hints so it recognises
+    dish names ('Zinger', 'Alfredo') it would otherwise mishear."""
+    res = (
+        db.table("menu_items")
+        .select("name")
+        .eq("workspace_id", workspace_id)
+        .eq("is_active", True)
+        .limit(300)
+        .execute()
+    )
+    names: list[str] = []
+    seen: set[str] = set()
+    for row in res.data or []:
+        name = (row.get("name") or "").strip()
+        key = name.lower()
+        if name and key not in seen:
+            seen.add(key)
+            names.append(name)
+    return names[:150]
 
 
 def _create_kiosk_conversation(
@@ -453,6 +486,53 @@ async def get_kiosk_info(token: Annotated[str, Path()]) -> DataResponse[KioskInf
             workspace_name=ws_res.data[0]["name"] if ws_res.data else "",
             theme=kiosk_cfg.theme,
             session_lock_enabled=kiosk_cfg.session_lock_enabled,
+        )
+    )
+
+
+@public_router.get(
+    "/kiosk/{token}/stt-token",
+    response_model=DataResponse[KioskSttToken],
+)
+async def get_kiosk_stt_token(
+    token: Annotated[str, Path()],
+) -> DataResponse[KioskSttToken]:
+    """Mint a short-lived Deepgram token for the browser's streaming recogniser.
+
+    Returns 503 when no Deepgram key is configured; the kiosk client treats that
+    as "fall back to the free in-browser recogniser", so the kiosk keeps working.
+    """
+    cfg = get_settings()
+    if not cfg.deepgram_api_key:
+        raise ServiceUnavailableError("Speech-to-text is not configured")
+
+    db = get_supabase_admin()
+    ctx = _get_kiosk_chat_context(db, token)
+    keywords = _kiosk_stt_keywords(db, ctx["workspace_id"])
+
+    try:
+        resp = await _get_http().post(
+            "https://api.deepgram.com/v1/auth/grant",
+            headers={
+                "Authorization": f"Token {cfg.deepgram_api_key}",
+                "content-type": "application/json",
+            },
+            json={"ttl_seconds": 60},
+        )
+    except Exception as exc:  # network error reaching Deepgram
+        raise AppError("Could not obtain a speech-to-text token") from exc
+
+    if resp.status_code != 200:
+        raise AppError(f"Speech-to-text token request failed ({resp.status_code})")
+
+    data = resp.json()
+    return ok(
+        KioskSttToken(
+            access_token=data.get("access_token", ""),
+            expires_in=int(data.get("expires_in", 30) or 30),
+            model=cfg.deepgram_model,
+            endpointing_ms=600,
+            keywords=keywords,
         )
     )
 

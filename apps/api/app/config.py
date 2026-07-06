@@ -66,6 +66,11 @@ class Settings(BaseSettings):
     anthropic_api_key: str | None = None
     openai_tts_voice: str = "nova"
 
+    # --- Kiosk speech-to-text (Deepgram). No-op without the key; the kiosk
+    # falls back to the free in-browser recognizer. ---
+    deepgram_api_key: str | None = None
+    deepgram_model: str = "nova-2"
+
     # --- Dashboard help bot (Gemini). No-op without GEMINI_API_KEY. ---
     gemini_api_key: str | None = None
     gemini_model: str = "gemini-3.1-flash-lite"
