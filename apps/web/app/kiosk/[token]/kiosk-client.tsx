@@ -77,6 +77,18 @@ const STT_SILENCE_MS = 900; // finalize the transcript after this much silence
 const API_BASE = (process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000').replace(/\/+$/, '');
 const TTS_SAMPLE_RATE = 24000; // OpenAI tts-1 pcm: 24kHz, 16-bit signed LE, mono
 
+// Rate a provider's response time for the ?debug overlay: green/amber/red.
+function rateMs(
+  ms: number | null,
+  goodMax: number,
+  okMax: number,
+): { label: string; cls: string } {
+  if (ms == null) return { label: '—', cls: 'text-white/50' };
+  if (ms <= goodMax) return { label: 'good', cls: 'text-emerald-300' };
+  if (ms <= okMax) return { label: 'ok', cls: 'text-amber-300' };
+  return { label: 'slow', cls: 'text-red-300' };
+}
+
 // ── Theme config ───────────────────────────────────────────────────────────────
 
 type ThemeCfg = {
@@ -152,6 +164,8 @@ export function KioskClient({
     cacheRead: number | null;
     cacheWrite: number | null;
     tts: number | null;
+    sttSource: 'deepgram' | 'browser' | null;
+    ttsSource: 'openai' | 'openai-mp3' | 'browser' | null;
   } | null>(null);
 
   // Refs — stable across renders, safe to read/write inside async loops
@@ -179,6 +193,10 @@ export function KioskClient({
   const dgWorkletReadyRef = useRef(false);
   const dgTokenRef = useRef<{ tok: SttTokenData; fetchedAt: number } | null>(null);
   const dgUnavailableRef = useRef(false); // set once we know no Deepgram key is configured
+
+  // Which provider actually served the last turn (for the ?debug overlay)
+  const sttSourceRef = useRef<'deepgram' | 'browser' | null>(null);
+  const ttsSourceRef = useRef<'openai' | 'openai-mp3' | 'browser' | null>(null);
 
   // Enable per-turn timing logs by adding ?debug to the kiosk URL.
   useEffect(() => {
@@ -476,13 +494,14 @@ export function KioskClient({
     const ctx = audioCtxRef.current;
     if (ctx && ctx.state !== 'closed') {
       try {
-        if (await streamSpeak(text, ctx)) return;
+        if (await streamSpeak(text, ctx)) { ttsSourceRef.current = 'openai'; return; }
       } catch { /* fall through to full-clip playback */ }
     }
 
     // Fallbacks: full mp3 blob, then the browser's built-in speech synthesis.
     const blob = await kioskSpeak(token, text);
-    if (blob) { await playAudioBlob(blob); return; }
+    if (blob) { ttsSourceRef.current = 'openai-mp3'; await playAudioBlob(blob); return; }
+    ttsSourceRef.current = 'browser';
     await speakWithBrowser(text);
   }
 
@@ -711,9 +730,13 @@ export function KioskClient({
       const ctx = await ensureDgAudio();
       if (ctx) {
         const result = await listenWithDeepgram(tok, ctx);
-        if (result !== null) return result;
+        if (result !== null) {
+          sttSourceRef.current = 'deepgram';
+          return result;
+        }
       }
     }
+    sttSourceRef.current = 'browser';
     return listenWithBrowser();
   }
 
@@ -774,6 +797,7 @@ export function KioskClient({
       setAiResponse(response);
 
       ttsFirstAudioRef.current = null;
+      ttsSourceRef.current = null;
       const recordTiming = () => {
         if (!debugRef.current) return;
         setDbg({
@@ -783,6 +807,8 @@ export function KioskClient({
           cacheRead: debug?.cache_read ?? null,
           cacheWrite: debug?.cache_write ?? null,
           tts: ttsFirstAudioRef.current,
+          sttSource: sttSourceRef.current,
+          ttsSource: ttsSourceRef.current,
         });
       };
       recordTiming();
@@ -871,6 +897,46 @@ export function KioskClient({
           </div>
           <div>cache: read {dbg.cacheRead ?? 0} / write {dbg.cacheWrite ?? 0}</div>
           <div>tts first audio: {dbg.tts != null ? `${dbg.tts}ms` : '…'}</div>
+
+          <div className="mt-1 border-t border-white/20 pt-1 font-semibold text-sky-300">
+            providers
+          </div>
+          <div>
+            stt · {dbg.sttSource ?? '—'}{' '}
+            <span className={dbg.sttSource === 'deepgram' ? 'text-emerald-300' : 'text-amber-300'}>
+              {dbg.sttSource === 'deepgram'
+                ? '● deepgram (accurate)'
+                : dbg.sttSource === 'browser'
+                  ? '● browser (fallback)'
+                  : ''}
+            </span>
+          </div>
+          <div>
+            chat · claude{' '}
+            {(() => {
+              const r = rateMs(dbg.anthropicMs, 1000, 1800);
+              return (
+                <span className={r.cls}>
+                  ● {dbg.anthropicMs != null ? `${dbg.anthropicMs}ms` : '—'} {r.label}
+                </span>
+              );
+            })()}
+          </div>
+          <div>
+            tts · {dbg.ttsSource === 'browser' ? 'browser' : 'openai'}
+            {dbg.ttsSource === 'openai-mp3' ? ' (mp3)' : ''}{' '}
+            {(() => {
+              const r =
+                dbg.ttsSource === 'browser'
+                  ? { label: 'fallback', cls: 'text-amber-300' }
+                  : rateMs(dbg.tts, 1200, 2000);
+              return (
+                <span className={r.cls}>
+                  ● {dbg.tts != null ? `${dbg.tts}ms` : '—'} {r.label}
+                </span>
+              );
+            })()}
+          </div>
         </div>
       )}
 
