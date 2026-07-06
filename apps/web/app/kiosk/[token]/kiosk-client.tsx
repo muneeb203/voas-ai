@@ -577,14 +577,22 @@ export function KioskClient({
       });
       if (res.status === 503) {
         dgUnavailableRef.current = true; // key not configured — use browser recogniser
+        // eslint-disable-next-line no-console
+        if (debugRef.current) console.log('[kiosk] deepgram off: no DEEPGRAM_API_KEY on backend (503)');
         return null;
       }
-      if (!res.ok) return null; // transient failure → retry next turn
+      if (!res.ok) {
+        // eslint-disable-next-line no-console
+        if (debugRef.current) console.log(`[kiosk] deepgram token fetch failed: HTTP ${res.status}`);
+        return null; // transient failure → retry next turn
+      }
       const json = (await res.json()) as { data?: SttTokenData };
       const data = json.data?.access_token ? json.data : null;
       if (data) dgTokenRef.current = { tok: data, fetchedAt: performance.now() };
       return data;
-    } catch {
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      if (debugRef.current) console.log('[kiosk] deepgram token fetch error', err);
       return null;
     }
   }
@@ -653,7 +661,8 @@ export function KioskClient({
 
       let ws: WebSocket;
       try {
-        ws = new WebSocket(url, ['token', tok.access_token]);
+        // Grant tokens are JWTs → Bearer scheme (raw API keys would use 'token').
+        ws = new WebSocket(url, ['bearer', tok.access_token]);
       } catch {
         done(null);
         return;
@@ -734,6 +743,11 @@ export function KioskClient({
           sttSourceRef.current = 'deepgram';
           return result;
         }
+        // eslint-disable-next-line no-console
+        if (debugRef.current) console.log('[kiosk] deepgram stream failed → browser fallback');
+      } else if (debugRef.current) {
+        // eslint-disable-next-line no-console
+        console.log('[kiosk] mic/audio init failed → browser fallback');
       }
     }
     sttSourceRef.current = 'browser';
