@@ -157,6 +157,15 @@ class KioskChatBody(BaseModel):
     messages: list[KioskChatMessage]
 
 
+class KioskMetricBody(BaseModel):
+    stt_source: Literal["deepgram", "browser"]
+    stt_confidence: float | None = None
+    chat_ms: int | None = None
+    anthropic_ms: int | None = None
+    tts_ms: int | None = None
+    order_placed: bool = False
+
+
 class KioskChatResponse(BaseModel):
     response: str
     order_confirmed: bool
@@ -535,6 +544,39 @@ async def get_kiosk_stt_token(
             keywords=keywords,
         )
     )
+
+
+@public_router.post(
+    "/kiosk/{token}/metrics",
+    response_model=DataResponse[dict],
+)
+async def record_kiosk_metric(
+    token: Annotated[str, Path()],
+    body: KioskMetricBody,
+) -> DataResponse[dict]:
+    """Best-effort per-turn metrics for the admin Kiosk Performance card.
+
+    Never fails the kiosk: any error (bad token, migration not applied) is
+    swallowed so the customer-facing flow is unaffected.
+    """
+    db = get_supabase_admin()
+    try:
+        ctx = _get_kiosk_chat_context(db, token)
+        db.table("kiosk_turn_metrics").insert(
+            {
+                "workspace_id": ctx["workspace_id"],
+                "location_id": ctx["location_id"],
+                "stt_source": body.stt_source,
+                "stt_confidence": body.stt_confidence,
+                "chat_ms": body.chat_ms,
+                "anthropic_ms": body.anthropic_ms,
+                "tts_ms": body.tts_ms,
+                "order_placed": body.order_placed,
+            }
+        ).execute()
+    except Exception as exc:
+        log.warning("kiosk_metric_insert_failed", error=str(exc))
+    return ok({"recorded": True})
 
 
 @public_router.post(

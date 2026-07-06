@@ -1,4 +1,4 @@
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, Query, status
 from pydantic import BaseModel, Field
@@ -353,6 +353,67 @@ _KIOSK_SELECT = (
     "kiosk_enabled, max_kiosk_urls, theme, session_lock_enabled, "
     "kiosk_monthly_limit, kiosk_credits_balance, kiosk_credits_used_this_month, kiosk_month_start"
 )
+
+
+# ---------- Kiosk performance metrics -----------------------------------------
+
+
+class KioskMetricsWindow(BaseModel):
+    total_turns: int
+    deepgram_turns: int
+    avg_confidence: float | None = None  # 0..1, over Deepgram turns only
+    avg_chat_ms: int | None = None
+    avg_tts_ms: int | None = None
+    orders_placed: int
+
+
+class AdminKioskMetrics(BaseModel):
+    window_7d: KioskMetricsWindow
+    window_30d: KioskMetricsWindow
+    window_all: KioskMetricsWindow
+
+
+def _kiosk_metrics_window(db, workspace_id: str, since: str | None) -> KioskMetricsWindow:
+    res = db.rpc(
+        "kiosk_metrics_summary",
+        {"p_workspace_id": workspace_id, "p_since": since},
+    ).execute()
+    row = (res.data or [{}])[0] if res.data else {}
+
+    def _as_int(value: object) -> int | None:
+        return int(value) if value is not None else None
+
+    conf = row.get("avg_confidence")
+    return KioskMetricsWindow(
+        total_turns=int(row.get("total_turns") or 0),
+        deepgram_turns=int(row.get("deepgram_turns") or 0),
+        avg_confidence=float(conf) if conf is not None else None,
+        avg_chat_ms=_as_int(row.get("avg_chat_ms")),
+        avg_tts_ms=_as_int(row.get("avg_tts_ms")),
+        orders_placed=int(row.get("orders_placed") or 0),
+    )
+
+
+@router.get(
+    "/workspaces/{workspace_id}/kiosk-metrics",
+    response_model=DataResponse[AdminKioskMetrics],
+)
+async def get_admin_kiosk_metrics(
+    workspace_id: str, _: AdminContextDep
+) -> DataResponse[AdminKioskMetrics]:
+    db = get_supabase_admin()
+    now = datetime.now(UTC)
+    return ok(
+        AdminKioskMetrics(
+            window_7d=_kiosk_metrics_window(
+                db, workspace_id, (now - timedelta(days=7)).isoformat()
+            ),
+            window_30d=_kiosk_metrics_window(
+                db, workspace_id, (now - timedelta(days=30)).isoformat()
+            ),
+            window_all=_kiosk_metrics_window(db, workspace_id, None),
+        )
+    )
 
 
 @router.get(
