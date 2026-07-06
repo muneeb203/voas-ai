@@ -308,3 +308,24 @@ export function topupKioskCredits(workspaceId: string, amount: number) {
     body: { amount },
   });
 }
+
+export interface KioskMetricsWindow {
+  total_turns: number;
+  deepgram_turns: number;
+  avg_confidence: number | null;
+  avg_chat_ms: number | null;
+  avg_tts_ms: number | null;
+  orders_placed: number;
+}
+
+export interface AdminKioskMetrics {
+  window_7d: KioskMetricsWindow;
+  window_30d: KioskMetricsWindow;
+  window_all: KioskMetricsWindow;
+}
+
+export function getAdminKioskMetrics(workspaceId: string) {
+  return apiCall<AdminKioskMetrics>(`/v1/admin/workspaces/${workspaceId}/kiosk-metrics`, {
+    cache: 'no-store',
+  });
+}

@@ -35,6 +35,24 @@ export function heartbeatKioskSession(
   });
 }
 
+export interface KioskMetricPayload {
+  stt_source: 'deepgram' | 'browser';
+  stt_confidence: number | null;
+  chat_ms: number | null;
+  anthropic_ms: number | null;
+  tts_ms: number | null;
+  order_placed: boolean;
+}
+
+// Fire-and-forget per-turn metrics for the admin Kiosk Performance card.
+// Never blocks or breaks the turn.
+export function reportKioskMetrics(token: string, payload: KioskMetricPayload): void {
+  void publicFetch(`/v1/kiosk/${token}/metrics`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  }).catch(() => {});
+}
+
 export interface KioskChatMessage {
   role: 'user' | 'assistant';
   content: string;

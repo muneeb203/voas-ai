@@ -4,13 +4,14 @@ import { notFound } from 'next/navigation';
 import { formatDistanceToNow } from 'date-fns';
 import { ArrowLeft } from 'lucide-react';
 import { requireAdminSession } from '@/lib/auth/admin';
-import { getAdminWorkspace, listAdminTickets, listAdminAuditLogs, getAdminWorkspaceUsage, listAdminWorkspaceGrants, getAdminKioskSettings } from '@/lib/api/admin';
+import { getAdminWorkspace, listAdminTickets, listAdminAuditLogs, getAdminWorkspaceUsage, listAdminWorkspaceGrants, getAdminKioskSettings, getAdminKioskMetrics } from '@/lib/api/admin';
 import { isApiError } from '@/lib/types';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { AdminWorkspaceBillingPanel } from '@/components/admin/admin-workspace-billing-panel';
 import { AdminKioskSettingsCard } from '@/components/admin/admin-kiosk-settings-card';
+import { AdminKioskMetricsCard } from '@/components/admin/admin-kiosk-metrics-card';
 import {
   Table,
   TableBody,
@@ -40,14 +41,16 @@ export default async function AdminWorkspaceDetailPage({
 }) {
   await requireAdminSession(`/admin/workspaces/${params.id}`);
 
-  const [detailRes, ticketsRes, auditRes, usageRes, grantsRes, kioskRes] = await Promise.all([
-    getAdminWorkspace(params.id),
-    listAdminTickets({ workspaceId: params.id }),
-    listAdminAuditLogs({ workspace_id: params.id }),
-    getAdminWorkspaceUsage(params.id),
-    listAdminWorkspaceGrants(params.id),
-    getAdminKioskSettings(params.id),
-  ]);
+  const [detailRes, ticketsRes, auditRes, usageRes, grantsRes, kioskRes, kioskMetricsRes] =
+    await Promise.all([
+      getAdminWorkspace(params.id),
+      listAdminTickets({ workspaceId: params.id }),
+      listAdminAuditLogs({ workspace_id: params.id }),
+      getAdminWorkspaceUsage(params.id),
+      listAdminWorkspaceGrants(params.id),
+      getAdminKioskSettings(params.id),
+      getAdminKioskMetrics(params.id),
+    ]);
 
   if (isApiError(detailRes)) {
     if (detailRes.error.code === 'NOT_FOUND') notFound();
@@ -59,6 +62,17 @@ export default async function AdminWorkspaceDetailPage({
   const kioskSettings = !isApiError(kioskRes)
     ? kioskRes.data
     : { kiosk_enabled: false, max_kiosk_urls: 1, theme: 'gradient' as const, session_lock_enabled: false, kiosk_monthly_limit: 500, kiosk_credits_balance: 0, kiosk_credits_used_this_month: 0, kiosk_month_start: null };
+  const emptyWindow = {
+    total_turns: 0,
+    deepgram_turns: 0,
+    avg_confidence: null,
+    avg_chat_ms: null,
+    avg_tts_ms: null,
+    orders_placed: 0,
+  };
+  const kioskMetrics = !isApiError(kioskMetricsRes)
+    ? kioskMetricsRes.data
+    : { window_7d: emptyWindow, window_30d: emptyWindow, window_all: emptyWindow };
   const defaultTab = searchParams.tab === 'billing' ? 'billing' : 'overview';
 
   return (
@@ -136,7 +150,10 @@ export default async function AdminWorkspaceDetailPage({
         </TabsContent>
 
         <TabsContent value="kiosk">
-          <AdminKioskSettingsCard workspaceId={workspace.id} settings={kioskSettings} plan={workspace.plan} />
+          <div className="space-y-6">
+            <AdminKioskMetricsCard metrics={kioskMetrics} />
+            <AdminKioskSettingsCard workspaceId={workspace.id} settings={kioskSettings} plan={workspace.plan} />
+          </div>
         </TabsContent>
 
         <TabsContent value="members">

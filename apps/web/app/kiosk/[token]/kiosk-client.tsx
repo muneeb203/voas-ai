@@ -7,6 +7,7 @@ import {
   heartbeatKioskSession,
   kioskChat,
   kioskSpeak,
+  reportKioskMetrics,
   type KioskChatMessage,
 } from '@/lib/api/kiosk-public';
 
@@ -43,7 +44,7 @@ interface DeepgramResult {
   type?: string;
   is_final?: boolean;
   speech_final?: boolean;
-  channel?: { alternatives?: { transcript?: string }[] };
+  channel?: { alternatives?: { transcript?: string; confidence?: number }[] };
 }
 
 interface KioskClientProps {
@@ -197,6 +198,7 @@ export function KioskClient({
   // Which provider actually served the last turn (for the ?debug overlay)
   const sttSourceRef = useRef<'deepgram' | 'browser' | null>(null);
   const ttsSourceRef = useRef<'openai' | 'openai-mp3' | 'browser' | null>(null);
+  const sttConfidenceRef = useRef<number | null>(null); // Deepgram confidence of the last turn
 
   // Enable per-turn timing logs by adding ?debug to the kiosk URL.
   useEffect(() => {
@@ -709,12 +711,14 @@ export function KioskClient({
         } catch {
           return;
         }
-        const txt = msg.channel?.alternatives?.[0]?.transcript ?? '';
+        const alt = msg.channel?.alternatives?.[0];
+        const txt = alt?.transcript ?? '';
         if (txt) {
           heardSpeech = true;
           if (msg.is_final) {
             finalText = `${finalText} ${txt}`.trim();
             interimText = '';
+            if (typeof alt?.confidence === 'number') sttConfidenceRef.current = alt.confidence;
           } else {
             interimText = txt;
           }
@@ -734,6 +738,7 @@ export function KioskClient({
   // Deepgram first (accurate, menu-aware); silently fall back to the free
   // browser recogniser if the key isn't set or anything goes wrong.
   async function listen(): Promise<string> {
+    sttConfidenceRef.current = null; // reset; Deepgram sets it, browser leaves it null
     const tok = await fetchSttToken();
     if (tok) {
       const ctx = await ensureDgAudio();
@@ -825,6 +830,16 @@ export function KioskClient({
           ttsSource: ttsSourceRef.current,
         });
       };
+      const reportTurn = (orderPlaced: boolean) => {
+        reportKioskMetrics(token, {
+          stt_source: sttSourceRef.current ?? 'browser',
+          stt_confidence: sttConfidenceRef.current,
+          chat_ms: chatMs,
+          anthropic_ms: debug?.anthropic_ms ?? null,
+          tts_ms: ttsFirstAudioRef.current,
+          order_placed: orderPlaced,
+        });
+      };
       recordTiming();
 
       if (order_confirmed) {
@@ -836,6 +851,7 @@ export function KioskClient({
         setKioskState('confirmed');
         await speakText(response);
         recordTiming();
+        reportTurn(true);
         startCountdown();
         return; // loop ends — countdown handles reset
       }
@@ -845,6 +861,7 @@ export function KioskClient({
       setKioskState('speaking');
       await speakText(response);
       recordTiming();
+      reportTurn(false);
 
       if (kioskStateRef.current !== 'speaking') return; // cancelled during playback
       // Loop → next recording turn
