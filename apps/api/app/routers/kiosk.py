@@ -521,7 +521,7 @@ async def get_kiosk_stt_token(
 
     try:
         resp = await _get_http().post(
-            "https://api.deepgram.com/v1/auth/grant",
+            f"{cfg.deepgram_base_url}/v1/auth/grant",
             headers={
                 "Authorization": f"Token {cfg.deepgram_api_key}",
                 "content-type": "application/json",
@@ -660,7 +660,7 @@ async def kiosk_chat(
 
     chat_t0 = time.perf_counter()
     resp = await _get_http().post(
-        "https://api.anthropic.com/v1/messages",
+        f"{cfg.anthropic_base_url}/v1/messages",
         headers={
             "x-api-key": cfg.anthropic_api_key,
             "anthropic-version": "2023-06-01",
