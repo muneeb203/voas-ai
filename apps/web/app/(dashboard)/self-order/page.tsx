@@ -4,6 +4,7 @@ import { requireDashboardSession } from '@/lib/auth/workspace';
 import { listLocations } from '@/lib/api/locations';
 import { listKioskTokens, getKioskSettings } from '@/lib/api/kiosk';
 import { getBillingUsage } from '@/lib/api/billing';
+import { PAY_AS_YOU_GO } from '@/lib/constants';
 import { isApiError } from '@/lib/types';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { PageHeader } from '@/components/dashboard/page-header';
@@ -74,6 +75,15 @@ export default async function SelfOrderPage() {
             regenerate the URL at any time if security is a concern.
           </CardDescription>
         </CardHeader>
+        <CardContent>
+          <p className="text-sm text-muted-foreground">
+            Kiosk usage is billed at{' '}
+            <span className="font-medium text-foreground">
+              ${PAY_AS_YOU_GO.kioskPerInteraction.toFixed(2)} per interaction
+            </span>{' '}
+            (1 credit each), or included in your monthly plan.
+          </p>
+        </CardContent>
       </Card>
 
       {isOwner && <KioskSettingsCard initialSettings={kioskSettings} />}
