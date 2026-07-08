@@ -58,7 +58,7 @@ export default function PricingPage() {
         <div className="grid gap-6 lg:grid-cols-4">
           {PLANS.map((plan, idx) => {
             const isPopular = idx === 1;
-            const savePct = Math.round((1 - plan.priceMonthly / plan.originalMonthly) * 100);
+            const saveAmount = plan.originalMonthly - plan.priceMonthly;
             return (
               <div
                 key={plan.id}
@@ -86,7 +86,7 @@ export default function PricingPage() {
                       ${plan.originalMonthly}
                     </span>
                     <span className="rounded-full bg-accent/10 px-2 py-0.5 text-xs font-medium text-accent-700">
-                      Save {savePct}%
+                      Save ${saveAmount}
                     </span>
                   </div>
                 </div>
@@ -155,7 +155,7 @@ export default function PricingPage() {
           <span className="font-medium text-foreground">
             ${PAY_AS_YOU_GO.kioskPerInteraction.toFixed(2)} / kiosk interaction
           </span>
-          . Plans bundle the same rate at ~17% off.
+          . Plans bundle the same rate at a discount.
         </p>
       </section>
 
