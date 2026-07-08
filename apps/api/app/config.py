@@ -64,11 +64,13 @@ class Settings(BaseSettings):
     # OPENAI_API_KEY     → TTS via tts-1 (shared key with WhatsApp); falls back to browser TTS
     # OPENAI_TTS_VOICE   → alloy | echo | fable | onyx | nova | shimmer (default: nova)
     anthropic_api_key: str | None = None
+    anthropic_base_url: str = "https://api.anthropic.com"
     openai_tts_voice: str = "nova"
 
     # --- Kiosk speech-to-text (Deepgram). No-op without the key; the kiosk
     # falls back to the free in-browser recognizer. ---
     deepgram_api_key: str | None = None
+    deepgram_base_url: str = "https://api.deepgram.com"
     deepgram_model: str = "nova-2"
 
     # --- Dashboard help bot (Gemini). No-op without GEMINI_API_KEY. ---

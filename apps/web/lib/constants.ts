@@ -19,16 +19,24 @@ export const VERTICALS = [
 ] as const;
 export type Vertical = (typeof VERTICALS)[number]['value'];
 
+// Pay-as-you-go rates. Plan "original" prices are these rates applied to the
+// included usage; the plan price is a bundled discount on that.
+export const PAY_AS_YOU_GO = {
+  voicePerMinute: 0.12,
+  kioskPerInteraction: 0.12,
+} as const;
+
 export const PLANS = [
   {
     id: 'essentials',
     name: 'Essentials',
-    priceMonthly: 99,
+    priceMonthly: 100,
+    originalMonthly: 120, // 500 voice + 500 kiosk @ $0.12
     maxKioskUrls: 1,
     blurb: 'Voice, WhatsApp, and kiosk for single-location operators.',
     features: [
       '1 location',
-      '200 voice minutes / month',
+      '500 voice minutes / month',
       '500 kiosk interactions / month',
       '1 kiosk URL',
       'Voice · WhatsApp · Kiosk',
@@ -38,12 +46,13 @@ export const PLANS = [
   {
     id: 'professional',
     name: 'Professional',
-    priceMonthly: 199,
+    priceMonthly: 200,
+    originalMonthly: 240, // 1,000 voice + 1,000 kiosk @ $0.12
     maxKioskUrls: 3,
     blurb: 'Higher limits for growing operations across multiple locations.',
     features: [
       'Up to 3 locations',
-      '500 voice minutes / month',
+      '1,000 voice minutes / month',
       '1,000 kiosk interactions / month',
       '3 kiosk URLs',
       'Voice · WhatsApp · Kiosk',
@@ -53,12 +62,13 @@ export const PLANS = [
   {
     id: 'business',
     name: 'Business',
-    priceMonthly: 299,
+    priceMonthly: 400,
+    originalMonthly: 480, // 2,000 voice + 2,000 kiosk @ $0.12
     maxKioskUrls: 6,
     blurb: 'High-volume multi-location teams across all channels.',
     features: [
       'Up to 5 locations',
-      '1,000 voice minutes / month',
+      '2,000 voice minutes / month',
       '2,000 kiosk interactions / month',
       '6 kiosk URLs',
       'Voice · WhatsApp · Kiosk',

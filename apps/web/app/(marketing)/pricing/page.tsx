@@ -3,7 +3,7 @@ import Link from 'next/link';
 import { Check } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { CallToAction } from '@/components/marketing/cta';
-import { PLANS } from '@/lib/constants';
+import { PLANS, PAY_AS_YOU_GO } from '@/lib/constants';
 import { cn } from '@/lib/utils';
 
 export const metadata: Metadata = {
@@ -18,7 +18,7 @@ const FAQ = [
   },
   {
     q: "Are there setup or per-call fees?",
-    a: "None. Your monthly plan covers everything up to your included limits. Voice minutes beyond your plan are billed at your plan's overage rate — no surprises.",
+    a: "None. Your monthly plan covers everything up to your included limits. Beyond that you're billed pay-as-you-go — $0.12 per voice minute and $0.12 per kiosk interaction — no surprises.",
   },
   {
     q: "How does payment work?",
@@ -58,6 +58,7 @@ export default function PricingPage() {
         <div className="grid gap-6 lg:grid-cols-4">
           {PLANS.map((plan, idx) => {
             const isPopular = idx === 1;
+            const savePct = Math.round((1 - plan.priceMonthly / plan.originalMonthly) * 100);
             return (
               <div
                 key={plan.id}
@@ -73,9 +74,21 @@ export default function PricingPage() {
                 )}
                 <h2 className="mt-2 text-xl font-semibold">{plan.name}</h2>
                 <p className="mt-1 text-sm text-muted-foreground">{plan.blurb}</p>
-                <div className="mt-6 flex items-baseline gap-1">
-                  <span className="text-4xl font-semibold tracking-tight">${plan.priceMonthly}</span>
-                  <span className="text-sm text-muted-foreground">/ location / month</span>
+                <div className="mt-6">
+                  <div className="flex items-baseline gap-1">
+                    <span className="text-4xl font-semibold tracking-tight">
+                      ${plan.priceMonthly}
+                    </span>
+                    <span className="text-sm text-muted-foreground">/ location / month</span>
+                  </div>
+                  <div className="mt-1.5 flex items-center gap-2">
+                    <span className="text-sm text-muted-foreground line-through">
+                      ${plan.originalMonthly}
+                    </span>
+                    <span className="rounded-full bg-accent/10 px-2 py-0.5 text-xs font-medium text-accent-700">
+                      Save {savePct}%
+                    </span>
+                  </div>
                 </div>
 
                 <ul className="mt-6 space-y-3 text-sm">
@@ -131,6 +144,19 @@ export default function PricingPage() {
             </Button>
           </div>
         </div>
+
+        <p className="mx-auto mt-10 max-w-2xl text-balance text-center text-sm text-muted-foreground">
+          Prefer to pay only for what you use?{' '}
+          <span className="font-medium text-foreground">Pay-as-you-go</span> is{' '}
+          <span className="font-medium text-foreground">
+            ${PAY_AS_YOU_GO.voicePerMinute.toFixed(2)} / voice minute
+          </span>{' '}
+          and{' '}
+          <span className="font-medium text-foreground">
+            ${PAY_AS_YOU_GO.kioskPerInteraction.toFixed(2)} / kiosk interaction
+          </span>
+          . Plans bundle the same rate at ~17% off.
+        </p>
       </section>
 
       <section className="border-y border-border/60 bg-secondary/30">

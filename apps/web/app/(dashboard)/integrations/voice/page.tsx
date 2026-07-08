@@ -4,6 +4,7 @@ import { ArrowLeft, AlertCircle } from 'lucide-react';
 import { requireDashboardSession } from '@/lib/auth/workspace';
 import { getVoiceCapabilities, getVoiceSettings } from '@/lib/api/voice';
 import { getBillingUsage } from '@/lib/api/billing';
+import { PAY_AS_YOU_GO } from '@/lib/constants';
 import { isApiError } from '@/lib/types';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { PageHeader } from '@/components/dashboard/page-header';
@@ -90,6 +91,19 @@ export default async function VoiceSettingsPage() {
         <div className="space-y-4">
           {/* Voice minutes — shown first so low-credit warnings are impossible to miss */}
           {billing && <VoiceMinutesCard usage={billing} />}
+
+          <Card>
+            <CardContent className="p-4 text-xs">
+              <p className="font-medium text-foreground">Pay-as-you-go rate</p>
+              <p className="mt-1 text-muted-foreground">
+                Beyond your plan, voice is billed at{' '}
+                <span className="font-medium text-foreground">
+                  ${PAY_AS_YOU_GO.voicePerMinute.toFixed(2)} / minute
+                </span>
+                . Test calls count toward usage.
+              </p>
+            </CardContent>
+          </Card>
 
           <MenuSyncCard
             menuDirty={settings.menu_dirty}
