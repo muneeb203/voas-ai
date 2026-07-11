@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 168 56" fill="none">
+  <circle cx="18" cy="28" r="4" fill="#00C2A8"/>
+  <path d="M23.74 19.8 A10 10 0 0 1 23.74 36.2" stroke="#00C2A8" stroke-width="3" stroke-linecap="round"/>
+  <path d="M27.18 14.9 A16 16 0 0 1 27.18 41.1" stroke="#00C2A8" stroke-width="3" stroke-linecap="round"/>
+  <text x="48" y="38" font-family="Inter, system-ui, -apple-system, Segoe UI, sans-serif">
+    <tspan font-size="32" font-weight="600" fill="#0A2540">VOAS</tspan><tspan font-size="20" font-weight="300" fill="#64748B"> AI</tspan>
+  </text>
+</svg>
