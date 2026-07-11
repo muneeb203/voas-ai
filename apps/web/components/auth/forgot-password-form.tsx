@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Field } from '@/components/ui/field';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
+import { Turnstile, TURNSTILE_ENABLED } from './turnstile';
 
 const EmailSchema = z.object({
   email: z.string().email('Enter a valid email').max(254),
@@ -25,6 +26,8 @@ export function ForgotPasswordForm() {
   const [email, setEmail] = useState('');
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | undefined>();
+  const [captchaToken, setCaptchaToken] = useState('');
+  const [captchaReset, setCaptchaReset] = useState(0);
 
   async function onEmailSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -39,10 +42,20 @@ export function ForgotPasswordForm() {
       return;
     }
 
+    if (TURNSTILE_ENABLED && !captchaToken) {
+      setError('Please complete the verification.');
+      return;
+    }
+
     setPending(true);
     const supabase = createSupabaseBrowserClient();
-    const { error: resetError } = await supabase.auth.resetPasswordForEmail(parsed.data.email);
+    const { error: resetError } = await supabase.auth.resetPasswordForEmail(
+      parsed.data.email,
+      TURNSTILE_ENABLED ? { captchaToken } : undefined,
+    );
     setPending(false);
+    setCaptchaToken('');
+    setCaptchaReset((n) => n + 1);
 
     if (resetError) {
       toast.error(resetError.message);
@@ -86,10 +99,19 @@ export function ForgotPasswordForm() {
 
   async function resendCode() {
     if (!email) return;
+    if (TURNSTILE_ENABLED && !captchaToken) {
+      toast.error('Please complete the verification below, then resend.');
+      return;
+    }
     setPending(true);
     const supabase = createSupabaseBrowserClient();
-    const { error: resetError } = await supabase.auth.resetPasswordForEmail(email);
+    const { error: resetError } = await supabase.auth.resetPasswordForEmail(
+      email,
+      TURNSTILE_ENABLED ? { captchaToken } : undefined,
+    );
     setPending(false);
+    setCaptchaToken('');
+    setCaptchaReset((n) => n + 1);
     if (resetError) toast.error(resetError.message);
     else toast.success('New code sent.');
   }
@@ -135,6 +157,10 @@ export function ForgotPasswordForm() {
           {pending ? 'Verifying…' : 'Verify code'}
         </Button>
 
+        {TURNSTILE_ENABLED && (
+          <Turnstile onVerify={setCaptchaToken} resetSignal={captchaReset} />
+        )}
+
         <div className="flex items-center justify-between text-xs">
           <button
             type="button"
@@ -171,6 +197,8 @@ export function ForgotPasswordForm() {
           disabled={pending}
         />
       </Field>
+
+      <Turnstile onVerify={setCaptchaToken} resetSignal={captchaReset} />
 
       <Button type="submit" size="lg" className="w-full" disabled={pending}>
         {pending ? 'Sending…' : 'Send code'}

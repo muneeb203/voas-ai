@@ -10,6 +10,7 @@ import { Input } from '@/components/ui/input';
 import { Field } from '@/components/ui/field';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import { GoogleButton } from './google-button';
+import { Turnstile, TURNSTILE_ENABLED } from './turnstile';
 
 const LoginSchema = z.object({
   email: z.string().email('Enter a valid email').max(254),
@@ -26,6 +27,8 @@ export function LoginForm() {
 
   const [pending, setPending] = useState(false);
   const [errors, setErrors] = useState<FieldErrors>({});
+  const [captchaToken, setCaptchaToken] = useState('');
+  const [captchaReset, setCaptchaReset] = useState(0);
 
   // Surface OAuth / callback errors that landed back here as ?error=...
   useEffect(() => {
@@ -54,12 +57,22 @@ export function LoginForm() {
       return;
     }
 
+    if (TURNSTILE_ENABLED && !captchaToken) {
+      toast.error('Please complete the verification.');
+      return;
+    }
+
     setPending(true);
     const supabase = createSupabaseBrowserClient();
-    const { error } = await supabase.auth.signInWithPassword(parsed.data);
+    const { error } = await supabase.auth.signInWithPassword({
+      ...parsed.data,
+      options: TURNSTILE_ENABLED ? { captchaToken } : undefined,
+    });
 
     if (error) {
       setPending(false);
+      setCaptchaToken('');
+      setCaptchaReset((n) => n + 1);
       toast.error(error.message);
       return;
     }
@@ -115,6 +128,8 @@ export function LoginForm() {
             Forgot password?
           </Link>
         </div>
+
+        <Turnstile onVerify={setCaptchaToken} resetSignal={captchaReset} />
 
         <Button type="submit" size="lg" className="w-full" disabled={pending}>
           {pending ? 'Signing in…' : 'Sign in'}

@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Field } from '@/components/ui/field';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
+import { Turnstile, TURNSTILE_ENABLED } from '@/components/auth/turnstile';
 
 const Schema = z.object({
   email: z.string().email('Enter a valid email').max(254),
@@ -23,6 +24,8 @@ export function AdminLoginForm() {
 
   const [pending, setPending] = useState(false);
   const [errors, setErrors] = useState<FieldErrors>({});
+  const [captchaToken, setCaptchaToken] = useState('');
+  const [captchaReset, setCaptchaReset] = useState(0);
 
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -43,12 +46,22 @@ export function AdminLoginForm() {
       return;
     }
 
+    if (TURNSTILE_ENABLED && !captchaToken) {
+      toast.error('Please complete the verification.');
+      return;
+    }
+
     setPending(true);
     const supabase = createSupabaseBrowserClient();
-    const { data, error } = await supabase.auth.signInWithPassword(parsed.data);
+    const { data, error } = await supabase.auth.signInWithPassword({
+      ...parsed.data,
+      options: TURNSTILE_ENABLED ? { captchaToken } : undefined,
+    });
     setPending(false);
 
     if (error) {
+      setCaptchaToken('');
+      setCaptchaReset((n) => n + 1);
       toast.error(error.message);
       return;
     }
@@ -89,6 +102,8 @@ export function AdminLoginForm() {
           disabled={pending}
         />
       </Field>
+
+      <Turnstile onVerify={setCaptchaToken} resetSignal={captchaReset} />
 
       <Button type="submit" size="lg" className="w-full" disabled={pending}>
         {pending ? 'Signing in…' : 'Sign in to admin'}
