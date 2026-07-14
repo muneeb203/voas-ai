@@ -10,6 +10,7 @@ import { Input } from '@/components/ui/input';
 import { Field } from '@/components/ui/field';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import { GoogleButton } from './google-button';
+import { Turnstile, TURNSTILE_ENABLED } from './turnstile';
 
 const SignupSchema = z.object({
   fullName: z.string().min(2, 'Please enter your full name').max(120),
@@ -27,6 +28,8 @@ export function SignupForm() {
 
   const [pending, setPending] = useState(false);
   const [errors, setErrors] = useState<FieldErrors>({});
+  const [captchaToken, setCaptchaToken] = useState('');
+  const [captchaReset, setCaptchaReset] = useState(0);
 
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -49,6 +52,11 @@ export function SignupForm() {
       return;
     }
 
+    if (TURNSTILE_ENABLED && !captchaToken) {
+      toast.error('Please complete the verification.');
+      return;
+    }
+
     setPending(true);
     const supabase = createSupabaseBrowserClient();
     const { data, error } = await supabase.auth.signUp({
@@ -60,11 +68,14 @@ export function SignupForm() {
           plan_intent: plan,
         },
         emailRedirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(next)}`,
+        ...(TURNSTILE_ENABLED ? { captchaToken } : {}),
       },
     });
     setPending(false);
 
     if (error) {
+      setCaptchaToken('');
+      setCaptchaReset((n) => n + 1);
       toast.error(error.message);
       return;
     }
@@ -123,6 +134,8 @@ export function SignupForm() {
             disabled={pending}
           />
         </Field>
+
+        <Turnstile onVerify={setCaptchaToken} resetSignal={captchaReset} />
 
         <Button type="submit" size="lg" className="w-full" disabled={pending}>
           {pending ? 'Creating account…' : 'Create account'}
