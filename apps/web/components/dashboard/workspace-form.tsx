@@ -1,7 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
-import { useActionState } from '@/lib/use-action-state';
+import { useState } from 'react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -14,10 +13,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { VERTICALS } from '@/lib/constants';
-import {
-  updateWorkspaceAction,
-  type FormState,
-} from '@/app/actions/settings-action';
+import { updateWorkspaceAction, type FormState } from '@/app/actions/settings-action';
 
 interface WorkspaceFormProps {
   defaultName: string;
@@ -26,7 +22,7 @@ interface WorkspaceFormProps {
   disabled?: boolean;
 }
 
-const INITIAL: FormState = { status: 'idle' };
+const IDLE: FormState = { status: 'idle' };
 
 export function WorkspaceForm({
   defaultName,
@@ -34,16 +30,34 @@ export function WorkspaceForm({
   slug,
   disabled,
 }: WorkspaceFormProps) {
-  const [state, formAction, pending] = useActionState(updateWorkspaceAction, INITIAL);
-  const fieldErrors = state.status === 'error' ? state.fieldErrors : undefined;
+  const [pending, setPending] = useState(false);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string> | undefined>(undefined);
 
-  useEffect(() => {
-    if (state.status === 'success') toast.success(state.message ?? 'Saved');
-    if (state.status === 'error' && !state.fieldErrors) toast.error(state.message);
-  }, [state]);
+  async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const formData = new FormData(e.currentTarget);
+
+    setFieldErrors(undefined);
+    setPending(true);
+    // Loading widget → resolves to "saved" on the same toast, so the
+    // confirmation is reliable even though the action revalidates the layout.
+    const toastId = toast.loading('Updating changes…');
+
+    const result = await updateWorkspaceAction(IDLE, formData);
+    setPending(false);
+
+    if (result.status === 'success') {
+      toast.success('Changes saved', { id: toastId });
+    } else if (result.status === 'error') {
+      if (result.fieldErrors) setFieldErrors(result.fieldErrors);
+      toast.error(result.message, { id: toastId });
+    } else {
+      toast.dismiss(toastId);
+    }
+  }
 
   return (
-    <form action={formAction} className="space-y-5">
+    <form onSubmit={onSubmit} className="space-y-5">
       <Field label="Workspace name" htmlFor="name" required error={fieldErrors?.name}>
         <Input id="name" name="name" defaultValue={defaultName} disabled={disabled || pending} />
       </Field>
@@ -79,7 +93,7 @@ export function WorkspaceForm({
       </Field>
 
       <Button type="submit" disabled={disabled || pending}>
-        {pending ? 'Saving…' : 'Save changes'}
+        {pending ? 'Updating…' : 'Save changes'}
       </Button>
       {disabled && (
         <p className="text-xs text-muted-foreground">Only workspace owners can edit these.</p>
