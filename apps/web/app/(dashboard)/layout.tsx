@@ -29,7 +29,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
           <ImpersonationBanner workspaceName={session.impersonation.workspace_name} />
         )}
         <div className="flex flex-1">
-          <Sidebar className="hidden w-60 shrink-0 lg:flex" />
+          <Sidebar className="hidden w-60 shrink-0 lg:flex" vertical={session.active.workspace.vertical} />
           <div className="flex min-w-0 flex-1 flex-col">
             <Topbar
               workspaceName={session.active.workspace.name}
@@ -37,6 +37,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
               userEmail={session.user.email}
               userName={session.user.full_name}
               role={session.active.role}
+              vertical={session.active.workspace.vertical}
             />
             <main className="flex-1">
               <div className="mx-auto max-w-7xl px-4 py-8 lg:px-8">{children}</div>

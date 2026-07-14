@@ -10,12 +10,15 @@ export const SITE = {
 export const WORKSPACE_ROLES = ['owner', 'manager', 'staff'] as const;
 export type WorkspaceRole = (typeof WORKSPACE_ROLES)[number];
 
+// `available: true` = the vertical has a full functional experience today
+// (Orders/Menu for restaurant, Appointments/Services/Staff for salon).
+// The rest are on the roadmap and show the base experience until built.
 export const VERTICALS = [
-  { value: 'restaurant', label: 'Restaurant' },
-  { value: 'dental', label: 'Dental' },
-  { value: 'salon', label: 'Salon' },
-  { value: 'auto', label: 'Auto repair' },
-  { value: 'other', label: 'Other' },
+  { value: 'restaurant', label: 'Restaurant', available: true },
+  { value: 'salon', label: 'Salon', available: true },
+  { value: 'dental', label: 'Dental', available: false },
+  { value: 'auto', label: 'Auto repair', available: false },
+  { value: 'other', label: 'Other', available: false },
 ] as const;
 export type Vertical = (typeof VERTICALS)[number]['value'];
 
