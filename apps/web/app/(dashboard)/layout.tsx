@@ -46,7 +46,11 @@ export default async function DashboardLayout({ children }: { children: React.Re
           </div>
         </div>
       </div>
-      <ProductTour userId={session.user.id} tourCompleted={tourCompleted} />
+      <ProductTour
+        userId={session.user.id}
+        tourCompleted={tourCompleted}
+        vertical={session.active.workspace.vertical}
+      />
     </NextIntlClientProvider>
   );
 }
