@@ -28,6 +28,7 @@ export interface KioskInfo {
   workspace_name: string;
   theme: 'warm' | 'light' | 'gradient';
   session_lock_enabled: boolean;
+  vertical: string;
 }
 
 export function listKioskTokens(workspaceId: string) {

@@ -1,3 +1,5 @@
+from datetime import UTC, datetime, timedelta
+
 from app.core.exceptions import AppError, NotFoundError
 from app.core.supabase import get_supabase_admin
 from app.models.salon import (
@@ -313,6 +315,35 @@ def list_appointments(
     if to_iso:
         q = q.lte("starts_at", to_iso)
     return [SalonAppointment(**row) for row in (q.execute().data or [])]
+
+
+def check_in_by_name(workspace_id: str, customer_name: str) -> SalonAppointment | None:
+    """Find the customer's nearest appointment around now (by name) and stamp
+    it as checked in. Returns None if no matching upcoming appointment."""
+    db = get_supabase_admin()
+    now = datetime.now(UTC)
+    res = (
+        db.table("salon_appointments")
+        .select("*")
+        .eq("workspace_id", workspace_id)
+        .in_("status", ["pending", "confirmed"])
+        .gte("starts_at", (now - timedelta(hours=2)).isoformat())
+        .lte("starts_at", (now + timedelta(hours=12)).isoformat())
+        .ilike("customer_name", f"%{customer_name.strip()}%")
+        .order("starts_at", desc=False)
+        .limit(1)
+        .execute()
+    )
+    if not res.data:
+        return None
+    appt = res.data[0]
+    upd = (
+        db.table("salon_appointments")
+        .update({"checked_in_at": now.isoformat(), "status": "confirmed"})
+        .eq("id", appt["id"])
+        .execute()
+    )
+    return SalonAppointment(**(upd.data[0] if upd.data else appt))
 
 
 def update_appointment_status(

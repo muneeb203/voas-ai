@@ -100,6 +100,7 @@ class SalonAppointment(BaseModel):
     status: AppointmentStatus
     price_cents: int
     notes: str | None = None
+    checked_in_at: datetime | None = None
     created_at: datetime
 
 

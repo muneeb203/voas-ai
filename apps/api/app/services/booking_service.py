@@ -222,6 +222,46 @@ def create_appointment(workspace_id: str, data: BookAppointmentInput) -> SalonAp
     return SalonAppointment(**res.data[0])
 
 
+def availability_prompt_context(workspace_id: str) -> str:
+    """Compact services + upcoming-free-slots text for injecting into an AI
+    prompt (WhatsApp or kiosk). The model offers only these real, open times;
+    create_appointment re-checks at commit so stale slots can't double-book."""
+    from app.services import salon_service
+
+    services = salon_service.list_services(workspace_id, active_only=True)
+    if not services:
+        return "AVAILABLE APPOINTMENTS: no services configured yet."
+
+    tz = _location_tz(workspace_id, None)
+    today = datetime.now(tz).date()
+    lines = [
+        "SERVICES & AVAILABLE APPOINTMENTS "
+        "(to book, copy service_id / starts_at / staff_id exactly):"
+    ]
+    for svc in services[:6]:
+        slot_lines: list[str] = []
+        for offset in range(0, 4):
+            day = (today + timedelta(days=offset)).isoformat()
+            try:
+                avail = get_availability(workspace_id, svc.id, day, max_slots=4)
+            except Exception:
+                continue
+            for slot in avail.slots:
+                when = slot.starts_at.astimezone(tz).strftime("%a %b %d, %I:%M %p")
+                slot_lines.append(
+                    f"  - {when} with {slot.staff_name} "
+                    f"[starts_at: {slot.starts_at.isoformat()} staff_id: {slot.staff_id}]"
+                )
+                if len(slot_lines) >= 5:
+                    break
+            if len(slot_lines) >= 5:
+                break
+        price = f"${svc.price_cents / 100:.0f}"
+        lines.append(f"\n{svc.name} ({svc.duration_minutes} min, {price}) [service_id: {svc.id}]")
+        lines.extend(slot_lines or ["  - no open times in the next few days"])
+    return "\n".join(lines)
+
+
 def get_appointment(workspace_id: str, appointment_id: str) -> SalonAppointment:
     db = get_supabase_admin()
     res = (

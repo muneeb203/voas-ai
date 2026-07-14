@@ -14,15 +14,28 @@ from __future__ import annotations
 
 import json
 import re
+from datetime import datetime, timedelta
 from typing import Any
 
 import httpx
 
 from app.config import get_settings
+from app.core.exceptions import AppError
 from app.core.logging import get_logger
 from app.core.supabase import get_supabase_admin
-from app.models.whatsapp import WHATSAPP_PROMPT_SUFFIX
-from app.services import voice_order_service, voice_service, whatsapp_service
+from app.models.salon import BookAppointmentInput
+from app.models.whatsapp import (
+    WHATSAPP_PROMPT_SUFFIX,
+    WHATSAPP_SALON_PROMPT_SUFFIX,
+    WHATSAPP_SALON_SYSTEM_PROMPT,
+)
+from app.services import (
+    booking_service,
+    salon_service,
+    voice_order_service,
+    voice_service,
+    whatsapp_service,
+)
 
 log = get_logger(__name__)
 
@@ -34,6 +47,65 @@ _ORDER_BLOCK_RE = re.compile(
     r"<<<ORDER>>>\s*(?P<json>.*?)\s*<<<END_ORDER>>>",
     re.DOTALL,
 )
+_BOOK_BLOCK_RE = re.compile(
+    r"<<<BOOK>>>\s*(?P<json>.*?)\s*<<<END_BOOK>>>",
+    re.DOTALL,
+)
+
+
+def _strip_book_block(text: str) -> str:
+    return _BOOK_BLOCK_RE.sub("", text).strip()
+
+
+def _extract_booking(text: str) -> dict[str, Any] | None:
+    match = _BOOK_BLOCK_RE.search(text)
+    if not match:
+        return None
+    try:
+        parsed = json.loads(match.group("json").strip())
+    except json.JSONDecodeError:
+        log.warning("whatsapp_book_block_invalid_json", raw_preview=match.group("json")[:200])
+        return None
+    return parsed if isinstance(parsed, dict) else None
+
+
+def _salon_context_for_workspace(workspace_id: str) -> str:
+    """Services + a compact list of upcoming free slots, injected into the
+    prompt so the model can offer and book real times. The booking engine
+    re-checks each slot at commit, so slightly-stale availability can't cause
+    a double-booking."""
+    services = salon_service.list_services(workspace_id, active_only=True)
+    if not services:
+        return "AVAILABLE APPOINTMENTS: no services configured yet."
+
+    tz = booking_service._location_tz(workspace_id, None)
+    today = datetime.now(tz).date()
+    lines = [
+        "SERVICES & AVAILABLE APPOINTMENTS "
+        "(to book, copy service_id / starts_at / staff_id exactly):"
+    ]
+    for svc in services[:6]:
+        slot_lines: list[str] = []
+        for offset in range(0, 4):
+            day = (today + timedelta(days=offset)).isoformat()
+            try:
+                avail = booking_service.get_availability(workspace_id, svc.id, day, max_slots=4)
+            except Exception:
+                continue
+            for slot in avail.slots:
+                when = slot.starts_at.astimezone(tz).strftime("%a %b %d, %I:%M %p")
+                slot_lines.append(
+                    f"  - {when} with {slot.staff_name} "
+                    f"[starts_at: {slot.starts_at.isoformat()} staff_id: {slot.staff_id}]"
+                )
+                if len(slot_lines) >= 5:
+                    break
+            if len(slot_lines) >= 5:
+                break
+        price = f"${svc.price_cents / 100:.0f}"
+        lines.append(f"\n{svc.name} ({svc.duration_minutes} min, {price}) [service_id: {svc.id}]")
+        lines.extend(slot_lines or ["  - no open times in the next few days"])
+    return "\n".join(lines)
 
 
 def _strip_order_block(text: str) -> str:
@@ -57,7 +129,17 @@ def _extract_order(text: str) -> dict[str, Any] | None:
     return parsed if isinstance(parsed, dict) else None
 
 
-def _build_system_prompt(workspace_id: str, base_prompt: str) -> str:
+def _build_system_prompt(workspace_id: str, base_prompt: str, vertical: str) -> str:
+    if vertical == "salon":
+        # Self-contained salon prompt — the restaurant base prompt (take orders,
+        # delivery) would fight the booking flow, same lesson as the kiosk.
+        parts = [
+            WHATSAPP_SALON_SYSTEM_PROMPT.strip(),
+            WHATSAPP_SALON_PROMPT_SUFFIX.strip(),
+            _salon_context_for_workspace(workspace_id),
+        ]
+        return "\n\n".join(p for p in parts if p)
+
     menu_md = voice_service._menu_context_for_workspace(workspace_id)
     parts = [base_prompt.strip(), WHATSAPP_PROMPT_SUFFIX.strip()]
     if menu_md:
@@ -140,6 +222,56 @@ def _call_openai(
         return None, None
 
 
+def _handle_salon_reply(
+    workspace_id: str,
+    conversation_id: str,
+    conv: dict[str, Any],
+    raw_reply: str,
+    token_usage: dict[str, int] | None,
+) -> dict[str, Any]:
+    """Salon turn: parse the <<<BOOK>>> block (if any) and create the
+    appointment via the conflict-safe booking engine. Reuses the order_placed
+    / order_id keys so the webhook caller is unchanged."""
+    booking_args = _extract_booking(raw_reply)
+    customer_reply = _strip_book_block(raw_reply) or "Got it!"
+    placed = False
+    appt_id: str | None = None
+
+    if booking_args and booking_args.get("service_id") and booking_args.get("starts_at"):
+        try:
+            appt = booking_service.create_appointment(
+                workspace_id,
+                BookAppointmentInput(
+                    service_id=booking_args["service_id"],
+                    starts_at=booking_args["starts_at"],
+                    staff_id=booking_args.get("staff_id"),
+                    customer_name=booking_args.get("customer_name") or conv.get("customer_name"),
+                    customer_phone=conv.get("customer_phone"),
+                    location_id=conv.get("location_id"),
+                    conversation_id=conversation_id,
+                ),
+            )
+            placed = True
+            appt_id = appt.id
+        except AppError as exc:
+            # e.g. slot taken / no staff — tell the customer instead of dropping.
+            customer_reply = f"{customer_reply}\n\n{exc.message}".strip()
+        except Exception as exc:
+            log.error(
+                "whatsapp_booking_failed",
+                workspace_id=workspace_id,
+                conversation_id=conversation_id,
+                error=str(exc),
+            )
+
+    return {
+        "reply": customer_reply,
+        "order_placed": placed,
+        "order_id": appt_id,
+        "usage": token_usage,
+    }
+
+
 def get_ai_reply(
     workspace_id: str,
     conversation_id: str,
@@ -155,14 +287,17 @@ def get_ai_reply(
 
     conv_res = (
         db.table("conversations")
-        .select("id, location_id, customer_id, customer_phone")
+        .select("id, location_id, customer_id, customer_phone, customer_name")
         .eq("id", conversation_id)
         .limit(1)
         .execute()
     )
     conv = conv_res.data[0] if conv_res.data else {}
 
-    system_prompt = _build_system_prompt(workspace_id, settings_row.system_prompt)
+    ws_res = db.table("workspaces").select("vertical").eq("id", workspace_id).limit(1).execute()
+    vertical = ws_res.data[0]["vertical"] if ws_res.data else "restaurant"
+
+    system_prompt = _build_system_prompt(workspace_id, settings_row.system_prompt, vertical)
     messages: list[dict[str, str]] = [{"role": "system", "content": system_prompt}]
     messages.extend(_load_history(conversation_id))
     messages.append({"role": "user", "content": incoming_message})
@@ -170,6 +305,9 @@ def get_ai_reply(
     raw_reply, token_usage = _call_openai(settings_row.model, messages)
     if raw_reply is None:
         return {"reply": _FALLBACK_REPLY, "order_placed": False, "order_id": None, "usage": None}
+
+    if vertical == "salon":
+        return _handle_salon_reply(workspace_id, conversation_id, conv, raw_reply, token_usage)
 
     order_args = _extract_order(raw_reply)
     customer_reply = _strip_order_block(raw_reply) or "Got it!"

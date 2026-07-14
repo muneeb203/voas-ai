@@ -19,7 +19,8 @@ from app.core.exceptions import (
 from app.core.logging import get_logger
 from app.core.supabase import get_supabase_admin
 from app.deps import OwnerContextDep, WorkspaceContextDep
-from app.services import voice_order_service
+from app.models.salon import BookAppointmentInput
+from app.services import booking_service, salon_service, voice_order_service
 from app.services.voice_service import _menu_context_for_workspace
 from app.utils.responses import DataResponse, ok
 
@@ -98,6 +99,46 @@ PLACE_ORDER_TOOL: dict = {
     },
 }
 
+SALON_KIOSK_SYSTEM_PROMPT = """You are the self-service assistant at a salon's in-store kiosk. Customers walk up and speak.
+
+You can do two things:
+1) BOOK a walk-in appointment for one of the services below.
+2) CHECK IN a customer who already has an appointment today.
+
+Rules:
+- Reply in ONE short sentence, 15 words maximum. No filler.
+- Offer times ONLY from the AVAILABLE APPOINTMENTS list. Never invent a time.
+- To BOOK: once the customer confirms a specific service and time, call the book_appointment tool with the service_id, starts_at, and staff_id copied EXACTLY from the list, plus their name if given.
+- To CHECK IN: if the customer says they've arrived for an existing appointment, get their name, then call the check_in tool with that name.
+- Calling the tool IS how it happens — never say it's done in text without calling the tool.
+
+"""
+
+BOOK_APPOINTMENT_TOOL: dict = {
+    "name": "book_appointment",
+    "description": "Book a walk-in appointment once the customer confirms a specific service and time.",
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "service_id": {"type": "string", "description": "Copied exactly from the list."},
+            "starts_at": {"type": "string", "description": "ISO 8601 UTC, copied exactly."},
+            "staff_id": {"type": "string", "description": "Copied exactly, or omit."},
+            "customer_name": {"type": "string"},
+        },
+        "required": ["service_id", "starts_at"],
+    },
+}
+
+CHECK_IN_TOOL: dict = {
+    "name": "check_in",
+    "description": "Check in a customer who already has an appointment today.",
+    "input_schema": {
+        "type": "object",
+        "properties": {"customer_name": {"type": "string"}},
+        "required": ["customer_name"],
+    },
+}
+
 
 # ── Pydantic models ────────────────────────────────────────────────────────────
 
@@ -132,6 +173,7 @@ class KioskInfo(BaseModel):
     workspace_name: str
     theme: str
     session_lock_enabled: bool
+    vertical: str = "restaurant"
 
 
 class KioskSttToken(BaseModel):
@@ -170,6 +212,7 @@ class KioskChatResponse(BaseModel):
     response: str
     order_confirmed: bool
     order: dict | None = None
+    appointment: dict | None = None  # salon: booked/checked-in details for the confirm screen
     debug: dict | None = None  # timing/token info for the ?debug overlay
 
 
@@ -247,6 +290,103 @@ def _get_kiosk_system_prompt(db, workspace_id: str) -> str:
     return prompt
 
 
+def _build_salon_kiosk_system_prompt(workspace_id: str) -> str:
+    # Not cached: availability changes with every booking, and create_appointment
+    # re-checks the slot at commit anyway.
+    return f"{SALON_KIOSK_SYSTEM_PROMPT}{booking_service.availability_prompt_context(workspace_id)}".strip()
+
+
+def _appt_display(appt, kind: str, workspace_id: str, location_id: str | None) -> dict:
+    tz = booking_service._location_tz(workspace_id, location_id)
+    return {
+        "kind": kind,  # 'booked' | 'checked_in'
+        "service_name": appt.service_name,
+        "staff_name": appt.staff_name,
+        "when": appt.starts_at.astimezone(tz).strftime("%a %b %d, %I:%M %p"),
+        "order_number": f"#{str(appt.id)[:6].upper()}",
+    }
+
+
+def _handle_salon_kiosk_chat(db, workspace_id, ctx, token, content_blocks, debug_info, body):
+    """Salon kiosk: handle the book_appointment / check_in tool calls."""
+    location_id = ctx["location_id"]
+    for block in content_blocks:
+        if block.get("type") != "tool_use":
+            continue
+        name = block.get("name")
+        args: dict = block.get("input", {})
+
+        if name == "book_appointment":
+            if not args.get("service_id") or not args.get("starts_at"):
+                return ok(
+                    KioskChatResponse(
+                        response="Sorry, which service and time would you like?",
+                        order_confirmed=False,
+                        debug=debug_info,
+                    )
+                )
+            conversation_id = _create_kiosk_conversation(db, workspace_id, location_id, body.messages)
+            try:
+                appt = booking_service.create_appointment(
+                    workspace_id,
+                    BookAppointmentInput(
+                        service_id=args["service_id"],
+                        starts_at=args["starts_at"],
+                        staff_id=args.get("staff_id"),
+                        customer_name=args.get("customer_name"),
+                        location_id=location_id,
+                        conversation_id=conversation_id,
+                    ),
+                )
+            except AppError as exc:
+                return ok(
+                    KioskChatResponse(response=exc.message, order_confirmed=False, debug=debug_info)
+                )
+            except Exception as exc:
+                log.error("kiosk_book_failed", workspace_id=workspace_id, error=str(exc))
+                return ok(
+                    KioskChatResponse(
+                        response="Sorry, I couldn't book that — please try again.",
+                        order_confirmed=False,
+                        debug=debug_info,
+                    )
+                )
+            db.rpc("decrement_kiosk_credit", {"p_workspace_id": workspace_id}).execute()
+            return ok(
+                KioskChatResponse(
+                    response="You're booked!",
+                    order_confirmed=True,
+                    appointment=_appt_display(appt, "booked", workspace_id, location_id),
+                    debug=debug_info,
+                )
+            )
+
+        if name == "check_in":
+            appt = salon_service.check_in_by_name(workspace_id, args.get("customer_name", ""))
+            if not appt:
+                return ok(
+                    KioskChatResponse(
+                        response="I couldn't find your appointment — please see the front desk.",
+                        order_confirmed=False,
+                        debug=debug_info,
+                    )
+                )
+            return ok(
+                KioskChatResponse(
+                    response="You're checked in!",
+                    order_confirmed=True,
+                    appointment=_appt_display(appt, "checked_in", workspace_id, location_id),
+                    debug=debug_info,
+                )
+            )
+
+    text = next(
+        (b["text"] for b in content_blocks if b.get("type") == "text"),
+        "Sorry, could you repeat that?",
+    )
+    return ok(KioskChatResponse(response=text, order_confirmed=False, debug=debug_info))
+
+
 def _get_kiosk_chat_context(db, token: str) -> dict:
     """Cached token → {workspace_id, location_id} for the hot /chat and /speak
     paths, so the token lookup doesn't run on every turn. The kiosk is always
@@ -256,7 +396,15 @@ def _get_kiosk_chat_context(db, token: str) -> dict:
     if cached and cached[0] > now:
         return cached[1]
     row = _get_token_row(db, token)
-    ctx = {"workspace_id": row["workspace_id"], "location_id": row["location_id"]}
+    ws = (
+        db.table("workspaces").select("vertical").eq("id", row["workspace_id"]).limit(1).execute()
+    )
+    vertical = ws.data[0]["vertical"] if ws.data else "restaurant"
+    ctx = {
+        "workspace_id": row["workspace_id"],
+        "location_id": row["location_id"],
+        "vertical": vertical,
+    }
     _kiosk_ctx_cache[token] = (now + KIOSK_CTX_TTL_SECONDS, ctx)
     return ctx
 
@@ -487,14 +635,18 @@ async def get_kiosk_info(token: Annotated[str, Path()]) -> DataResponse[KioskInf
     ).execute()
 
     loc_res = db.table("locations").select("name").eq("id", location_id).limit(1).execute()
-    ws_res = db.table("workspaces").select("name").eq("id", workspace_id).limit(1).execute()
+    ws_res = (
+        db.table("workspaces").select("name, vertical").eq("id", workspace_id).limit(1).execute()
+    )
+    ws_row = ws_res.data[0] if ws_res.data else {}
 
     return ok(
         KioskInfo(
             location_name=loc_res.data[0]["name"] if loc_res.data else "Restaurant",
-            workspace_name=ws_res.data[0]["name"] if ws_res.data else "",
+            workspace_name=ws_row.get("name") or "",
             theme=kiosk_cfg.theme,
             session_lock_enabled=kiosk_cfg.session_lock_enabled,
+            vertical=ws_row.get("vertical") or "restaurant",
         )
     )
 
@@ -655,7 +807,13 @@ async def kiosk_chat(
             "This kiosk is out of credits. Contact the restaurant to add more."
         )
 
-    system_prompt = _get_kiosk_system_prompt(db, workspace_id)
+    vertical = ctx.get("vertical", "restaurant")
+    if vertical == "salon":
+        system_prompt = _build_salon_kiosk_system_prompt(workspace_id)
+        tools = [BOOK_APPOINTMENT_TOOL, CHECK_IN_TOOL]
+    else:
+        system_prompt = _get_kiosk_system_prompt(db, workspace_id)
+        tools = [PLACE_ORDER_TOOL]
     messages_payload = [m.model_dump() for m in body.messages]
 
     chat_t0 = time.perf_counter()
@@ -677,7 +835,7 @@ async def kiosk_chat(
                 }
             ],
             "messages": messages_payload,
-            "tools": [PLACE_ORDER_TOOL],
+            "tools": tools,
         },
     )
 
@@ -712,6 +870,9 @@ async def kiosk_chat(
         tool_calls=tool_calls,
         has_text=any(b.get("type") == "text" for b in content_blocks),
     )
+
+    if vertical == "salon":
+        return _handle_salon_kiosk_chat(db, workspace_id, ctx, token, content_blocks, debug_info, body)
 
     for block in content_blocks:
         if block.get("type") == "tool_use" and block.get("name") == "place_order":

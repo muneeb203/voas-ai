@@ -17,6 +17,7 @@ import {
   generateVoicePrompt,
   LANGUAGE_FORMALITY_LABELS,
   PERSONALITY_LABELS,
+  SALON_PERSONALITY_LABELS,
   FRIENDLINESS_LABELS,
   GREETING_LENGTH_LABELS,
   type Language,
@@ -24,6 +25,7 @@ import {
   type GreetingLength,
   type LanguageFormality,
   type BusinessPersonality,
+  type BusinessVertical,
 } from '@/lib/voice-prompt-templates';
 
 // ── Tone toggle ──────────────────────────────────────────────────────────────
@@ -92,6 +94,8 @@ interface VoicePromptGeneratorModalProps {
   workspaceName: string
   /** Current language selected in the voice settings form */
   language: Language
+  /** Workspace vertical — tailors the generated prompt (salon vs restaurant) */
+  vertical?: BusinessVertical
 }
 
 export function VoicePromptGeneratorModal({
@@ -100,6 +104,7 @@ export function VoicePromptGeneratorModal({
   onApply,
   workspaceName,
   language,
+  vertical = 'restaurant',
 }: VoicePromptGeneratorModalProps) {
   // Business info
   const [businessName, setBusinessName] = useState(workspaceName)
@@ -142,10 +147,12 @@ export function VoicePromptGeneratorModal({
     greetingLength,
     languageFormality,
     businessPersonality,
+    vertical,
   })
 
   const formalityLabels = LANGUAGE_FORMALITY_LABELS[language]
-  const personalityLabels = PERSONALITY_LABELS[language]
+  const personalityLabels =
+    (vertical === 'salon' ? SALON_PERSONALITY_LABELS : PERSONALITY_LABELS)[language]
   const friendlinessLabels = FRIENDLINESS_LABELS[language]
   const greetingLengthLabels = GREETING_LENGTH_LABELS[language]
 

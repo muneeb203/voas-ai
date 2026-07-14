@@ -38,6 +38,8 @@ interface VoiceSettingsFormProps {
   disabled?: boolean;
   /** Workspace name — pre-fills the generator modal's business name field */
   workspaceName?: string;
+  /** Workspace vertical — tailors the auto-generated prompt (salon vs restaurant) */
+  vertical?: string;
 }
 
 export function VoiceSettingsForm({
@@ -45,6 +47,7 @@ export function VoiceSettingsForm({
   capabilities,
   disabled,
   workspaceName = '',
+  vertical = 'restaurant',
 }: VoiceSettingsFormProps) {
   const [state, formAction, pending] = useActionState(updateVoiceSettingsAction, INITIAL);
   const fieldErrors = state.fieldErrors;
@@ -433,6 +436,7 @@ export function VoiceSettingsForm({
         }}
         workspaceName={workspaceName}
         language={language}
+        vertical={vertical === 'salon' ? 'salon' : 'restaurant'}
       />
     </form>
   );

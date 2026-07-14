@@ -27,6 +27,127 @@ log = get_logger(__name__)
 
 # Order statuses that don't count toward revenue.
 _NON_REVENUE_STATUSES = {"cancelled", "refunded"}
+# Salon appointment statuses that don't count toward booked revenue.
+_NON_REVENUE_SALON = {"cancelled", "no_show"}
+
+
+def _vertical(db, workspace_id: str) -> str:
+    res = db.table("workspaces").select("vertical").eq("id", workspace_id).limit(1).execute()
+    return res.data[0]["vertical"] if res.data else "restaurant"
+
+
+def _order_metrics(db, workspace_id: str, since_iso: str, tz: tzinfo) -> dict[str, Any]:
+    """Restaurant: aggregate the orders table into the shared summary shape."""
+    rows = (
+        db.table("orders")
+        .select("id, status, total_cents, items_json, created_at")
+        .eq("workspace_id", workspace_id)
+        .gte("created_at", since_iso)
+        .execute()
+    ).data or []
+
+    by_status: dict[str, int] = defaultdict(int)
+    daily_counts: dict[str, int] = defaultdict(int)
+    daily_rev: dict[str, int] = defaultdict(int)
+    total_rev = 0
+    rev_count = 0
+    item_counts: dict[str, int] = defaultdict(int)
+    item_rev: dict[str, int] = defaultdict(int)
+
+    for row in rows:
+        status_val = row.get("status") or "pending"
+        by_status[status_val] += 1
+        created = _local(row.get("created_at"), tz)
+        if created:
+            daily_counts[created.date().isoformat()] += 1
+        if status_val in _NON_REVENUE_STATUSES:
+            continue
+        total = int(row.get("total_cents") or 0)
+        total_rev += total
+        rev_count += 1
+        if created:
+            daily_rev[created.date().isoformat()] += total
+        items = row.get("items_json")
+        if isinstance(items, list):
+            for item in items:
+                if not isinstance(item, dict):
+                    continue
+                name = str(item.get("name") or "").strip()
+                if not name:
+                    continue
+                quantity = int(item.get("quantity") or 1)
+                unit_price = int(item.get("unit_price_cents") or 0)
+                item_counts[name] += quantity
+                item_rev[name] += quantity * unit_price
+
+    top = [
+        TopItem(name=name, count=count, revenue_cents=item_rev[name])
+        for name, count in sorted(item_counts.items(), key=lambda kv: kv[1], reverse=True)[:10]
+    ]
+    return {
+        "total": len(rows),
+        "by_status": dict(by_status),
+        "daily_counts": daily_counts,
+        "daily_rev": daily_rev,
+        "total_rev": total_rev,
+        "rev_count": rev_count,
+        "top": top,
+    }
+
+
+def _appointment_metrics(
+    db, workspace_id: str, since_iso: str, now_iso: str, tz: tzinfo
+) -> dict[str, Any]:
+    """Salon: aggregate salon_appointments (by appointment date) into the same
+    summary shape — appointments as 'orders', services as 'top items'."""
+    rows = (
+        db.table("salon_appointments")
+        .select("id, status, price_cents, service_name, starts_at")
+        .eq("workspace_id", workspace_id)
+        .gte("starts_at", since_iso)
+        .lte("starts_at", now_iso)
+        .execute()
+    ).data or []
+
+    by_status: dict[str, int] = defaultdict(int)
+    daily_counts: dict[str, int] = defaultdict(int)
+    daily_rev: dict[str, int] = defaultdict(int)
+    total_rev = 0
+    rev_count = 0
+    svc_counts: dict[str, int] = defaultdict(int)
+    svc_rev: dict[str, int] = defaultdict(int)
+
+    for row in rows:
+        status_val = row.get("status") or "confirmed"
+        by_status[status_val] += 1
+        when = _local(row.get("starts_at"), tz)
+        if when:
+            daily_counts[when.date().isoformat()] += 1
+        if status_val in _NON_REVENUE_SALON:
+            continue
+        price = int(row.get("price_cents") or 0)
+        total_rev += price
+        rev_count += 1
+        if when:
+            daily_rev[when.date().isoformat()] += price
+        name = str(row.get("service_name") or "").strip()
+        if name:
+            svc_counts[name] += 1
+            svc_rev[name] += price
+
+    top = [
+        TopItem(name=name, count=count, revenue_cents=svc_rev[name])
+        for name, count in sorted(svc_counts.items(), key=lambda kv: kv[1], reverse=True)[:10]
+    ]
+    return {
+        "total": len(rows),
+        "by_status": dict(by_status),
+        "daily_counts": daily_counts,
+        "daily_rev": daily_rev,
+        "total_rev": total_rev,
+        "rev_count": rev_count,
+        "top": top,
+    }
 
 
 def _parse_dt(value: str | None) -> datetime | None:
@@ -129,61 +250,20 @@ def get_summary(workspace_id: str, since: datetime) -> AnalyticsSummary:
     avg_duration = sum(duration_values) / len(duration_values) if duration_values else None
     avg_sentiment = sum(sentiment_values) / len(sentiment_values) if sentiment_values else None
 
-    # --- Orders ------------------------------------------------------------
-    order_res = (
-        db.table("orders")
-        .select("id, status, total_cents, items_json, created_at")
-        .eq("workspace_id", workspace_id)
-        .gte("created_at", since_iso)
-        .execute()
-    )
-    orders: list[dict[str, Any]] = order_res.data or []
+    # --- Orders / appointments (vertical-aware) ----------------------------
+    if _vertical(db, workspace_id) == "salon":
+        m = _appointment_metrics(db, workspace_id, since_iso, now.isoformat(), tz)
+    else:
+        m = _order_metrics(db, workspace_id, since_iso, tz)
 
-    orders_by_status: dict[str, int] = defaultdict(int)
-    daily_order_counts: dict[str, int] = defaultdict(int)
-    daily_revenue: dict[str, int] = defaultdict(int)
-    total_revenue_cents = 0
-    revenue_order_count = 0
-    item_counts: dict[str, int] = defaultdict(int)
-    item_revenue: dict[str, int] = defaultdict(int)
-
-    for row in orders:
-        status_val = row.get("status") or "pending"
-        orders_by_status[status_val] += 1
-
-        created = _local(row.get("created_at"), tz)
-        if created:
-            daily_order_counts[created.date().isoformat()] += 1
-
-        is_revenue = status_val not in _NON_REVENUE_STATUSES
-        total = int(row.get("total_cents") or 0)
-        if is_revenue:
-            total_revenue_cents += total
-            revenue_order_count += 1
-            if created:
-                daily_revenue[created.date().isoformat()] += total
-
-        # Aggregate line items for the top-items chart (revenue orders only).
-        if is_revenue:
-            items = row.get("items_json")
-            if isinstance(items, list):
-                for item in items:
-                    if not isinstance(item, dict):
-                        continue
-                    name = str(item.get("name") or "").strip()
-                    if not name:
-                        continue
-                    quantity = int(item.get("quantity") or 1)
-                    unit_price = int(item.get("unit_price_cents") or 0)
-                    item_counts[name] += quantity
-                    item_revenue[name] += quantity * unit_price
-
+    total_units = m["total"]
+    orders_by_status = m["by_status"]
+    daily_order_counts = m["daily_counts"]
+    daily_revenue = m["daily_rev"]
+    total_revenue_cents = m["total_rev"]
+    revenue_order_count = m["rev_count"]
+    top_menu_items = m["top"]
     avg_order_value = total_revenue_cents / revenue_order_count if revenue_order_count else None
-
-    top_menu_items = [
-        TopItem(name=name, count=count, revenue_cents=item_revenue[name])
-        for name, count in sorted(item_counts.items(), key=lambda kv: kv[1], reverse=True)[:10]
-    ]
 
     # --- Customers ---------------------------------------------------------
     total_customers = len(customer_ids)
@@ -218,7 +298,7 @@ def get_summary(workspace_id: str, since: datetime) -> AnalyticsSummary:
         conversations_by_outcome=dict(by_outcome),
         avg_duration_seconds=avg_duration,
         avg_sentiment=avg_sentiment,
-        total_orders=len(orders),
+        total_orders=total_units,
         total_revenue_cents=total_revenue_cents,
         avg_order_value_cents=avg_order_value,
         orders_by_status=dict(orders_by_status),
@@ -256,23 +336,40 @@ def get_today_stats(workspace_id: str) -> TodayStats:
         sum(sentiment_values) / len(sentiment_values) if sentiment_values else None
     )
 
-    order_res = (
-        db.table("orders")
-        .select("id, status, total_cents")
-        .eq("workspace_id", workspace_id)
-        .gte("created_at", start_iso)
-        .execute()
-    )
-    orders: list[dict[str, Any]] = order_res.data or []
-    revenue_today_cents = sum(
-        int(r.get("total_cents") or 0)
-        for r in orders
-        if (r.get("status") or "pending") not in _NON_REVENUE_STATUSES
-    )
+    if _vertical(db, workspace_id) == "salon":
+        now_iso = datetime.now(UTC).isoformat()
+        appts = (
+            db.table("salon_appointments")
+            .select("id, status, price_cents")
+            .eq("workspace_id", workspace_id)
+            .gte("starts_at", start_iso)
+            .lte("starts_at", now_iso)
+            .execute()
+        ).data or []
+        units_today = len(appts)
+        revenue_today_cents = sum(
+            int(r.get("price_cents") or 0)
+            for r in appts
+            if (r.get("status") or "confirmed") not in _NON_REVENUE_SALON
+        )
+    else:
+        orders = (
+            db.table("orders")
+            .select("id, status, total_cents")
+            .eq("workspace_id", workspace_id)
+            .gte("created_at", start_iso)
+            .execute()
+        ).data or []
+        units_today = len(orders)
+        revenue_today_cents = sum(
+            int(r.get("total_cents") or 0)
+            for r in orders
+            if (r.get("status") or "pending") not in _NON_REVENUE_STATUSES
+        )
 
     return TodayStats(
         conversations_today=len(conversations),
-        orders_today=len(orders),
+        orders_today=units_today,
         revenue_today_cents=revenue_today_cents,
         avg_sentiment_today=avg_sentiment_today,
     )

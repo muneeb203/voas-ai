@@ -84,6 +84,7 @@ export default async function VoiceSettingsPage() {
               capabilities={caps}
               disabled={!isOwner}
               workspaceName={workspaceName}
+              vertical={session.active.workspace.vertical}
             />
           </CardContent>
         </Card>
