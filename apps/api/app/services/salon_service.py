@@ -4,6 +4,8 @@ from app.core.exceptions import AppError, NotFoundError
 from app.core.supabase import get_supabase_admin
 from app.models.salon import (
     AppointmentStatusUpdate,
+    ReminderSettings,
+    ReminderSettingsUpdate,
     SalonAppointment,
     SalonService,
     SalonServiceCreate,
@@ -353,6 +355,50 @@ def check_in_by_name(workspace_id: str, customer_name: str) -> SalonAppointment 
         .execute()
     )
     return SalonAppointment(**(upd.data[0] if upd.data else appt))
+
+
+# --- Reminder settings ------------------------------------------------------
+
+
+def get_reminder_settings(workspace_id: str) -> ReminderSettings:
+    db = get_supabase_admin()
+    res = (
+        db.table("voice_settings")
+        .select(
+            "send_appointment_confirmations, send_appointment_reminders, reminder_lead_minutes"
+        )
+        .eq("workspace_id", workspace_id)
+        .limit(1)
+        .execute()
+    )
+    if not res.data:
+        return ReminderSettings()
+    row = res.data[0]
+    return ReminderSettings(
+        send_appointment_confirmations=row.get("send_appointment_confirmations", True),
+        send_appointment_reminders=row.get("send_appointment_reminders", True),
+        reminder_lead_minutes=row.get("reminder_lead_minutes") or [1440],
+    )
+
+
+def update_reminder_settings(
+    workspace_id: str, payload: ReminderSettingsUpdate, actor_id: str
+) -> ReminderSettings:
+    db = get_supabase_admin()
+    changes = payload.model_dump(exclude_none=True)
+    if changes:
+        db.table("voice_settings").upsert(
+            {"workspace_id": workspace_id, **changes}, on_conflict="workspace_id"
+        ).execute()
+        audit_service.write(
+            actor_type="user",
+            actor_id=actor_id,
+            workspace_id=workspace_id,
+            action="salon.reminder_settings.updated",
+            resource_type="voice_settings",
+            resource_id=workspace_id,
+        )
+    return get_reminder_settings(workspace_id)
 
 
 def update_appointment_status(

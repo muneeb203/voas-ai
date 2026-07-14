@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 AppointmentStatus = Literal["pending", "confirmed", "completed", "cancelled", "no_show"]
 
@@ -130,6 +130,32 @@ class AvailabilityResult(BaseModel):
     date: str
     service_id: str
     slots: list[AvailabilitySlot]
+
+
+# --- Reminder settings ------------------------------------------------------
+
+
+class ReminderSettings(BaseModel):
+    send_appointment_confirmations: bool = True
+    send_appointment_reminders: bool = True
+    reminder_lead_minutes: list[int] = [1440]  # minutes-before offsets, e.g. [1440, 120]
+
+
+class ReminderSettingsUpdate(BaseModel):
+    send_appointment_confirmations: bool | None = None
+    send_appointment_reminders: bool | None = None
+    # 5 min .. 14 days before; at most 4 distinct offsets.
+    reminder_lead_minutes: list[int] | None = Field(default=None, max_length=4)
+
+    @field_validator("reminder_lead_minutes")
+    @classmethod
+    def _valid_leads(cls, v: list[int] | None) -> list[int] | None:
+        if v is None:
+            return v
+        for m in v:
+            if m < 5 or m > 20160:
+                raise ValueError("Each reminder lead must be between 5 minutes and 14 days.")
+        return sorted(set(v), reverse=True)
 
 
 class BookAppointmentInput(BaseModel):

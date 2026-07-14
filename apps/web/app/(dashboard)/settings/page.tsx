@@ -2,7 +2,9 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { requireDashboardSession } from '@/lib/auth/workspace';
 import { getBillingUsage, listBillingGrants } from '@/lib/api/billing';
+import { getReminderSettings } from '@/lib/api/salon';
 import { isApiError } from '@/lib/types';
+import { ReminderSettingsForm } from '@/components/dashboard/reminder-settings-form';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { PageHeader } from '@/components/dashboard/page-header';
@@ -36,6 +38,9 @@ export default async function SettingsPage({
     ? await Promise.all([getBillingUsage(ws.id), listBillingGrants(ws.id)])
     : [null, null];
 
+  const isSalon = ws.vertical === 'salon';
+  const reminderRes = isSalon ? await getReminderSettings(ws.id) : null;
+
   return (
     <div>
       <PageHeader eyebrow="Settings" title="Workspace settings" />
@@ -64,6 +69,20 @@ export default async function SettingsPage({
               />
             </CardContent>
           </Card>
+
+          {isSalon && reminderRes && !isApiError(reminderRes) && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Appointment messaging</CardTitle>
+                <CardDescription>
+                  Booking confirmations and automatic reminders to cut no-shows.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <ReminderSettingsForm initial={reminderRes.data} canEdit={isOwner} />
+              </CardContent>
+            </Card>
+          )}
 
           {isOwner && <DangerZone workspaceName={ws.name} />}
         </TabsContent>

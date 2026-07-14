@@ -75,6 +75,12 @@ export interface BookInput {
   customer_phone?: string | null;
 }
 
+export interface ReminderSettings {
+  send_appointment_confirmations: boolean;
+  send_appointment_reminders: boolean;
+  reminder_lead_minutes: number[];
+}
+
 export interface ServiceInput {
   name: string;
   description?: string | null;
@@ -142,6 +148,21 @@ export function updateStaff(workspaceId: string, staffId: string, body: Partial<
 
 export function deleteStaff(workspaceId: string, staffId: string) {
   return apiCall<null>(`/v1/workspaces/${workspaceId}/salon/staff/${staffId}`, { method: 'DELETE' });
+}
+
+// --- Reminder settings ------------------------------------------------------
+
+export function getReminderSettings(workspaceId: string) {
+  return apiCall<ReminderSettings>(`/v1/workspaces/${workspaceId}/salon/reminder-settings`, {
+    cache: 'no-store',
+  });
+}
+
+export function updateReminderSettings(workspaceId: string, body: Partial<ReminderSettings>) {
+  return apiCall<ReminderSettings>(`/v1/workspaces/${workspaceId}/salon/reminder-settings`, {
+    method: 'PUT',
+    body,
+  });
 }
 
 // --- Google Calendar (per-staff two-way sync) -------------------------------
