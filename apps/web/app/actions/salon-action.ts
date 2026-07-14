@@ -15,6 +15,8 @@ import {
   rescheduleAppointment,
   getGoogleConnectUrl,
   disconnectGoogle,
+  updateReminderSettings,
+  type ReminderSettings,
   type AppointmentStatus,
   type AvailabilitySlot,
   type BookInput,
@@ -107,6 +109,17 @@ export async function disconnectGoogleCalendarAction(staffId: string) {
   const res = await disconnectGoogle(session.active.workspace_id, staffId);
   if (isApiError(res)) return { error: res.error.message };
   revalidatePath('/staff');
+  return { error: null };
+}
+
+// --- Reminder settings ------------------------------------------------------
+
+export async function updateReminderSettingsAction(body: Partial<ReminderSettings>) {
+  const { error, session } = await requireOwner('/settings');
+  if (error || !session) return { error: error ?? 'Unauthorized' };
+  const res = await updateReminderSettings(session.active.workspace_id, body);
+  if (isApiError(res)) return { error: res.error.message };
+  revalidatePath('/settings');
   return { error: null };
 }
 

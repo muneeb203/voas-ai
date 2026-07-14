@@ -64,6 +64,10 @@ def _init_sentry() -> bool:
 
 @asynccontextmanager
 async def lifespan(_: FastAPI) -> AsyncIterator[None]:
+    import asyncio
+
+    from app.services import appointment_reminder_service
+
     configure_logging()
     log = get_logger(__name__)
     settings = get_settings()
@@ -75,7 +79,16 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
         cors_origins=settings.cors_origins_list,
         sentry_active=sentry_active,
     )
+
+    reminder_task = asyncio.create_task(appointment_reminder_service.run_reminder_loop())
+
     yield
+
+    import contextlib
+
+    reminder_task.cancel()
+    with contextlib.suppress(asyncio.CancelledError):
+        await reminder_task
     log.info("api_shutdown")
 
 

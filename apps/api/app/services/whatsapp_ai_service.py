@@ -250,6 +250,8 @@ def _handle_salon_reply(
                     location_id=conv.get("location_id"),
                     conversation_id=conversation_id,
                 ),
+                # The WhatsApp thread already confirms in-chat — no duplicate DM.
+                send_confirmation=False,
             )
             placed = True
             appt_id = appt.id

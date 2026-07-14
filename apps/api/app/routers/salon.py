@@ -5,6 +5,8 @@ from app.models.salon import (
     AppointmentStatusUpdate,
     AvailabilityResult,
     BookAppointmentInput,
+    ReminderSettings,
+    ReminderSettingsUpdate,
     RescheduleInput,
     SalonAppointment,
     SalonService,
@@ -127,6 +129,27 @@ async def get_availability(
             location_id=location_id,
         )
     )
+
+
+# --- Reminder settings ------------------------------------------------------
+
+
+@router.get(
+    "/workspaces/{workspace_id}/salon/reminder-settings",
+    response_model=DataResponse[ReminderSettings],
+)
+async def get_reminder_settings(ctx: WorkspaceContextDep) -> DataResponse[ReminderSettings]:
+    return ok(salon_service.get_reminder_settings(ctx.workspace_id))
+
+
+@router.put(
+    "/workspaces/{workspace_id}/salon/reminder-settings",
+    response_model=DataResponse[ReminderSettings],
+)
+async def update_reminder_settings(
+    payload: ReminderSettingsUpdate, ctx: OwnerContextDep
+) -> DataResponse[ReminderSettings]:
+    return ok(salon_service.update_reminder_settings(ctx.workspace_id, payload, ctx.user.id))
 
 
 # --- Appointments -----------------------------------------------------------

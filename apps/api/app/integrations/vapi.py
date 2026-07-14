@@ -142,6 +142,87 @@ PLACE_ORDER_TOOL: dict[str, Any] = {
 }
 
 
+CHECK_AVAILABILITY_TOOL: dict[str, Any] = {
+    "type": "function",
+    "function": {
+        "name": "check_availability",
+        "description": (
+            "Look up REAL open appointment times for a service on a given date. "
+            "Call this before offering any time — never invent times. Returns a "
+            "list of open slots, each with a starts_at and staff_id to copy "
+            "exactly into book_appointment."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "service_id": {
+                    "type": "string",
+                    "description": "Service id, copied exactly from the services list in your prompt.",
+                },
+                "date": {
+                    "type": "string",
+                    "description": "Date the customer wants, as YYYY-MM-DD.",
+                },
+            },
+            "required": ["service_id", "date"],
+        },
+    },
+}
+
+
+BOOK_APPOINTMENT_TOOL: dict[str, Any] = {
+    "type": "function",
+    "function": {
+        "name": "book_appointment",
+        "description": (
+            "Book an appointment. ONLY call after the customer confirms a specific "
+            "service and time that came back from check_availability. Copy "
+            "service_id, starts_at, and staff_id EXACTLY from that result."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "service_id": {"type": "string", "description": "Copied exactly from availability."},
+                "starts_at": {
+                    "type": "string",
+                    "description": "ISO 8601 UTC slot start, copied exactly from availability.",
+                },
+                "staff_id": {
+                    "type": "string",
+                    "description": "Copied exactly from the chosen slot, or omit to auto-assign.",
+                },
+                "customer_name": {"type": "string"},
+                "customer_phone": {
+                    "type": "string",
+                    "description": "Customer's phone number including country code.",
+                },
+            },
+            "required": ["service_id", "starts_at"],
+        },
+    },
+}
+
+
+CHECK_IN_TOOL: dict[str, Any] = {
+    "type": "function",
+    "function": {
+        "name": "check_in",
+        "description": "Check a customer in for their appointment today, found by their name.",
+        "parameters": {
+            "type": "object",
+            "properties": {"customer_name": {"type": "string"}},
+            "required": ["customer_name"],
+        },
+    },
+}
+
+
+def _tools_for_vertical(vertical: str) -> list[dict[str, Any]]:
+    if vertical == "salon":
+        return [CHECK_AVAILABILITY_TOOL, BOOK_APPOINTMENT_TOOL, CHECK_IN_TOOL]
+    return [PLACE_ORDER_TOOL]
+
+
 def assistant_payload(
     *,
     system_prompt: str,
@@ -151,6 +232,7 @@ def assistant_payload(
     server_url: str | None,
     end_call_phrases: list[str] | None = None,
     language: str = "en",
+    vertical: str = "restaurant",
 ) -> dict[str, Any]:
     """Shape the JSON Vapi expects for create/update of an assistant."""
     voice_id = _VOICE_ID_MAP.get(voice.lower(), voice)
@@ -163,7 +245,7 @@ def assistant_payload(
             "provider": "openai",
             "model": model,
             "messages": [{"role": "system", "content": system_prompt}],
-            "tools": [PLACE_ORDER_TOOL],
+            "tools": _tools_for_vertical(vertical),
         },
         "voice": {
             "provider": "11labs",

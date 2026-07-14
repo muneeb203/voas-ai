@@ -193,7 +193,9 @@ def _slot_bookable(
     return not _overlaps(starts_at, block_end, busy)
 
 
-def create_appointment(workspace_id: str, data: BookAppointmentInput) -> SalonAppointment:
+def create_appointment(
+    workspace_id: str, data: BookAppointmentInput, send_confirmation: bool = True
+) -> SalonAppointment:
     db = get_supabase_admin()
     service = salon_service._get_service(workspace_id, service_id=data.service_id)
     if not service.is_active:
@@ -250,6 +252,11 @@ def create_appointment(workspace_id: str, data: BookAppointmentInput) -> SalonAp
             "id", appt.id
         ).execute()
         appt.google_event_id = event_id
+
+    if send_confirmation:
+        from app.services import appointment_reminder_service
+
+        appointment_reminder_service.send_confirmation(appt)
     return appt
 
 

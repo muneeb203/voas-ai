@@ -14,14 +14,17 @@ from typing import Any
 from fastapi import APIRouter, BackgroundTasks, Header, Request, status
 from fastapi.responses import Response
 
-from app.core.exceptions import ForbiddenError
+from app.core.exceptions import AppError, ForbiddenError
 from app.core.logging import get_logger
 from app.core.supabase import get_supabase_admin
 from app.integrations import twilio_whatsapp, vapi
 from app.models.customer import CustomerUpsert
+from app.models.salon import BookAppointmentInput
 from app.services import (
     billing_service,
+    booking_service,
     customer_service,
+    salon_service,
     voice_order_service,
     voice_service,
     whatsapp_ai_service,
@@ -39,6 +42,14 @@ def _twiml_ok() -> Response:
 
 def _strip_whatsapp_prefix(value: str) -> str:
     return value[len("whatsapp:") :] if value.startswith("whatsapp:") else value
+
+
+def _spoken_time(dt: datetime, workspace_id: str, location_id: str | None) -> str:
+    """Human-friendly time in the location's timezone for the agent to read out."""
+    tz = booking_service._location_tz(workspace_id, location_id)
+    local = dt.astimezone(tz)
+    hour = local.strftime("%I:%M %p").lstrip("0")
+    return f"{local.strftime('%A, %b %d')} at {hour}"
 
 
 log = get_logger(__name__)
@@ -180,6 +191,121 @@ async def vapi_webhook(
                         fulfillment=order_result["fulfillment"],
                     )
                 results.append({"toolCallId": tc_id, "result": order_result["message"]})
+
+            elif name == "check_availability":
+                svc_id = (args or {}).get("service_id")
+                date_str = (args or {}).get("date")
+                if not svc_id or not date_str:
+                    results.append(
+                        {"toolCallId": tc_id, "result": "I need the service and a date to check times."}
+                    )
+                    continue
+                try:
+                    avail = booking_service.get_availability(
+                        workspace_id,
+                        service_id=svc_id,
+                        date_str=date_str,
+                        location_id=location_id,
+                        max_slots=8,
+                    )
+                except Exception as exc:
+                    log.error("vapi_check_availability_failed", error=str(exc))
+                    results.append(
+                        {"toolCallId": tc_id, "result": "Sorry, I couldn't pull up open times just now."}
+                    )
+                    continue
+                if not avail.slots:
+                    results.append(
+                        {
+                            "toolCallId": tc_id,
+                            "result": f"No open times on {date_str}. Offer the customer another day.",
+                        }
+                    )
+                    continue
+                slot_lines = [
+                    f"{_spoken_time(s.starts_at, workspace_id, location_id)} with {s.staff_name} "
+                    f"[starts_at: {s.starts_at.isoformat()} staff_id: {s.staff_id}]"
+                    for s in avail.slots
+                ]
+                results.append(
+                    {
+                        "toolCallId": tc_id,
+                        "result": (
+                            "Open times (read the times naturally; when the customer picks one, "
+                            "call book_appointment with the exact starts_at and staff_id): "
+                            + "; ".join(slot_lines)
+                        ),
+                    }
+                )
+
+            elif name == "book_appointment":
+                if not billing_service.check_allowed(workspace_id, "voice_minutes", channel="voice"):
+                    results.append(
+                        {
+                            "toolCallId": tc_id,
+                            "result": billing_service.limit_reached_message("voice_minutes"),
+                        }
+                    )
+                    continue
+                if not (args or {}).get("service_id") or not (args or {}).get("starts_at"):
+                    results.append(
+                        {"toolCallId": tc_id, "result": "I still need the service and time to book."}
+                    )
+                    continue
+                try:
+                    appt = booking_service.create_appointment(
+                        workspace_id,
+                        BookAppointmentInput(
+                            service_id=args["service_id"],
+                            starts_at=args["starts_at"],
+                            staff_id=args.get("staff_id"),
+                            customer_name=args.get("customer_name") or (conv or {}).get("customer_name"),
+                            customer_phone=args.get("customer_phone") or (conv or {}).get("customer_phone"),
+                            location_id=location_id,
+                            conversation_id=conv["id"] if conv else None,
+                        ),
+                    )
+                except AppError as exc:
+                    results.append({"toolCallId": tc_id, "result": exc.message})
+                    continue
+                except Exception as exc:
+                    log.error("vapi_book_failed", workspace_id=workspace_id, error=str(exc))
+                    results.append(
+                        {
+                            "toolCallId": tc_id,
+                            "result": "Sorry, I couldn't book that — please try another time.",
+                        }
+                    )
+                    continue
+                when = _spoken_time(appt.starts_at, workspace_id, location_id)
+                staff = f" with {appt.staff_name}" if appt.staff_name else ""
+                results.append(
+                    {
+                        "toolCallId": tc_id,
+                        "result": (
+                            f"Booked: {appt.service_name}{staff} on {when}. "
+                            "Confirm these details back to the customer."
+                        ),
+                    }
+                )
+
+            elif name == "check_in":
+                appt = salon_service.check_in_by_name(workspace_id, (args or {}).get("customer_name", ""))
+                if not appt:
+                    results.append(
+                        {
+                            "toolCallId": tc_id,
+                            "result": "I couldn't find that appointment — confirm the name or send them to the front desk.",
+                        }
+                    )
+                    continue
+                results.append(
+                    {
+                        "toolCallId": tc_id,
+                        "result": f"Checked in {appt.customer_name or 'the customer'} for {appt.service_name}.",
+                    }
+                )
+
             else:
                 log.warning("vapi_unknown_tool", name=name, args_preview=str(args)[:120])
                 results.append({"toolCallId": tc_id, "result": f"Unknown tool {name}, sorry."})

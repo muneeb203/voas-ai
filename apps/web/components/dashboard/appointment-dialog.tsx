@@ -199,11 +199,12 @@ export function AppointmentDialog({
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="appt-phone">Phone (optional)</Label>
+                <Label htmlFor="appt-phone">Phone (for confirmation)</Label>
                 <Input
                   id="appt-phone"
                   value={customerPhone}
                   onChange={(e) => setCustomerPhone(e.target.value)}
+                  placeholder="+1…"
                 />
               </div>
             </div>
