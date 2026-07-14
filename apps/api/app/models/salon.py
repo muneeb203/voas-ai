@@ -108,6 +108,11 @@ class AppointmentStatusUpdate(BaseModel):
     status: AppointmentStatus
 
 
+class RescheduleInput(BaseModel):
+    starts_at: datetime
+    staff_id: str | None = None
+
+
 # --- Availability / booking (also used by the AI tool) ----------------------
 
 

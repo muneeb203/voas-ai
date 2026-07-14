@@ -803,9 +803,7 @@ async def kiosk_chat(
     )
     balance = bal_res.data[0]["kiosk_credits_balance"] if bal_res.data else 0
     if balance <= 0:
-        raise KioskLimitError(
-            "This kiosk is out of credits. Contact the restaurant to add more."
-        )
+        raise KioskLimitError("This kiosk is out of service. Please see the front desk.")
 
     vertical = ctx.get("vertical", "restaurant")
     if vertical == "salon":

@@ -1,5 +1,5 @@
-from fastapi import APIRouter, Query
-from pydantic import BaseModel
+from fastapi import APIRouter, Query, status as http_status
+from pydantic import BaseModel, Field
 
 from app.deps import WorkspaceContextDep
 from app.models.order import Order, OrderStatus
@@ -11,6 +11,36 @@ router = APIRouter(tags=["orders"])
 
 class OrderStatusUpdate(BaseModel):
     status: OrderStatus
+
+
+class ManualOrderItem(BaseModel):
+    name: str = Field(..., min_length=1, max_length=200)
+    quantity: int = Field(default=1, ge=1, le=99)
+
+
+class ManualOrderInput(BaseModel):
+    items: list[ManualOrderItem] = Field(..., min_length=1)
+    location_id: str | None = None
+    customer_name: str | None = Field(default=None, max_length=160)
+    customer_phone: str | None = Field(default=None, max_length=40)
+    fulfillment: str = "pickup"
+
+
+@router.post(
+    "/workspaces/{workspace_id}/orders",
+    response_model=DataResponse[Order],
+    status_code=http_status.HTTP_201_CREATED,
+)
+async def create_order(payload: ManualOrderInput, ctx: WorkspaceContextDep) -> DataResponse[Order]:
+    order = order_service.create_manual_order(
+        ctx.workspace_id,
+        items=[{"name": i.name, "quantity": i.quantity} for i in payload.items],
+        location_id=payload.location_id,
+        customer_name=payload.customer_name,
+        customer_phone=payload.customer_phone,
+        fulfillment=payload.fulfillment,
+    )
+    return ok(order)
 
 
 @router.get("/workspaces/{workspace_id}/orders", response_model=DataResponse[list[Order]])
