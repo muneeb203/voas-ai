@@ -13,6 +13,8 @@ from app.models.voice import (
     DEFAULT_GREETING_BY_LANG,
     DEFAULT_SYSTEM_PROMPT,
     DEFAULT_SYSTEM_PROMPT_BY_LANG,
+    SALON_DEFAULT_GREETING,
+    SALON_DEFAULT_SYSTEM_PROMPT,
     LocationVoiceConfigSafe,
     LocationVoiceConfigUpsert,
     VoiceCapabilities,
@@ -96,19 +98,26 @@ def _hydrate_settings(row: dict, workspace_id: str) -> VoiceSettings:
     return settings
 
 
+def _vertical(workspace_id: str) -> str:
+    db = get_supabase_admin()
+    res = db.table("workspaces").select("vertical").eq("id", workspace_id).limit(1).execute()
+    return (res.data[0].get("vertical") if res.data else None) or "restaurant"
+
+
 def get_or_create_settings(workspace_id: str) -> VoiceSettings:
     db = get_supabase_admin()
     res = db.table("voice_settings").select("*").eq("workspace_id", workspace_id).limit(1).execute()
     if res.data:
         return _hydrate_settings(res.data[0], workspace_id)
 
+    is_salon = _vertical(workspace_id) == "salon"
     res = (
         db.table("voice_settings")
         .insert(
             {
                 "workspace_id": workspace_id,
-                "system_prompt": DEFAULT_SYSTEM_PROMPT,
-                "greeting": DEFAULT_GREETING,
+                "system_prompt": SALON_DEFAULT_SYSTEM_PROMPT if is_salon else DEFAULT_SYSTEM_PROMPT,
+                "greeting": SALON_DEFAULT_GREETING if is_salon else DEFAULT_GREETING,
                 "voice": "rachel",
                 "model": "gpt-4o-mini",
                 "enabled": False,
@@ -157,12 +166,35 @@ def _menu_context_for_workspace(workspace_id: str) -> str:
     return "\n".join(lines)
 
 
+def _services_context_for_workspace(workspace_id: str) -> str:
+    """Render active salon services (with ids) to feed the voice assistant.
+
+    The voice agent needs each service_id so it can call check_availability and
+    book_appointment. Open times themselves come from the live tool, not here."""
+    from app.services import salon_service
+
+    services = salon_service.list_services(workspace_id, active_only=True)
+    if not services:
+        return ""
+    lines = ["", "--- SERVICES (use service_id when calling tools) ---"]
+    for svc in services:
+        price = f"${svc.price_cents / 100:.0f}"
+        lines.append(
+            f"- {svc.name} ({svc.duration_minutes} min, {price}) [service_id: {svc.id}]"
+        )
+    return "\n".join(lines)
+
+
 def _sync_assistant(workspace_id: str, settings: VoiceSettings) -> str | None:
-    """Push the current settings (plus menu context) to Vapi.
+    """Push the current settings (plus vertical context) to Vapi.
     Returns the assistant id (creates if missing)."""
     cfg = get_settings()
-    menu_md = _menu_context_for_workspace(workspace_id)
-    full_prompt = f"{settings.system_prompt}\n\n{menu_md}".strip()
+    vertical = _vertical(workspace_id)
+    if vertical == "salon":
+        context_md = _services_context_for_workspace(workspace_id)
+    else:
+        context_md = _menu_context_for_workspace(workspace_id)
+    full_prompt = f"{settings.system_prompt}\n\n{context_md}".strip()
 
     payload = vapi.assistant_payload(
         system_prompt=full_prompt,
@@ -172,6 +204,7 @@ def _sync_assistant(workspace_id: str, settings: VoiceSettings) -> str | None:
         server_url=cfg.vapi_server_url,
         end_call_phrases=settings.end_call_phrases,
         language=settings.language,
+        vertical=vertical,
     )
 
     if settings.vapi_assistant_id:
