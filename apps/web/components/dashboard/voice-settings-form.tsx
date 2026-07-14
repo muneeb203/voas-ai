@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { Sparkles, CheckCircle2, AlertCircle } from 'lucide-react';
+import { Sparkles, CheckCircle2, AlertCircle, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useActionState } from '@/lib/use-action-state';
 import { Button } from '@/components/ui/button';
@@ -19,6 +19,7 @@ import {
 } from '@/components/ui/select';
 import {
   updateVoiceSettingsAction,
+  getVoiceSyncStatusAction,
   type FormResult,
 } from '@/app/actions/voice-action';
 import type { VoiceLanguage, VoiceSettings, VoiceCapabilities } from '@/lib/types';
@@ -53,11 +54,15 @@ export function VoiceSettingsForm({
   const fieldErrors = state.fieldErrors;
   const wasPending = useRef(false);
 
-  type SyncPhase = 'idle' | 'saving' | 'done' | 'failed';
+  type SyncPhase = 'idle' | 'saving' | 'syncing' | 'done' | 'failed';
   const [syncPhase, setSyncPhase] = useState<SyncPhase>('idle');
   const [progress, setProgress] = useState(0);
   const [msgIdx, setMsgIdx] = useState(0);
+  const [finalMsg, setFinalMsg] = useState<string | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const watchdogRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pollRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const resetRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const SYNC_MESSAGES = [
     'Saving your settings...',
@@ -115,12 +120,55 @@ export function VoiceSettingsForm({
   );
   const isNonEnglishLang = language !== 'en';
 
+  function scheduleReset() {
+    resetRef.current = setTimeout(() => {
+      setSyncPhase('idle');
+      setProgress(0);
+      setFinalMsg(null);
+    }, 4000);
+  }
+
+  // After the (now instant) save, the assistant syncs to Vapi in the
+  // background. Poll for the outcome so we report "live" / errors honestly,
+  // instead of freezing on a slow round-trip.
+  async function pollSync(attempt: number) {
+    let result: { status: 'pending' | 'synced' | 'error'; error: string | null };
+    try {
+      result = await getVoiceSyncStatusAction();
+    } catch {
+      result = { status: 'pending', error: null };
+    }
+    if (result.status === 'synced') {
+      setSyncPhase('done');
+      setProgress(100);
+      setFinalMsg('Your assistant is live and ready to take calls.');
+      scheduleReset();
+      return;
+    }
+    if (result.status === 'error') {
+      setSyncPhase('failed');
+      setProgress(0);
+      setFinalMsg(result.error || 'The assistant update failed. Please try again.');
+      return;
+    }
+    if (attempt >= 10) {
+      // Saved, but Vapi is still catching up — don't hang the UI on it.
+      setSyncPhase('done');
+      setProgress(100);
+      setFinalMsg('Saved. Your assistant is finishing its update in the background.');
+      scheduleReset();
+      return;
+    }
+    pollRef.current = setTimeout(() => pollSync(attempt + 1), 1500);
+  }
+
   useEffect(() => {
     const wasP = wasPending.current;
 
     if (!wasP && pending) {
       // Save started
       setSyncPhase('saving');
+      setFinalMsg(null);
       setProgress(4);
       setMsgIdx(0);
       const start = Date.now();
@@ -131,33 +179,50 @@ export function VoiceSettingsForm({
         setProgress(Math.min(p, 84));
         setMsgIdx(Math.min(Math.floor(elapsed / 5000), SYNC_MESSAGES.length - 1));
       }, 250);
+      // Watchdog — the save must never leave the bar stuck, even if the
+      // request itself stalls.
+      watchdogRef.current = setTimeout(() => {
+        if (timerRef.current) clearInterval(timerRef.current);
+        setSyncPhase('failed');
+        setProgress(0);
+        setFinalMsg('This is taking longer than expected — please try saving again.');
+      }, 30000);
     }
 
     if (wasP && !pending) {
       if (timerRef.current) clearInterval(timerRef.current);
+      if (watchdogRef.current) clearTimeout(watchdogRef.current);
 
-      if (state.error && !state.fieldErrors) {
+      if (state.fieldErrors) {
+        setSyncPhase('idle');
+        setProgress(0);
+      } else if (state.error) {
         setSyncPhase('failed');
         setProgress(0);
+        setFinalMsg(state.error);
         toast.error(state.error);
-      } else if (!state.error) {
-        setSyncPhase('done');
-        setProgress(100);
-        const dismiss = setTimeout(() => {
-          setSyncPhase('idle');
-          setProgress(0);
-        }, 3500);
-        return () => clearTimeout(dismiss);
+      } else {
+        // Persisted — now watch the background Vapi sync.
+        setSyncPhase('syncing');
+        setProgress(92);
+        pollSync(0);
       }
     }
 
     wasPending.current = pending;
-
-    return () => {
-      if (timerRef.current) clearInterval(timerRef.current);
-    };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pending, state]);
+
+  // Clear every timer on unmount.
+  useEffect(
+    () => () => {
+      if (timerRef.current) clearInterval(timerRef.current);
+      if (watchdogRef.current) clearTimeout(watchdogRef.current);
+      if (pollRef.current) clearTimeout(pollRef.current);
+      if (resetRef.current) clearTimeout(resetRef.current);
+    },
+    [],
+  );
 
   return (
     <form action={formAction} className="space-y-5">
@@ -394,7 +459,7 @@ export function VoiceSettingsForm({
               )}
               style={{ width: `${progress}%` }}
             />
-            {syncPhase === 'saving' && (
+            {(syncPhase === 'saving' || syncPhase === 'syncing') && (
               <div className="absolute inset-0 animate-pulse bg-gradient-to-r from-transparent via-white/10 to-transparent" />
             )}
           </div>
@@ -405,18 +470,26 @@ export function VoiceSettingsForm({
               <>
                 <CheckCircle2 className="h-3.5 w-3.5 flex-shrink-0 text-success" />
                 <p className="text-xs font-medium text-success">
-                  Your assistant is live and ready to take calls.
+                  {finalMsg ?? 'Your assistant is live and ready to take calls.'}
                 </p>
               </>
             )}
             {syncPhase === 'failed' && (
               <>
                 <AlertCircle className="h-3.5 w-3.5 flex-shrink-0 text-error" />
-                <p className="text-xs text-error">{state.error}</p>
+                <p className="text-xs text-error">{finalMsg ?? state.error}</p>
               </>
             )}
             {syncPhase === 'saving' && (
               <p className="text-xs text-muted-foreground">{SYNC_MESSAGES[msgIdx]}</p>
+            )}
+            {syncPhase === 'syncing' && (
+              <>
+                <Loader2 className="h-3.5 w-3.5 flex-shrink-0 animate-spin text-accent" />
+                <p className="text-xs text-muted-foreground">
+                  Saved — updating your assistant…
+                </p>
+              </>
             )}
           </div>
         </div>

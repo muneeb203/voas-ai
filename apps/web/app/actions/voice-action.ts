@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { requireDashboardSession } from '@/lib/auth/workspace';
 import {
   disableLocationVoice,
+  getVoiceSyncStatus,
   testLocationVoice,
   updateVoiceSettings,
   upsertLocationVoice,
@@ -78,6 +79,16 @@ export async function updateVoiceSettingsAction(
   revalidatePath('/integrations');
   revalidatePath('/integrations/voice');
   return { error: null };
+}
+
+export async function getVoiceSyncStatusAction(): Promise<{
+  status: 'pending' | 'synced' | 'error';
+  error: string | null;
+}> {
+  const session = await requireDashboardSession('/integrations/voice');
+  const res = await getVoiceSyncStatus(session.active.workspace_id);
+  if (isApiError(res)) return { status: 'error', error: res.error.message };
+  return { status: res.data.sync_status, error: res.data.sync_error };
 }
 
 export async function upsertLocationVoiceAction(
