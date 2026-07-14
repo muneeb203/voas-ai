@@ -17,6 +17,9 @@ import {
   Settings,
   LifeBuoy,
   Compass,
+  CalendarDays,
+  Scissors,
+  UserCog,
   type LucideIcon,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -26,6 +29,7 @@ import { START_TOUR_EVENT } from '@/components/dashboard/product-tour';
 interface NavItem {
   href: string;
   labelKey: string;
+  label?: string; // literal label (overrides translation) — used for vertical-specific items
   icon: LucideIcon;
   comingSoon?: boolean;
 }
@@ -35,45 +39,53 @@ interface NavSection {
   items: NavItem[];
 }
 
-const SECTIONS: NavSection[] = [
-  {
-    titleKey: 'overview',
-    items: [
-      { href: '/dashboard', labelKey: 'dashboard', icon: LayoutDashboard },
-      { href: '/conversations', labelKey: 'conversations', icon: MessageSquare },
-      { href: '/orders', labelKey: 'orders', icon: ShoppingBag },
-      { href: '/customers', labelKey: 'customers', icon: Users2 },
-    ],
-  },
-  {
-    titleKey: 'setup',
-    items: [
-      { href: '/knowledge-base', labelKey: 'knowledgeBase', icon: BookOpen },
-      { href: '/integrations', labelKey: 'integrations', icon: Plug },
-      { href: '/analytics', labelKey: 'analytics', icon: BarChart3 },
-    ],
-  },
-  {
-    titleKey: 'workspace',
-    items: [
-      { href: '/locations', labelKey: 'locations', icon: MapPin },
-      { href: '/self-order', labelKey: 'selfOrder', icon: MonitorSmartphone },
-      { href: '/team', labelKey: 'team', icon: Users },
-      { href: '/settings', labelKey: 'settings', icon: Settings },
-      { href: '/support', labelKey: 'support', icon: LifeBuoy },
-    ],
-  },
-];
+// Nav is vertical-aware: a salon sees Appointments / Services / Staff where a
+// restaurant sees Orders / Knowledge Base.
+function buildSections(vertical: string): NavSection[] {
+  const isSalon = vertical === 'salon';
+  const overview: NavItem[] = [
+    { href: '/dashboard', labelKey: 'dashboard', icon: LayoutDashboard },
+    { href: '/conversations', labelKey: 'conversations', icon: MessageSquare },
+    isSalon
+      ? { href: '/appointments', labelKey: 'appointments', label: 'Appointments', icon: CalendarDays }
+      : { href: '/orders', labelKey: 'orders', icon: ShoppingBag },
+    { href: '/customers', labelKey: 'customers', icon: Users2 },
+  ];
+  const setup: NavItem[] = [
+    isSalon
+      ? { href: '/services', labelKey: 'services', label: 'Services', icon: Scissors }
+      : { href: '/knowledge-base', labelKey: 'knowledgeBase', icon: BookOpen },
+    { href: '/integrations', labelKey: 'integrations', icon: Plug },
+    { href: '/analytics', labelKey: 'analytics', icon: BarChart3 },
+  ];
+  const workspace: NavItem[] = [
+    { href: '/locations', labelKey: 'locations', icon: MapPin },
+    ...(isSalon
+      ? [{ href: '/staff', labelKey: 'staff', label: 'Staff', icon: UserCog }]
+      : []),
+    { href: '/self-order', labelKey: 'selfOrder', icon: MonitorSmartphone },
+    { href: '/team', labelKey: 'team', icon: Users },
+    { href: '/settings', labelKey: 'settings', icon: Settings },
+    { href: '/support', labelKey: 'support', icon: LifeBuoy },
+  ];
+  return [
+    { titleKey: 'overview', items: overview },
+    { titleKey: 'setup', items: setup },
+    { titleKey: 'workspace', items: workspace },
+  ];
+}
 
 interface SidebarProps {
   className?: string;
   onNavigate?: () => void;
+  vertical?: string;
 }
 
-export function Sidebar({ className, onNavigate }: SidebarProps) {
+export function Sidebar({ className, onNavigate, vertical = 'restaurant' }: SidebarProps) {
   const pathname = usePathname();
   const t = useTranslations('nav');
   const tc = useTranslations('common');
+  const SECTIONS = buildSections(vertical);
 
   return (
     <aside className={cn('flex h-full flex-col border-r border-border bg-background', className)}>
@@ -105,7 +117,7 @@ export function Sidebar({ className, onNavigate }: SidebarProps) {
                       )}
                     >
                       <Icon className="h-4 w-4 shrink-0" />
-                      <span className="flex-1">{t(`items.${item.labelKey}`)}</span>
+                      <span className="flex-1">{item.label ?? t(`items.${item.labelKey}`)}</span>
                       {item.comingSoon && (
                         <span className="rounded-full bg-muted px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-wider text-muted-foreground">
                           {tc('comingSoon')}

@@ -24,6 +24,7 @@ interface TopbarProps {
   userEmail: string | null;
   userName: string | null;
   role: string;
+  vertical?: string;
 }
 
 function initials(name: string | null, email: string | null): string {
@@ -40,6 +41,7 @@ export function Topbar({
   userEmail,
   userName,
   role,
+  vertical,
 }: TopbarProps) {
   const [mobileOpen, setMobileOpen] = useState(false);
   const t = useTranslations('topbar');
@@ -133,7 +135,7 @@ export function Topbar({
                 <X className="h-5 w-5" />
               </button>
             </div>
-            <Sidebar className="h-[calc(100%-4rem)]" onNavigate={() => setMobileOpen(false)} />
+            <Sidebar className="h-[calc(100%-4rem)]" onNavigate={() => setMobileOpen(false)} vertical={vertical} />
           </div>
         </div>
       )}
