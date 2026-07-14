@@ -256,43 +256,17 @@ def update_settings(
         if submitted_greet.strip() == defaults_for_old_greet.strip():
             changes["greeting"] = DEFAULT_GREETING_BY_LANG[new_lang]
 
-    if changes:
-        res = db.table("voice_settings").update(changes).eq("workspace_id", workspace_id).execute()
-        if not res.data:
-            raise NotFoundError("Voice settings not found")
-        current = VoiceSettings.model_validate(res.data[0])
-        log.info("voice_update_step", step="db_update_changes", elapsed_ms=_ms())
-
-    # Sync to Vapi every time settings change (or first-time create assistant).
-    try:
-        assistant_id = _sync_assistant(workspace_id, current)
-        log.info("voice_update_step", step="vapi_sync_assistant", elapsed_ms=_ms())
-    except Exception as exc:
-        log.error(
-            "vapi_sync_failed",
-            workspace_id=workspace_id,
-            elapsed_ms=_ms(),
-            error=str(exc),
-        )
-        raise AppError(f"Vapi rejected the assistant config: {exc}") from exc
-    now_iso = datetime.now(UTC).isoformat()
-    if assistant_id and assistant_id != current.vapi_assistant_id:
-        update = (
-            db.table("voice_settings")
-            .update({"vapi_assistant_id": assistant_id, "last_synced_at": now_iso})
-            .eq("workspace_id", workspace_id)
-            .execute()
-        )
-        current = _hydrate_settings(update.data[0], workspace_id)
-    else:
-        res = (
-            db.table("voice_settings")
-            .update({"last_synced_at": now_iso})
-            .eq("workspace_id", workspace_id)
-            .execute()
-        )
-        if res.data:
-            current = _hydrate_settings(res.data[0], workspace_id)
+    # Persist immediately and mark the assistant as needing a (background) sync.
+    # We deliberately do NOT call Vapi here — a slow Vapi round-trip must never
+    # block the owner's save. The route schedules sync_assistant_now() after
+    # returning; the UI polls sync_status to report the result.
+    changes["sync_status"] = "pending"
+    changes["sync_error"] = None
+    res = db.table("voice_settings").update(changes).eq("workspace_id", workspace_id).execute()
+    if not res.data:
+        raise NotFoundError("Voice settings not found")
+    current = _hydrate_settings(res.data[0], workspace_id)
+    log.info("voice_update_step", step="db_update_changes", elapsed_ms=_ms())
 
     audit_service.write(
         actor_type="user",
@@ -301,10 +275,34 @@ def update_settings(
         action="voice.settings_updated",
         resource_type="voice_settings",
         resource_id=workspace_id,
-        metadata={"changed_fields": list(changes.keys())},
+        metadata={"changed_fields": [k for k in changes if k not in ("sync_status", "sync_error")]},
     )
     log.info("voice_update_done", workspace_id=workspace_id, total_ms=_ms())
     return current
+
+
+def sync_assistant_now(workspace_id: str) -> None:
+    """Push the current settings to Vapi and record the outcome. Runs as a
+    background task after a save, so it never blocks the owner's request.
+    Never raises — failures are written to sync_status/sync_error for the UI."""
+    db = get_supabase_admin()
+    try:
+        settings = get_or_create_settings(workspace_id)
+        assistant_id = _sync_assistant(workspace_id, settings)
+        db.table("voice_settings").update(
+            {
+                "vapi_assistant_id": assistant_id,
+                "last_synced_at": datetime.now(UTC).isoformat(),
+                "sync_status": "synced",
+                "sync_error": None,
+            }
+        ).eq("workspace_id", workspace_id).execute()
+        log.info("voice_bg_sync_ok", workspace_id=workspace_id)
+    except Exception as exc:
+        log.error("voice_bg_sync_failed", workspace_id=workspace_id, error=str(exc))
+        db.table("voice_settings").update(
+            {"sync_status": "error", "sync_error": str(exc)[:500]}
+        ).eq("workspace_id", workspace_id).execute()
 
 
 # --- Per-location Twilio config --------------------------------------------

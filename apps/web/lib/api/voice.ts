@@ -17,6 +17,13 @@ export function getVoiceSettings(workspaceId: string) {
   });
 }
 
+// Uncached read for polling the background Vapi sync status after a save.
+export function getVoiceSyncStatus(workspaceId: string) {
+  return apiCall<VoiceSettings>(`/v1/workspaces/${workspaceId}/voice/settings`, {
+    cache: 'no-store',
+  });
+}
+
 export function updateVoiceSettings(
   workspaceId: string,
   payload: Partial<{

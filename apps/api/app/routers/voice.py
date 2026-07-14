@@ -1,4 +1,4 @@
-from fastapi import APIRouter, status
+from fastapi import APIRouter, BackgroundTasks, status
 
 from app.deps import OwnerContextDep, WorkspaceContextDep
 from app.models.voice import (
@@ -34,9 +34,14 @@ async def get_voice_settings(ctx: WorkspaceContextDep) -> DataResponse[VoiceSett
     response_model=DataResponse[VoiceSettings],
 )
 async def update_voice_settings(
-    payload: VoiceSettingsUpdate, ctx: OwnerContextDep
+    payload: VoiceSettingsUpdate,
+    ctx: OwnerContextDep,
+    background_tasks: BackgroundTasks,
 ) -> DataResponse[VoiceSettings]:
-    return ok(voice_service.update_settings(ctx.workspace_id, payload, ctx.user.id))
+    settings = voice_service.update_settings(ctx.workspace_id, payload, ctx.user.id)
+    # Push to Vapi AFTER responding — the save itself is instant.
+    background_tasks.add_task(voice_service.sync_assistant_now, ctx.workspace_id)
+    return ok(settings)
 
 
 @router.get(

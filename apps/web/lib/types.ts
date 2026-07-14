@@ -317,6 +317,8 @@ export interface VoiceSettings {
   enabled: boolean;
   send_order_confirmations: boolean;
   last_synced_at: string | null;
+  sync_status: 'pending' | 'synced' | 'error';
+  sync_error: string | null;
   created_at: string;
   updated_at: string;
   menu_dirty: boolean;

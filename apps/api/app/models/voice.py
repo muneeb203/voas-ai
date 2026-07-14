@@ -185,6 +185,8 @@ class VoiceSettings(BaseModel):
     enabled: bool
     send_order_confirmations: bool = True
     last_synced_at: datetime | None
+    sync_status: str = "synced"  # pending | synced | error
+    sync_error: str | None = None
     created_at: datetime
     updated_at: datetime
     # Computed: true if menu has changed since the assistant was last synced.
