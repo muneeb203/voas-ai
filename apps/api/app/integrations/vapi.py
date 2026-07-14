@@ -147,27 +147,26 @@ CHECK_AVAILABILITY_TOOL: dict[str, Any] = {
     "function": {
         "name": "check_availability",
         "description": (
-            "Look up REAL open appointment times for a service on a given date. "
+            "Look up REAL open appointment times for a service on a given day. "
             "Call this before offering any time — never invent times. Returns a "
-            "list of open slots, each with a starts_at and staff_id to copy "
-            "exactly into book_appointment."
+            "plain list of open times to read to the customer."
         ),
         "parameters": {
             "type": "object",
             "properties": {
-                "service_id": {
+                "service": {
                     "type": "string",
-                    "description": "Service id, copied exactly from the services list in your prompt.",
+                    "description": "The service in plain words, e.g. 'haircut' or 'balayage'.",
                 },
                 "date": {
                     "type": "string",
                     "description": (
-                        "Date the customer wants. Accepts 'today', 'tomorrow', a "
+                        "The day the customer wants. Accepts 'today', 'tomorrow', a "
                         "weekday name (e.g. 'Friday'), or an exact YYYY-MM-DD."
                     ),
                 },
             },
-            "required": ["service_id", "date"],
+            "required": ["service", "date"],
         },
     },
 }
@@ -178,21 +177,26 @@ BOOK_APPOINTMENT_TOOL: dict[str, Any] = {
     "function": {
         "name": "book_appointment",
         "description": (
-            "Book an appointment. ONLY call after the customer confirms a specific "
-            "service and time that came back from check_availability. Copy "
-            "service_id, starts_at, and staff_id EXACTLY from that result."
+            "Actually reserve the appointment in the system. You MUST call this to "
+            "book — telling the customer it's booked WITHOUT calling this does NOT "
+            "create the booking. Only call after the customer confirms a specific "
+            "time you offered from check_availability."
         ),
         "parameters": {
             "type": "object",
             "properties": {
-                "service_id": {"type": "string", "description": "Copied exactly from availability."},
-                "starts_at": {
+                "service": {"type": "string", "description": "The service in plain words."},
+                "date": {
                     "type": "string",
-                    "description": "ISO 8601 UTC slot start, copied exactly from availability.",
+                    "description": "The day: 'today', 'tomorrow', a weekday, or YYYY-MM-DD.",
                 },
-                "staff_id": {
+                "time": {
                     "type": "string",
-                    "description": "Copied exactly from the chosen slot, or omit to auto-assign.",
+                    "description": "The chosen time in plain words, e.g. '2:30 PM'.",
+                },
+                "staff_name": {
+                    "type": "string",
+                    "description": "Preferred stylist's name if the customer named one; optional.",
                 },
                 "customer_name": {"type": "string"},
                 "customer_phone": {
@@ -200,7 +204,7 @@ BOOK_APPOINTMENT_TOOL: dict[str, Any] = {
                     "description": "Customer's phone number including country code.",
                 },
             },
-            "required": ["service_id", "starts_at"],
+            "required": ["service", "date", "time", "customer_name"],
         },
     },
 }
