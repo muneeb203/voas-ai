@@ -8,6 +8,7 @@ Webhook event shapes are documented at https://docs.vapi.ai/server-url.
 
 import contextlib
 import json
+import re
 from datetime import UTC, date, datetime, timedelta
 from typing import Any
 
@@ -74,6 +75,66 @@ def _resolve_date(raw: str, workspace_id: str, location_id: str | None) -> str |
         if name in text:  # next occurrence of that weekday (today counts)
             return (today + timedelta(days=(i - today.weekday()) % 7)).isoformat()
     return None
+
+
+def _resolve_service(workspace_id: str, service_text: str | None):
+    """Match what the voice agent says ('haircut', or a raw id) to a real
+    service, so the model never has to echo a UUID."""
+    services = salon_service.list_services(workspace_id, active_only=True)
+    if not services:
+        return None
+    raw = (service_text or "").strip()
+    text = raw.lower()
+    for s in services:  # exact id
+        if s.id == raw:
+            return s
+    for s in services:  # exact name
+        if s.name.lower() == text:
+            return s
+    for s in services:  # fuzzy substring either way
+        if text and (text in s.name.lower() or s.name.lower() in text):
+            return s
+    return services[0] if len(services) == 1 else None
+
+
+def _parse_spoken_time(text: str | None) -> tuple[int, int, str] | None:
+    """Parse '2:30 PM' / '2pm' / '14:30' → (hour, minute, am|pm|'')."""
+    m = re.search(r"(\d{1,2})(?::(\d{2}))?\s*(a\.?m\.?|p\.?m\.?)?", (text or "").strip().lower())
+    if not m:
+        return None
+    hour = int(m.group(1))
+    minute = int(m.group(2) or 0)
+    if minute > 59 or hour > 23:
+        return None
+    ap = (m.group(3) or "").replace(".", "")
+    return (hour, minute, ap)
+
+
+def _find_matching_slot(slots: list, parsed: tuple[int, int, str], tz, staff_name: str | None):
+    """Find the availability slot whose local time matches the spoken time,
+    handling AM/PM ambiguity by checking against the real open slots."""
+    hour, minute, ap = parsed
+    candidates: set[int] = set()
+    if ap == "am":
+        candidates.add(0 if hour == 12 else hour)
+    elif ap == "pm":
+        candidates.add(12 if hour == 12 else (hour if hour >= 12 else hour + 12))
+    else:
+        candidates.add(hour)
+        if hour < 12:
+            candidates.add(hour + 12)  # salons run daytime; try the PM reading too
+
+    def local_hm(s):
+        loc = s.starts_at.astimezone(tz)
+        return (loc.hour, loc.minute)
+
+    matches = [s for s in slots if local_hm(s)[1] == minute and local_hm(s)[0] in candidates]
+    if staff_name:
+        sn = staff_name.strip().lower()
+        staff_matches = [s for s in matches if s.staff_name and sn in s.staff_name.lower()]
+        if staff_matches:
+            return staff_matches[0]
+    return matches[0] if matches else None
 
 
 log = get_logger(__name__)
@@ -217,12 +278,17 @@ async def vapi_webhook(
                 results.append({"toolCallId": tc_id, "result": order_result["message"]})
 
             elif name == "check_availability":
-                svc_id = (args or {}).get("service_id")
+                svc = _resolve_service(
+                    workspace_id, (args or {}).get("service") or (args or {}).get("service_id")
+                )
                 raw_date = (args or {}).get("date")
-                if not svc_id or not raw_date:
+                if not svc:
                     results.append(
-                        {"toolCallId": tc_id, "result": "I need the service and a date to check times."}
+                        {"toolCallId": tc_id, "result": "Which service would you like? Offer the ones on the list."}
                     )
+                    continue
+                if not raw_date:
+                    results.append({"toolCallId": tc_id, "result": "What day works for the customer?"})
                     continue
                 date_str = _resolve_date(raw_date, workspace_id, location_id)
                 if not date_str:
@@ -236,7 +302,7 @@ async def vapi_webhook(
                 try:
                     avail = booking_service.get_availability(
                         workspace_id,
-                        service_id=svc_id,
+                        service_id=svc.id,
                         date_str=date_str,
                         location_id=location_id,
                         max_slots=8,
@@ -256,17 +322,18 @@ async def vapi_webhook(
                     )
                     continue
                 slot_lines = [
-                    f"{_spoken_time(s.starts_at, workspace_id, location_id)} with {s.staff_name} "
-                    f"[starts_at: {s.starts_at.isoformat()} staff_id: {s.staff_id}]"
+                    f"{_spoken_time(s.starts_at, workspace_id, location_id)} with {s.staff_name}"
                     for s in avail.slots
                 ]
                 results.append(
                     {
                         "toolCallId": tc_id,
                         "result": (
-                            "Open times (read the times naturally; when the customer picks one, "
-                            "call book_appointment with the exact starts_at and staff_id): "
+                            f"Open times for {svc.name}: "
                             + "; ".join(slot_lines)
+                            + ". Read these to the customer. When they pick one, you MUST call "
+                            "book_appointment with the service, the day, that time, and their name "
+                            "and phone — do not tell them it's booked until book_appointment succeeds."
                         ),
                     }
                 )
@@ -280,20 +347,55 @@ async def vapi_webhook(
                         }
                     )
                     continue
-                if not (args or {}).get("service_id") or not (args or {}).get("starts_at"):
+                a = args if isinstance(args, dict) else {}
+                svc = _resolve_service(workspace_id, a.get("service") or a.get("service_id"))
+                date_str = _resolve_date(a.get("date"), workspace_id, location_id)
+                parsed = _parse_spoken_time(a.get("time") or a.get("starts_at"))
+                if not svc or not date_str or not parsed:
                     results.append(
-                        {"toolCallId": tc_id, "result": "I still need the service and time to book."}
+                        {"toolCallId": tc_id, "result": "I need the service, day, and time to book — could you confirm them?"}
+                    )
+                    continue
+                try:
+                    avail = booking_service.get_availability(
+                        workspace_id,
+                        service_id=svc.id,
+                        date_str=date_str,
+                        location_id=location_id,
+                        max_slots=40,
+                    )
+                except Exception as exc:
+                    log.error("vapi_book_failed", workspace_id=workspace_id, error=str(exc))
+                    results.append(
+                        {"toolCallId": tc_id, "result": "Sorry, I couldn't book that right now — please try again."}
+                    )
+                    continue
+                tz = booking_service._location_tz(workspace_id, location_id)
+                slot = _find_matching_slot(avail.slots, parsed, tz, a.get("staff_name"))
+                if not slot:
+                    alt = "; ".join(
+                        f"{_spoken_time(s.starts_at, workspace_id, location_id)} with {s.staff_name}"
+                        for s in avail.slots[:5]
+                    )
+                    results.append(
+                        {
+                            "toolCallId": tc_id,
+                            "result": (
+                                "That exact time isn't open. "
+                                + (f"Closest options: {alt}. Ask which they'd like." if alt else "Offer another day.")
+                            ),
+                        }
                     )
                     continue
                 try:
                     appt = booking_service.create_appointment(
                         workspace_id,
                         BookAppointmentInput(
-                            service_id=args["service_id"],
-                            starts_at=args["starts_at"],
-                            staff_id=args.get("staff_id"),
-                            customer_name=args.get("customer_name") or (conv or {}).get("customer_name"),
-                            customer_phone=args.get("customer_phone") or (conv or {}).get("customer_phone"),
+                            service_id=svc.id,
+                            starts_at=slot.starts_at,
+                            staff_id=slot.staff_id,
+                            customer_name=a.get("customer_name") or (conv or {}).get("customer_name"),
+                            customer_phone=a.get("customer_phone") or (conv or {}).get("customer_phone"),
                             location_id=location_id,
                             conversation_id=conv["id"] if conv else None,
                         ),
@@ -312,12 +414,13 @@ async def vapi_webhook(
                     continue
                 when = _spoken_time(appt.starts_at, workspace_id, location_id)
                 staff = f" with {appt.staff_name}" if appt.staff_name else ""
+                log.info("vapi_book_ok", workspace_id=workspace_id, appointment_id=appt.id)
                 results.append(
                     {
                         "toolCallId": tc_id,
                         "result": (
-                            f"Booked: {appt.service_name}{staff} on {when}. "
-                            "Confirm these details back to the customer."
+                            f"BOOKED and saved: {appt.service_name}{staff} on {when}. "
+                            "Now confirm to the customer that it's booked."
                         ),
                     }
                 )
