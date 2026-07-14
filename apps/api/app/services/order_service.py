@@ -1,8 +1,51 @@
 from datetime import UTC, datetime
+from typing import Any
 
-from app.core.exceptions import NotFoundError
+from app.core.exceptions import AppError, NotFoundError
 from app.core.supabase import get_supabase_admin
 from app.models.order import Order, OrderStatus
+
+
+def create_manual_order(
+    workspace_id: str,
+    items: list[dict[str, Any]],
+    location_id: str | None = None,
+    customer_name: str | None = None,
+    customer_phone: str | None = None,
+    fulfillment: str = "pickup",
+) -> Order:
+    """Create an order from the dashboard (staff-entered), priced against the
+    menu via the same path the AI uses."""
+    from app.services import voice_order_service
+
+    db = get_supabase_admin()
+    if not location_id:
+        loc = (
+            db.table("locations")
+            .select("id")
+            .eq("workspace_id", workspace_id)
+            .eq("is_active", True)
+            .limit(1)
+            .execute()
+        )
+        location_id = loc.data[0]["id"] if loc.data else None
+
+    result = voice_order_service.place_order_from_tool_call(
+        workspace_id=workspace_id,
+        location_id=location_id,
+        conversation_id=None,
+        customer_id=None,
+        customer_phone=customer_phone,
+        arguments={
+            "items": items,
+            "fulfillment": fulfillment,
+            "customer_name": customer_name,
+            "special_instructions": "Entered from dashboard",
+        },
+    )
+    if not result.get("success"):
+        raise AppError(result.get("message") or "Could not create the order.")
+    return get_order(workspace_id, str(result["order_id"]))
 
 
 def list_orders(

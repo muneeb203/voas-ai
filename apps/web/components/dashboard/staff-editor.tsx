@@ -1,9 +1,9 @@
 'use client';
 
-import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useEffect, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { toast } from 'sonner';
-import { Plus, Pencil, Trash2 } from 'lucide-react';
+import { Plus, Pencil, Trash2, Calendar, Check } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -21,6 +21,8 @@ import {
   createStaffAction,
   updateStaffAction,
   deleteStaffAction,
+  connectGoogleCalendarAction,
+  disconnectGoogleCalendarAction,
 } from '@/app/actions/salon-action';
 import type { SalonService, SalonStaff, StaffHours } from '@/lib/api/salon';
 
@@ -66,7 +68,9 @@ function daysFromHours(hours: StaffHours[]): Record<number, DayState> {
 
 export function StaffEditor({ initialStaff, services, canEdit }: Props) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [open, setOpen] = useState(false);
+  const [connectingId, setConnectingId] = useState<string | null>(null);
   const [editing, setEditing] = useState<SalonStaff | null>(null);
   const [name, setName] = useState('');
   const [title, setTitle] = useState('');
@@ -136,6 +140,32 @@ export function StaffEditor({ initialStaff, services, canEdit }: Props) {
     router.refresh();
   }
 
+  // One-time toast after returning from Google's consent screen.
+  useEffect(() => {
+    const g = searchParams.get('google');
+    if (g === 'connected') toast.success('Google Calendar connected');
+    else if (g === 'error') toast.error('Could not connect Google Calendar — please try again.');
+    if (g) router.replace('/staff');
+  }, [searchParams, router]);
+
+  async function handleConnectGoogle(m: SalonStaff) {
+    setConnectingId(m.id);
+    const res = await connectGoogleCalendarAction(m.id);
+    if (res.error || !res.authUrl) {
+      setConnectingId(null);
+      return toast.error(res.error ?? 'Could not start Google connection');
+    }
+    window.location.href = res.authUrl; // hand off to Google's consent screen
+  }
+
+  async function handleDisconnectGoogle(m: SalonStaff) {
+    if (!confirm(`Disconnect ${m.name}'s Google Calendar? New bookings won't sync to it.`)) return;
+    const res = await disconnectGoogleCalendarAction(m.id);
+    if (res.error) return toast.error(res.error);
+    toast.success('Google Calendar disconnected');
+    router.refresh();
+  }
+
   return (
     <div className="space-y-4">
       {canEdit && (
@@ -200,6 +230,44 @@ export function StaffEditor({ initialStaff, services, canEdit }: Props) {
                   ))}
                   {m.hours.length === 0 && <span>No hours set</span>}
                 </div>
+                {canEdit && (
+                  <div className="mt-3 flex items-center justify-between border-t pt-3">
+                    {m.google_connected ? (
+                      <>
+                        <span className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
+                          <Check className="h-3.5 w-3.5 flex-shrink-0 text-success" />
+                          <span className="truncate">
+                            Google Calendar{m.google_email ? ` · ${m.google_email}` : ''}
+                          </span>
+                        </span>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 flex-shrink-0 px-2 text-xs"
+                          onClick={() => handleDisconnectGoogle(m)}
+                        >
+                          Disconnect
+                        </Button>
+                      </>
+                    ) : (
+                      <>
+                        <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                          <Calendar className="h-3.5 w-3.5" />
+                          Google Calendar not connected
+                        </span>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-7 flex-shrink-0 px-2 text-xs"
+                          disabled={connectingId === m.id}
+                          onClick={() => handleConnectGoogle(m)}
+                        >
+                          {connectingId === m.id ? 'Connecting…' : 'Connect'}
+                        </Button>
+                      </>
+                    )}
+                  </div>
+                )}
               </CardContent>
             </Card>
           ))}

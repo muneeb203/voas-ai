@@ -23,6 +23,7 @@ from app.routers import (
     contact,
     conversations,
     customers,
+    google,
     health,
     help,
     kiosk,
@@ -116,6 +117,8 @@ def create_app() -> FastAPI:
     app.include_router(orders.router, prefix="/v1")
     app.include_router(menu.router, prefix="/v1")
     app.include_router(salon.router, prefix="/v1")
+    app.include_router(google.router, prefix="/v1")
+    app.include_router(google.public_router, prefix="/v1")
     app.include_router(analytics.router, prefix="/v1")
     app.include_router(billing.router, prefix="/v1")
     app.include_router(help.router, prefix="/v1")

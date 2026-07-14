@@ -60,6 +60,8 @@ class SalonStaff(BaseModel):
     sort_order: int
     service_ids: list[str] = []
     hours: list[StaffHours] = []
+    google_connected: bool = False
+    google_email: str | None = None
 
 
 class SalonStaffCreate(BaseModel):
@@ -101,11 +103,17 @@ class SalonAppointment(BaseModel):
     price_cents: int
     notes: str | None = None
     checked_in_at: datetime | None = None
+    google_event_id: str | None = None
     created_at: datetime
 
 
 class AppointmentStatusUpdate(BaseModel):
     status: AppointmentStatus
+
+
+class RescheduleInput(BaseModel):
+    starts_at: datetime
+    staff_id: str | None = None
 
 
 # --- Availability / booking (also used by the AI tool) ----------------------

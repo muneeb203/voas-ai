@@ -5,6 +5,7 @@ from app.models.salon import (
     AppointmentStatusUpdate,
     AvailabilityResult,
     BookAppointmentInput,
+    RescheduleInput,
     SalonAppointment,
     SalonService,
     SalonServiceCreate,
@@ -169,5 +170,19 @@ async def update_appointment_status(
     return ok(
         salon_service.update_appointment_status(
             ctx.workspace_id, appointment_id, payload, ctx.user.id
+        )
+    )
+
+
+@router.patch(
+    "/workspaces/{workspace_id}/salon/appointments/{appointment_id}/reschedule",
+    response_model=DataResponse[SalonAppointment],
+)
+async def reschedule_appointment(
+    appointment_id: str, payload: RescheduleInput, ctx: WorkspaceContextDep
+) -> DataResponse[SalonAppointment]:
+    return ok(
+        booking_service.reschedule_appointment(
+            ctx.workspace_id, appointment_id, payload.starts_at, payload.staff_id
         )
     )

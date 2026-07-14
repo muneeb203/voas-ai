@@ -15,6 +15,19 @@ export function getOrder(workspaceId: string, orderId: string) {
   });
 }
 
+export interface ManualOrderInput {
+  items: Array<{ name: string; quantity: number }>;
+  customer_name?: string | null;
+  customer_phone?: string | null;
+}
+
+export function createOrder(workspaceId: string, body: ManualOrderInput) {
+  return apiCall<Order>(`/v1/workspaces/${workspaceId}/orders`, {
+    method: 'POST',
+    body,
+  });
+}
+
 export function updateOrderStatus(
   workspaceId: string,
   orderId: string,

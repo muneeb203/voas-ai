@@ -4,10 +4,12 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { format, isToday, isTomorrow } from 'date-fns';
-import { ChevronDown } from 'lucide-react';
+import { ChevronDown, Plus } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { AppointmentDialog } from '@/components/dashboard/appointment-dialog';
+import type { SalonService } from '@/lib/api/salon';
 import {
   Table,
   TableBody,
@@ -53,11 +55,15 @@ function whenLabel(iso: string): string {
 
 export function AppointmentsList({
   initialAppointments,
+  services,
 }: {
   initialAppointments: SalonAppointment[];
+  services: SalonService[];
 }) {
   const router = useRouter();
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [newOpen, setNewOpen] = useState(false);
+  const [rescheduleAppt, setRescheduleAppt] = useState<SalonAppointment | null>(null);
 
   async function setStatus(a: SalonAppointment, status: AppointmentStatus) {
     setBusyId(a.id);
@@ -68,20 +74,29 @@ export function AppointmentsList({
     router.refresh();
   }
 
-  if (initialAppointments.length === 0) {
-    return (
-      <Card>
-        <CardContent className="py-12 text-center text-sm text-muted-foreground">
-          No appointments yet. Bookings made by the AI or your team will appear here.
-        </CardContent>
-      </Card>
-    );
-  }
+  const canBook = services.length > 0;
 
   return (
-    <Card>
-      <CardContent className="p-0">
-        <Table>
+    <div className="space-y-4">
+      <div className="flex items-center justify-end gap-3">
+        {!canBook && (
+          <p className="text-xs text-muted-foreground">Add a service + staff to take bookings.</p>
+        )}
+        <Button onClick={() => setNewOpen(true)} disabled={!canBook}>
+          <Plus className="h-4 w-4" /> New appointment
+        </Button>
+      </div>
+
+      {initialAppointments.length === 0 ? (
+        <Card>
+          <CardContent className="py-12 text-center text-sm text-muted-foreground">
+            No appointments yet. Bookings made by the AI or your team will appear here.
+          </CardContent>
+        </Card>
+      ) : (
+        <Card>
+          <CardContent className="p-0">
+            <Table>
           <TableHeader>
             <TableRow>
               <TableHead>When</TableHead>
@@ -114,6 +129,11 @@ export function AppointmentsList({
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
+                        {a.service_id && (
+                          <DropdownMenuItem onClick={() => setRescheduleAppt(a)}>
+                            Reschedule…
+                          </DropdownMenuItem>
+                        )}
                         {NEXT_STATUSES.filter((s) => s !== a.status).map((s) => (
                           <DropdownMenuItem key={s} onClick={() => setStatus(a, s)}>
                             {STATUS_META[s].label}
@@ -125,9 +145,30 @@ export function AppointmentsList({
                 </TableRow>
               );
             })}
-          </TableBody>
-        </Table>
-      </CardContent>
-    </Card>
+            </TableBody>
+          </Table>
+          </CardContent>
+        </Card>
+      )}
+
+      <AppointmentDialog
+        open={newOpen}
+        onClose={() => setNewOpen(false)}
+        mode="new"
+        services={services}
+      />
+      {rescheduleAppt && (
+        <AppointmentDialog
+          key={rescheduleAppt.id}
+          open
+          onClose={() => setRescheduleAppt(null)}
+          mode="reschedule"
+          services={services}
+          appointmentId={rescheduleAppt.id}
+          fixedServiceId={rescheduleAppt.service_id ?? undefined}
+          fixedServiceName={rescheduleAppt.service_name}
+        />
+      )}
+    </div>
   );
 }

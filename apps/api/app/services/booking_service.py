@@ -17,7 +17,7 @@ from app.models.salon import (
     BookAppointmentInput,
     SalonAppointment,
 )
-from app.services import salon_service
+from app.services import google_calendar_service, salon_service
 
 SLOT_STEP_MINUTES = 15
 BOOKED_STATUSES = ["pending", "confirmed"]
@@ -87,17 +87,23 @@ def _hours_for_weekday(db, staff_id: str, weekday: int) -> list[tuple[time, time
 
 
 def _busy_intervals(
-    db, staff_id: str, day_start_utc: datetime, day_end_utc: datetime
+    db,
+    staff_id: str,
+    day_start_utc: datetime,
+    day_end_utc: datetime,
+    exclude_appointment_id: str | None = None,
 ) -> list[tuple[datetime, datetime]]:
-    res = (
+    q = (
         db.table("salon_appointments")
         .select("starts_at, ends_at")
         .eq("staff_id", staff_id)
         .in_("status", BOOKED_STATUSES)
         .gte("starts_at", day_start_utc.isoformat())
         .lt("starts_at", day_end_utc.isoformat())
-        .execute()
     )
+    if exclude_appointment_id:
+        q = q.neq("id", exclude_appointment_id)
+    res = q.execute()
     return [(_parse_dt(r["starts_at"]), _parse_dt(r["ends_at"])) for r in (res.data or [])]
 
 
@@ -133,6 +139,7 @@ def get_availability(
         if not hours:
             continue
         busy = _busy_intervals(db, member["id"], day_start_utc, day_end_utc)
+        busy += google_calendar_service.freebusy(member["id"], day_start_utc, day_end_utc)
         for start_t, end_t in hours:
             block_start = datetime.combine(day, start_t, tzinfo=tz).astimezone(UTC)
             block_end = datetime.combine(day, end_t, tzinfo=tz).astimezone(UTC)
@@ -154,7 +161,12 @@ def get_availability(
 
 
 def _slot_bookable(
-    db, staff_id: str, starts_at: datetime, block_end: datetime, tz: ZoneInfo
+    db,
+    staff_id: str,
+    starts_at: datetime,
+    block_end: datetime,
+    tz: ZoneInfo,
+    exclude_appointment_id: str | None = None,
 ) -> bool:
     """True if [starts_at, block_end] fits a working block for the staff member
     on that weekday and doesn't overlap an existing appointment."""
@@ -171,8 +183,13 @@ def _slot_bookable(
     if not within:
         return False
     busy = _busy_intervals(
-        db, staff_id, starts_at - timedelta(days=1), block_end + timedelta(days=1)
+        db,
+        staff_id,
+        starts_at - timedelta(days=1),
+        block_end + timedelta(days=1),
+        exclude_appointment_id=exclude_appointment_id,
     )
+    busy += google_calendar_service.freebusy(staff_id, starts_at - timedelta(days=1), block_end + timedelta(days=1))
     return not _overlaps(starts_at, block_end, busy)
 
 
@@ -219,7 +236,25 @@ def create_appointment(workspace_id: str, data: BookAppointmentInput) -> SalonAp
     res = db.table("salon_appointments").insert(row).execute()
     if not res.data:
         raise AppError("Could not save the appointment.")
-    return SalonAppointment(**res.data[0])
+    appt = SalonAppointment(**res.data[0])
+
+    event_id = google_calendar_service.push_event(
+        chosen["id"],
+        _event_summary(service.name, data.customer_name),
+        "Booked via VOAS AI",
+        starts_at,
+        ends_at,
+    )
+    if event_id:
+        db.table("salon_appointments").update({"google_event_id": event_id}).eq(
+            "id", appt.id
+        ).execute()
+        appt.google_event_id = event_id
+    return appt
+
+
+def _event_summary(service_name: str, customer_name: str | None) -> str:
+    return f"{service_name} — {customer_name}" if customer_name else f"{service_name} — Walk-in"
 
 
 def availability_prompt_context(workspace_id: str) -> str:
@@ -260,6 +295,82 @@ def availability_prompt_context(workspace_id: str) -> str:
         lines.append(f"\n{svc.name} ({svc.duration_minutes} min, {price}) [service_id: {svc.id}]")
         lines.extend(slot_lines or ["  - no open times in the next few days"])
     return "\n".join(lines)
+
+
+def reschedule_appointment(
+    workspace_id: str,
+    appointment_id: str,
+    new_starts_at: datetime,
+    staff_id: str | None = None,
+) -> SalonAppointment:
+    """Move an appointment to a new time (and optionally a new staff member),
+    re-checking availability against everyone else's bookings."""
+    from app.services import salon_service
+
+    db = get_supabase_admin()
+    appt = get_appointment(workspace_id, appointment_id)
+    if not appt.service_id:
+        raise AppError("This appointment can't be rescheduled.")
+    service = salon_service._get_service(workspace_id, appt.service_id)
+
+    starts_at = new_starts_at if new_starts_at.tzinfo else new_starts_at.replace(tzinfo=UTC)
+    starts_at = starts_at.astimezone(UTC)
+    ends_at = starts_at + timedelta(minutes=service.duration_minutes)
+    block_end = starts_at + timedelta(minutes=service.duration_minutes + service.buffer_after_minutes)
+
+    target_staff = staff_id or appt.staff_id
+    if not target_staff:
+        raise AppError("No staff member is assigned to this appointment.")
+
+    eligible_ids = {m["id"] for m in _eligible_staff(db, workspace_id, appt.service_id, None)}
+    if target_staff not in eligible_ids:
+        raise AppError("That staff member doesn't perform this service.")
+
+    tz = _location_tz(workspace_id, appt.location_id)
+    if not _slot_bookable(db, target_staff, starts_at, block_end, tz, exclude_appointment_id=appointment_id):
+        raise ConflictError("That time isn't available — please pick another slot.")
+
+    staff_name = appt.staff_name
+    if staff_id and staff_id != appt.staff_id:
+        srow = db.table("salon_staff").select("name").eq("id", staff_id).limit(1).execute()
+        staff_name = srow.data[0]["name"] if srow.data else None
+
+    res = (
+        db.table("salon_appointments")
+        .update(
+            {
+                "starts_at": starts_at.isoformat(),
+                "ends_at": ends_at.isoformat(),
+                "staff_id": target_staff,
+                "staff_name": staff_name,
+                "status": "confirmed",
+            }
+        )
+        .eq("workspace_id", workspace_id)
+        .eq("id", appointment_id)
+        .execute()
+    )
+    if not res.data:
+        raise NotFoundError("Appointment not found")
+    updated = SalonAppointment(**res.data[0])
+
+    summary = _event_summary(service.name, appt.customer_name)
+    if target_staff != appt.staff_id:
+        # Moved to a different stylist → remove the old calendar event, create a new one.
+        if appt.google_event_id and appt.staff_id:
+            google_calendar_service.delete_event(appt.staff_id, appt.google_event_id)
+        new_event = google_calendar_service.push_event(
+            target_staff, summary, "Booked via VOAS AI", starts_at, ends_at
+        )
+        db.table("salon_appointments").update({"google_event_id": new_event}).eq(
+            "id", appointment_id
+        ).execute()
+        updated.google_event_id = new_event
+    elif appt.google_event_id:
+        google_calendar_service.update_event(
+            target_staff, appt.google_event_id, summary, starts_at, ends_at
+        )
+    return updated
 
 
 def get_appointment(workspace_id: str, appointment_id: str) -> SalonAppointment:
