@@ -56,15 +56,22 @@ export function WorkspaceForm({
         <Input id="slug" value={slug} disabled readOnly />
       </Field>
 
-      <Field label="Vertical" htmlFor="vertical" required error={fieldErrors?.vertical}>
+      <Field
+        label="Business type"
+        htmlFor="vertical"
+        required
+        error={fieldErrors?.vertical}
+        hint="Switching changes your whole dashboard — e.g. a salon gets Appointments, Services, and Staff instead of Orders and Menu. Restaurant and Salon are fully supported today; more are coming."
+      >
         <Select name="vertical" defaultValue={defaultVertical} disabled={disabled || pending}>
           <SelectTrigger id="vertical">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
             {VERTICALS.map((v) => (
-              <SelectItem key={v.value} value={v.value}>
+              <SelectItem key={v.value} value={v.value} disabled={!v.available}>
                 {v.label}
+                {!v.available ? ' (coming soon)' : ''}
               </SelectItem>
             ))}
           </SelectContent>

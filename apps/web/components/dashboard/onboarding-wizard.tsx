@@ -215,14 +215,22 @@ export function OnboardingWizard({ defaultName }: { defaultName?: string }) {
                 <button
                   key={v.value}
                   type="button"
+                  disabled={!v.available}
                   onClick={() => setVertical(v.value)}
                   className={
-                    vertical === v.value
-                      ? 'rounded-lg border-2 border-accent bg-accent/5 p-4 text-left text-sm font-medium'
-                      : 'rounded-lg border border-border bg-background p-4 text-left text-sm font-medium hover:border-accent/50'
+                    !v.available
+                      ? 'cursor-not-allowed rounded-lg border border-border bg-muted/40 p-4 text-left text-sm font-medium text-muted-foreground'
+                      : vertical === v.value
+                        ? 'rounded-lg border-2 border-accent bg-accent/5 p-4 text-left text-sm font-medium'
+                        : 'rounded-lg border border-border bg-background p-4 text-left text-sm font-medium hover:border-accent/50'
                   }
                 >
                   {v.label}
+                  {!v.available && (
+                    <span className="mt-0.5 block text-[10px] font-normal uppercase tracking-wider text-muted-foreground">
+                      Coming soon
+                    </span>
+                  )}
                 </button>
               ))}
             </div>

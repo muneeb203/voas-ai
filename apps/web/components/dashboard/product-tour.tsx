@@ -78,11 +78,20 @@ const STEPS = [
     },
   },
   {
+    popover: {
+      title: 'Built for your business type',
+      description:
+        'VOAS adapts to your vertical. Restaurants get Orders, Menu, and kiosk ordering; ' +
+        'salons get Appointments, Services, and Staff so the AI can book appointments. ' +
+        'Dental, auto repair, and more are on the way — you can switch your vertical any time in Settings.',
+    },
+  },
+  {
     element: '[data-tour="settings"]',
     popover: {
       title: 'Settings & Support',
       description:
-        "Manage your workspace and plan in Settings, and reach us from Support any time. " +
+        "Manage your workspace, business type, and plan in Settings, and reach us from Support any time. " +
         "That's the tour — you're all set!",
     },
   },
