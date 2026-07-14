@@ -7,6 +7,9 @@ import {
   BookOpen,
   Users,
   ArrowRight,
+  Scissors,
+  UtensilsCrossed,
+  Building2,
   type LucideIcon,
 } from 'lucide-react';
 import { requireDashboardSession } from '@/lib/auth/workspace';
@@ -143,12 +146,28 @@ export default async function DashboardHome() {
 
   const fullName = session.user.full_name?.split(' ')[0] ?? null;
 
+  const VERTICAL_META: Record<string, { label: string; Icon: LucideIcon }> = {
+    restaurant: { label: 'Restaurant', Icon: UtensilsCrossed },
+    salon: { label: 'Salon', Icon: Scissors },
+  };
+  const vertical = VERTICAL_META[session.active.workspace.vertical] ?? {
+    label: 'Business',
+    Icon: Building2,
+  };
+  const VerticalIcon = vertical.Icon;
+
   return (
     <div className="space-y-8">
       <header>
-        <p className="text-xs font-medium uppercase tracking-widest text-accent-700">
-          {t('eyebrow')}
-        </p>
+        <div className="flex items-center justify-between gap-3">
+          <p className="text-xs font-medium uppercase tracking-widest text-accent-700">
+            {t('eyebrow')}
+          </p>
+          <Badge variant="secondary" className="gap-1.5">
+            <VerticalIcon className="h-3.5 w-3.5" />
+            {vertical.label} mode
+          </Badge>
+        </div>
         <h1 className="mt-1 text-3xl font-semibold tracking-tight">
           {t('welcome')}{fullName ? `, ${fullName}` : ''} 👋
         </h1>

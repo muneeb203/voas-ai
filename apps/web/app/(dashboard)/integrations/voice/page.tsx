@@ -145,7 +145,7 @@ export default async function VoiceSettingsPage() {
                 </p>
               </div>
               <div className="pt-2">
-                <p className="font-medium text-foreground">Vapi assistant id</p>
+                <p className="font-medium text-foreground">Assistant ID</p>
                 <p className="mt-1 font-mono text-[10px] text-muted-foreground">
                   {settings.vapi_assistant_id ?? 'Not yet provisioned — save to create.'}
                 </p>

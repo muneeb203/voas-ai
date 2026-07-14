@@ -3,7 +3,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-NotificationType = Literal["order_placed", "product_update"]
+NotificationType = Literal["order_placed", "product_update", "usage_limit"]
 
 
 class Notification(BaseModel):
