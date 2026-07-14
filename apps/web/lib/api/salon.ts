@@ -48,7 +48,29 @@ export interface SalonAppointment {
   status: AppointmentStatus;
   price_cents: number;
   notes: string | null;
+  checked_in_at?: string | null;
   created_at: string;
+}
+
+export interface AvailabilitySlot {
+  starts_at: string;
+  ends_at: string;
+  staff_id: string;
+  staff_name: string;
+}
+
+export interface AvailabilityResult {
+  date: string;
+  service_id: string;
+  slots: AvailabilitySlot[];
+}
+
+export interface BookInput {
+  service_id: string;
+  starts_at: string;
+  staff_id?: string | null;
+  customer_name?: string | null;
+  customer_phone?: string | null;
 }
 
 export interface ServiceInput {
@@ -72,8 +94,9 @@ export interface StaffInput {
 
 // --- Services ---------------------------------------------------------------
 
-export function listServices(workspaceId: string) {
-  return apiCall<SalonService[]>(`/v1/workspaces/${workspaceId}/salon/services`, {
+export function listServices(workspaceId: string, activeOnly = false) {
+  const qs = activeOnly ? '?active_only=true' : '';
+  return apiCall<SalonService[]>(`/v1/workspaces/${workspaceId}/salon/services${qs}`, {
     cache: 'no-store',
   });
 }
@@ -136,5 +159,37 @@ export function updateAppointmentStatus(
   return apiCall<SalonAppointment>(
     `/v1/workspaces/${workspaceId}/salon/appointments/${appointmentId}/status`,
     { method: 'PATCH', body: { status } },
+  );
+}
+
+export function getAvailability(
+  workspaceId: string,
+  serviceId: string,
+  date: string,
+  staffId?: string,
+) {
+  const qs = new URLSearchParams({ service_id: serviceId, date });
+  if (staffId) qs.set('staff_id', staffId);
+  return apiCall<AvailabilityResult>(
+    `/v1/workspaces/${workspaceId}/salon/availability?${qs.toString()}`,
+    { cache: 'no-store' },
+  );
+}
+
+export function bookAppointment(workspaceId: string, body: BookInput) {
+  return apiCall<SalonAppointment>(`/v1/workspaces/${workspaceId}/salon/appointments`, {
+    method: 'POST',
+    body,
+  });
+}
+
+export function rescheduleAppointment(
+  workspaceId: string,
+  appointmentId: string,
+  body: { starts_at: string; staff_id?: string | null },
+) {
+  return apiCall<SalonAppointment>(
+    `/v1/workspaces/${workspaceId}/salon/appointments/${appointmentId}/reschedule`,
+    { method: 'PATCH', body },
   );
 }

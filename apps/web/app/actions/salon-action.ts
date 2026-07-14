@@ -10,7 +10,12 @@ import {
   updateStaff,
   deleteStaff,
   updateAppointmentStatus,
+  getAvailability,
+  bookAppointment,
+  rescheduleAppointment,
   type AppointmentStatus,
+  type AvailabilitySlot,
+  type BookInput,
   type ServiceInput,
   type StaffInput,
 } from '@/lib/api/salon';
@@ -90,6 +95,36 @@ export async function updateAppointmentStatusAction(
 ) {
   const session = await requireDashboardSession('/appointments');
   const res = await updateAppointmentStatus(session.active.workspace_id, appointmentId, status);
+  if (isApiError(res)) return { error: res.error.message };
+  revalidatePath('/appointments');
+  return { error: null };
+}
+
+export async function getAvailabilityAction(
+  serviceId: string,
+  date: string,
+  staffId?: string,
+): Promise<{ error: string | null; slots: AvailabilitySlot[] }> {
+  const session = await requireDashboardSession('/appointments');
+  const res = await getAvailability(session.active.workspace_id, serviceId, date, staffId);
+  if (isApiError(res)) return { error: res.error.message, slots: [] };
+  return { error: null, slots: res.data.slots };
+}
+
+export async function bookAppointmentAction(body: BookInput) {
+  const session = await requireDashboardSession('/appointments');
+  const res = await bookAppointment(session.active.workspace_id, body);
+  if (isApiError(res)) return { error: res.error.message };
+  revalidatePath('/appointments');
+  return { error: null };
+}
+
+export async function rescheduleAppointmentAction(
+  appointmentId: string,
+  body: { starts_at: string; staff_id?: string | null },
+) {
+  const session = await requireDashboardSession('/appointments');
+  const res = await rescheduleAppointment(session.active.workspace_id, appointmentId, body);
   if (isApiError(res)) return { error: res.error.message };
   revalidatePath('/appointments');
   return { error: null };

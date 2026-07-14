@@ -4,7 +4,9 @@ import { formatDistanceToNow } from 'date-fns';
 import { ShoppingBag } from 'lucide-react';
 import { requireDashboardSession } from '@/lib/auth/workspace';
 import { listOrders } from '@/lib/api/orders';
+import { listItems } from '@/lib/api/menu';
 import { isApiError, type OrderStatus } from '@/lib/types';
+import { NewOrderButton } from '@/components/dashboard/new-order-button';
 import { Card, CardContent } from '@/components/ui/card';
 import {
   Table,
@@ -44,11 +46,19 @@ export default async function OrdersPage({
   const status =
     (STATUSES.find((s) => s.id === searchParams.status)?.id as 'all' | OrderStatus) ?? 'all';
 
-  const res = await listOrders(
-    session.active.workspace_id,
-    status !== 'all' ? (status as OrderStatus) : undefined,
-  );
+  const [res, menuRes] = await Promise.all([
+    listOrders(
+      session.active.workspace_id,
+      status !== 'all' ? (status as OrderStatus) : undefined,
+    ),
+    listItems(session.active.workspace_id),
+  ]);
   const orders = !isApiError(res) ? res.data : [];
+  const menuItems = !isApiError(menuRes)
+    ? menuRes.data
+        .filter((i) => i.is_active)
+        .map((i) => ({ id: i.id, name: i.name, price_cents: i.price_cents }))
+    : [];
 
   return (
     <div>
@@ -56,6 +66,7 @@ export default async function OrdersPage({
         eyebrow="Activity"
         title="Orders"
         description="AI-taken orders from every channel."
+        action={<NewOrderButton menuItems={menuItems} />}
       />
 
       <div className="mb-6 flex items-center gap-1 border-b border-border">
