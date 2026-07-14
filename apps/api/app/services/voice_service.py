@@ -281,6 +281,45 @@ def update_settings(
     return current
 
 
+def _is_canned_prompt(text: str) -> bool:
+    t = (text or "").strip()
+    known = {p.strip() for p in DEFAULT_SYSTEM_PROMPT_BY_LANG.values()}
+    known.add(SALON_DEFAULT_SYSTEM_PROMPT.strip())
+    return t in known
+
+
+def _is_canned_greeting(text: str) -> bool:
+    t = (text or "").strip()
+    known = {g.strip() for g in DEFAULT_GREETING_BY_LANG.values()}
+    known.add(SALON_DEFAULT_GREETING.strip())
+    return t in known
+
+
+def apply_vertical_to_voice(workspace_id: str, vertical: str) -> None:
+    """Called when a workspace's vertical changes. Swaps the voice prompt +
+    greeting to the new vertical's defaults IFF they're still canned defaults
+    (never clobbers a customized prompt), and marks the assistant for re-sync so
+    the correct tools (booking vs ordering) get pushed to Vapi."""
+    db = get_supabase_admin()
+    row = (
+        db.table("voice_settings")
+        .select("system_prompt, greeting")
+        .eq("workspace_id", workspace_id)
+        .limit(1)
+        .execute()
+    )
+    if not row.data:
+        return  # no settings yet → seeded correctly on first read
+    cur = row.data[0]
+    is_salon = vertical == "salon"
+    updates: dict = {"sync_status": "pending", "sync_error": None}
+    if _is_canned_prompt(cur.get("system_prompt", "")):
+        updates["system_prompt"] = SALON_DEFAULT_SYSTEM_PROMPT if is_salon else DEFAULT_SYSTEM_PROMPT
+    if _is_canned_greeting(cur.get("greeting", "")):
+        updates["greeting"] = SALON_DEFAULT_GREETING if is_salon else DEFAULT_GREETING
+    db.table("voice_settings").update(updates).eq("workspace_id", workspace_id).execute()
+
+
 def sync_assistant_now(workspace_id: str) -> None:
     """Push the current settings to Vapi and record the outcome. Runs as a
     background task after a save, so it never blocks the owner's request.
