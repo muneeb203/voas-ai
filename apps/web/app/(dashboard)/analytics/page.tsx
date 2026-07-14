@@ -82,12 +82,13 @@ export default async function AnalyticsPage({
     : 30;
 
   const res = await getAnalyticsSummary(session.active.workspace_id, days);
+  const isSalon = session.active.workspace.vertical === 'salon';
 
   const header = (
     <PageHeader
       eyebrow="Insights"
       title="Analytics"
-      description={`Performance across voice, WhatsApp, and orders over the last ${days} days.`}
+      description={`Performance across voice, WhatsApp, and ${isSalon ? 'appointments' : 'orders'} over the last ${days} days.`}
       action={<DaysSelector selected={days} />}
     />
   );
@@ -162,13 +163,17 @@ export default async function AnalyticsPage({
           value={a.total_conversations.toLocaleString()}
           icon={MessageSquare}
         />
-        <StatCard label="Orders" value={a.total_orders.toLocaleString()} icon={ShoppingBag} />
         <StatCard
-          label="Revenue"
+          label={isSalon ? 'Appointments' : 'Orders'}
+          value={a.total_orders.toLocaleString()}
+          icon={ShoppingBag}
+        />
+        <StatCard
+          label={isSalon ? 'Booked revenue' : 'Revenue'}
           value={formatCurrency(a.total_revenue_cents)}
           subtext={
             a.avg_order_value_cents !== null
-              ? `${formatCurrency(a.avg_order_value_cents)} avg order`
+              ? `${formatCurrency(a.avg_order_value_cents)} avg ${isSalon ? 'booking' : 'order'}`
               : undefined
           }
           icon={DollarSign}
@@ -243,14 +248,16 @@ export default async function AnalyticsPage({
       <div className="grid gap-6 lg:grid-cols-2">
         <Card>
           <CardHeader>
-            <CardTitle>Top menu items</CardTitle>
+            <CardTitle>{isSalon ? 'Top services' : 'Top menu items'}</CardTitle>
           </CardHeader>
           <CardContent>
             <HorizontalBar
               items={topItems}
               maxValue={a.top_menu_items[0]?.count ?? 1}
               formatValue={(v) => `${v}×`}
-              emptyMessage="No orders yet in this period"
+              emptyMessage={
+                isSalon ? 'No appointments yet in this period' : 'No orders yet in this period'
+              }
             />
           </CardContent>
         </Card>

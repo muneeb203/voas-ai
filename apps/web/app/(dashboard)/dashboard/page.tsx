@@ -85,6 +85,8 @@ export default async function DashboardHome() {
     (waSettings?.enabled ?? false) &&
     waConfigResults.some((r) => !isApiError(r) && r.data?.enabled);
 
+  const isSalon = session.active.workspace.vertical === 'salon';
+
   const stats: StatCardData[] = [
     {
       label: t('stats.conversations'),
@@ -92,14 +94,14 @@ export default async function DashboardHome() {
       hint: t('stats.conversationsHint'),
     },
     {
-      label: t('stats.orders'),
+      label: isSalon ? 'Appointments' : t('stats.orders'),
       value: today ? today.orders_today.toLocaleString() : '—',
-      hint: t('stats.ordersHint'),
+      hint: isSalon ? 'Appointments today' : t('stats.ordersHint'),
     },
     {
-      label: t('stats.revenue'),
+      label: isSalon ? 'Booked revenue' : t('stats.revenue'),
       value: today ? formatCurrency(today.revenue_today_cents) : '—',
-      hint: t('stats.revenueHint'),
+      hint: isSalon ? 'From today’s appointments' : t('stats.revenueHint'),
     },
     {
       label: t('stats.sentiment'),
