@@ -9,6 +9,7 @@ import {
   kioskSpeak,
   reportKioskMetrics,
   type KioskChatMessage,
+  type KioskAppointment,
 } from '@/lib/api/kiosk-public';
 
 interface SpeechRecognitionResultLike extends ArrayLike<{ transcript: string }> {
@@ -53,6 +54,7 @@ interface KioskClientProps {
   workspaceName: string;
   theme: 'warm' | 'light' | 'gradient';
   sessionLockEnabled: boolean;
+  vertical?: string;
 }
 
 type KioskState =
@@ -148,12 +150,15 @@ export function KioskClient({
   workspaceName,
   theme,
   sessionLockEnabled,
+  vertical = 'restaurant',
 }: KioskClientProps) {
   const cfg = (THEME_CFG[theme] ?? THEME_CFG['gradient']) as ThemeCfg;
+  const isSalon = vertical === 'salon';
 
   const [kioskState, setKioskState] = useState<KioskState>('idle');
   const [orderItems, setOrderItems] = useState<OrderItem[]>([]);
   const [orderNumber, setOrderNumber] = useState<string | null>(null);
+  const [appointment, setAppointment] = useState<KioskAppointment | null>(null);
   const [countdown, setCountdown] = useState(30);
   const [errorMsg, setErrorMsg] = useState('');
   const [lastTranscript, setLastTranscript] = useState('');
@@ -287,6 +292,7 @@ export function KioskClient({
     setKioskState('idle');
     setOrderItems([]);
     setOrderNumber(null);
+    setAppointment(null);
     setCountdown(30);
     setErrorMsg('');
     setLastTranscript('');
@@ -811,7 +817,7 @@ export function KioskClient({
         return;
       }
 
-      const { response, order_confirmed, order, debug } = chatRes.data;
+      const { response, order_confirmed, order, appointment: appt, debug } = chatRes.data;
       messagesRef.current.push({ role: 'assistant', content: response });
       setAiResponse(response);
 
@@ -843,10 +849,15 @@ export function KioskClient({
       recordTiming();
 
       if (order_confirmed) {
-        setOrderItems(order?.items ?? []);
-        setOrderNumber(
-          order?.order_number ?? `#${Math.floor(Math.random() * 9000) + 1000}`,
-        );
+        if (appt) {
+          setAppointment(appt);
+          setOrderNumber(appt.order_number ?? null);
+        } else {
+          setOrderItems(order?.items ?? []);
+          setOrderNumber(
+            order?.order_number ?? `#${Math.floor(Math.random() * 9000) + 1000}`,
+          );
+        }
         kioskStateRef.current = 'confirmed';
         setKioskState('confirmed');
         await speakText(response);
@@ -1028,13 +1039,15 @@ export function KioskClient({
               <span
                 className={`mb-3 inline-block rounded-full px-3 py-1 text-xs font-semibold ${cfg.badgeClass}`}
               >
-                Voice Ordering
+                {isSalon ? 'Voice Booking' : 'Voice Ordering'}
               </span>
               <h1 className={`text-5xl font-black tracking-tight ${cfg.textPrimary}`}>
-                Tap to Order
+                {isSalon ? 'Tap to Book' : 'Tap to Order'}
               </h1>
               <p className={`mt-3 text-lg ${cfg.textSecondary}`}>
-                Speak your order — your AI assistant is ready
+                {isSalon
+                  ? 'Book or check in — your AI assistant is ready'
+                  : 'Speak your order — your AI assistant is ready'}
               </p>
             </div>
           </div>
@@ -1161,32 +1174,75 @@ export function KioskClient({
                   <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
                 </svg>
               </div>
-              <h1 className={`mt-5 text-3xl font-black ${cfg.textPrimary}`}>Order Confirmed!</h1>
+              <h1 className={`mt-5 text-3xl font-black ${cfg.textPrimary}`}>
+                {appointment
+                  ? appointment.kind === 'checked_in'
+                    ? 'Checked In!'
+                    : 'Appointment Booked!'
+                  : 'Order Confirmed!'}
+              </h1>
               {orderNumber && (
                 <p className="mt-1 text-base font-semibold" style={{ color: cfg.accentColor }}>
-                  Order {orderNumber}
+                  {appointment ? `Ref ${orderNumber}` : `Order ${orderNumber}`}
                 </p>
               )}
-              {orderItems.length > 0 && (
-                <ul className="mt-6 space-y-3 text-left">
-                  {orderItems.map((item, i) => (
-                    <li
-                      key={i}
+              {appointment ? (
+                <div className="mt-6 space-y-2 text-left">
+                  <div
+                    className={`flex items-center justify-between text-sm ${
+                      isLight ? 'border-b border-slate-100 pb-2' : 'border-b border-white/10 pb-2'
+                    }`}
+                  >
+                    <span className={cfg.textSecondary}>Service</span>
+                    <span className={`font-medium ${cfg.textPrimary}`}>
+                      {appointment.service_name}
+                    </span>
+                  </div>
+                  {appointment.staff_name && (
+                    <div
                       className={`flex items-center justify-between text-sm ${
-                        isLight
-                          ? 'border-b border-slate-100 pb-2'
-                          : 'border-b border-white/10 pb-2'
+                        isLight ? 'border-b border-slate-100 pb-2' : 'border-b border-white/10 pb-2'
                       }`}
                     >
+                      <span className={cfg.textSecondary}>With</span>
                       <span className={`font-medium ${cfg.textPrimary}`}>
-                        {item.qty}× {item.name}
+                        {appointment.staff_name}
                       </span>
-                      {item.price && <span className={cfg.textSecondary}>{item.price}</span>}
-                    </li>
-                  ))}
-                </ul>
+                    </div>
+                  )}
+                  <div className="flex items-center justify-between text-sm">
+                    <span className={cfg.textSecondary}>When</span>
+                    <span className={`font-medium ${cfg.textPrimary}`}>{appointment.when}</span>
+                  </div>
+                </div>
+              ) : (
+                orderItems.length > 0 && (
+                  <ul className="mt-6 space-y-3 text-left">
+                    {orderItems.map((item, i) => (
+                      <li
+                        key={i}
+                        className={`flex items-center justify-between text-sm ${
+                          isLight
+                            ? 'border-b border-slate-100 pb-2'
+                            : 'border-b border-white/10 pb-2'
+                        }`}
+                      >
+                        <span className={`font-medium ${cfg.textPrimary}`}>
+                          {item.qty}× {item.name}
+                        </span>
+                        {item.price && <span className={cfg.textSecondary}>{item.price}</span>}
+                      </li>
+                    ))}
+                  </ul>
+                )
               )}
-              <p className={`mt-6 text-sm ${cfg.textSecondary}`}>Your order is being prepared</p>
+              <p className={`mt-6 text-sm ${cfg.textSecondary}`}>
+                {appointment
+                  ? appointment.kind === 'checked_in'
+                    ? 'Please take a seat — you’ll be called shortly.'
+                    : 'See you then! A reminder will follow.'
+                  : 'Your order is being prepared'}
+              </p>
               <button
                 type="button"
                 onClick={reset}

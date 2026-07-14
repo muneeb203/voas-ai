@@ -58,6 +58,14 @@ export interface KioskChatMessage {
   content: string;
 }
 
+export interface KioskAppointment {
+  kind: 'booked' | 'checked_in';
+  service_name: string;
+  staff_name?: string | null;
+  when: string;
+  order_number?: string;
+}
+
 export interface KioskChatResponse {
   response: string;
   order_confirmed: boolean;
@@ -66,6 +74,7 @@ export interface KioskChatResponse {
     order_number?: string;
     total?: string;
   };
+  appointment?: KioskAppointment;
   debug?: {
     anthropic_ms?: number | null;
     cache_read?: number | null;
