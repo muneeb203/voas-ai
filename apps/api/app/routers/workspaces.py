@@ -1,4 +1,4 @@
-from fastapi import APIRouter, status
+from fastapi import APIRouter, BackgroundTasks, status
 
 from app.deps import CurrentUserDep, OwnerContextDep, WorkspaceContextDep
 from app.models.workspace import (
@@ -7,7 +7,7 @@ from app.models.workspace import (
     WorkspaceCreate,
     WorkspaceUpdate,
 )
-from app.services import workspace_service
+from app.services import voice_service, workspace_service
 from app.utils.responses import DataResponse, ok
 
 router = APIRouter(tags=["workspaces"])
@@ -39,9 +39,19 @@ async def get_workspace(ctx: WorkspaceContextDep) -> DataResponse[Workspace]:
 
 @router.patch("/workspaces/{workspace_id}", response_model=DataResponse[Workspace])
 async def update_workspace(
-    payload: WorkspaceUpdate, ctx: OwnerContextDep
+    payload: WorkspaceUpdate,
+    ctx: OwnerContextDep,
+    background_tasks: BackgroundTasks,
 ) -> DataResponse[Workspace]:
+    before = workspace_service.get_workspace(ctx.workspace_id)
     workspace = workspace_service.update_workspace(ctx.workspace_id, payload, ctx.user.id)
+
+    # Vertical change → realign the voice agent (prompt/greeting defaults + the
+    # ordering-vs-booking toolset) and re-sync it to Vapi in the background.
+    if payload.vertical and payload.vertical != before.vertical:
+        voice_service.apply_vertical_to_voice(ctx.workspace_id, payload.vertical)
+        background_tasks.add_task(voice_service.sync_assistant_now, ctx.workspace_id)
+
     return ok(workspace)
 
 
