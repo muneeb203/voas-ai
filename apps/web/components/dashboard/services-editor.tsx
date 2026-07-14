@@ -1,9 +1,10 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
-import { Plus, Pencil, Trash2, Clock } from 'lucide-react';
+import { Plus, Pencil, Trash2, Clock, RefreshCw } from 'lucide-react';
+import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -61,6 +62,7 @@ function toForm(s: SalonService): FormState {
 
 export function ServicesEditor({ initialServices, canEdit }: Props) {
   const router = useRouter();
+  const [refreshing, startRefresh] = useTransition();
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<SalonService | null>(null);
   const [form, setForm] = useState<FormState>(EMPTY);
@@ -108,13 +110,21 @@ export function ServicesEditor({ initialServices, canEdit }: Props) {
 
   return (
     <div className="space-y-4">
-      {canEdit && (
-        <div className="flex justify-end">
+      <div className="flex justify-end gap-2">
+        <Button
+          variant="outline"
+          onClick={() => startRefresh(() => router.refresh())}
+          disabled={refreshing}
+        >
+          <RefreshCw className={cn('h-4 w-4', refreshing && 'animate-spin')} />
+          Refresh
+        </Button>
+        {canEdit && (
           <Button onClick={openAdd}>
             <Plus className="h-4 w-4" /> Add service
           </Button>
-        </div>
-      )}
+        )}
+      </div>
 
       {initialServices.length === 0 ? (
         <Card>
