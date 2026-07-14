@@ -31,6 +31,8 @@ export interface SalonStaff {
   sort_order: number;
   service_ids: string[];
   hours: StaffHours[];
+  google_connected: boolean;
+  google_email: string | null;
 }
 
 export interface SalonAppointment {
@@ -140,6 +142,22 @@ export function updateStaff(workspaceId: string, staffId: string, body: Partial<
 
 export function deleteStaff(workspaceId: string, staffId: string) {
   return apiCall<null>(`/v1/workspaces/${workspaceId}/salon/staff/${staffId}`, { method: 'DELETE' });
+}
+
+// --- Google Calendar (per-staff two-way sync) -------------------------------
+
+export function getGoogleConnectUrl(workspaceId: string, staffId: string, returnPath = '/staff') {
+  const qs = `?return_path=${encodeURIComponent(returnPath)}`;
+  return apiCall<{ auth_url: string }>(
+    `/v1/workspaces/${workspaceId}/salon/staff/${staffId}/google/connect${qs}`,
+    { cache: 'no-store' },
+  );
+}
+
+export function disconnectGoogle(workspaceId: string, staffId: string) {
+  return apiCall<null>(`/v1/workspaces/${workspaceId}/salon/staff/${staffId}/google`, {
+    method: 'DELETE',
+  });
 }
 
 // --- Appointments -----------------------------------------------------------

@@ -13,6 +13,8 @@ import {
   getAvailability,
   bookAppointment,
   rescheduleAppointment,
+  getGoogleConnectUrl,
+  disconnectGoogle,
   type AppointmentStatus,
   type AvailabilitySlot,
   type BookInput,
@@ -82,6 +84,27 @@ export async function deleteStaffAction(staffId: string) {
   const { error, session } = await requireOwner('/staff');
   if (error || !session) return { error: error ?? 'Unauthorized' };
   const res = await deleteStaff(session.active.workspace_id, staffId);
+  if (isApiError(res)) return { error: res.error.message };
+  revalidatePath('/staff');
+  return { error: null };
+}
+
+// --- Google Calendar --------------------------------------------------------
+
+export async function connectGoogleCalendarAction(
+  staffId: string,
+): Promise<{ error: string | null; authUrl: string | null }> {
+  const { error, session } = await requireOwner('/staff');
+  if (error || !session) return { error: error ?? 'Unauthorized', authUrl: null };
+  const res = await getGoogleConnectUrl(session.active.workspace_id, staffId);
+  if (isApiError(res)) return { error: res.error.message, authUrl: null };
+  return { error: null, authUrl: res.data.auth_url };
+}
+
+export async function disconnectGoogleCalendarAction(staffId: string) {
+  const { error, session } = await requireOwner('/staff');
+  if (error || !session) return { error: error ?? 'Unauthorized' };
+  const res = await disconnectGoogle(session.active.workspace_id, staffId);
   if (isApiError(res)) return { error: res.error.message };
   revalidatePath('/staff');
   return { error: null };

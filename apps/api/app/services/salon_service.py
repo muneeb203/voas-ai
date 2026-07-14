@@ -13,7 +13,7 @@ from app.models.salon import (
     SalonStaffUpdate,
     StaffHours,
 )
-from app.services import audit_service
+from app.services import audit_service, google_calendar_service
 
 # --- Services ---------------------------------------------------------------
 
@@ -135,6 +135,12 @@ def _hydrate_staff(db, rows: list[dict]) -> list[SalonStaff]:
         .in_("staff_id", staff_ids)
         .execute()
     )
+    gcal = (
+        db.table("staff_google_calendar")
+        .select("staff_id, google_email")
+        .in_("staff_id", staff_ids)
+        .execute()
+    )
     svc_by_staff: dict[str, list[str]] = {}
     for link in links.data or []:
         svc_by_staff.setdefault(link["staff_id"], []).append(link["service_id"])
@@ -147,11 +153,14 @@ def _hydrate_staff(db, rows: list[dict]) -> list[SalonStaff]:
                 end_time=str(h["end_time"])[:5],
             )
         )
+    gcal_by_staff = {g["staff_id"]: g.get("google_email") for g in (gcal.data or [])}
     return [
         SalonStaff(
             **r,
             service_ids=svc_by_staff.get(r["id"], []),
             hours=hours_by_staff.get(r["id"], []),
+            google_connected=r["id"] in gcal_by_staff,
+            google_email=gcal_by_staff.get(r["id"]),
         )
         for r in rows
     ]
@@ -350,6 +359,14 @@ def update_appointment_status(
     workspace_id: str, appointment_id: str, payload: AppointmentStatusUpdate, actor_id: str
 ) -> SalonAppointment:
     db = get_supabase_admin()
+    existing = (
+        db.table("salon_appointments")
+        .select("staff_id, google_event_id")
+        .eq("workspace_id", workspace_id)
+        .eq("id", appointment_id)
+        .limit(1)
+        .execute()
+    )
     res = (
         db.table("salon_appointments")
         .update({"status": payload.status})
@@ -359,6 +376,13 @@ def update_appointment_status(
     )
     if not res.data:
         raise NotFoundError("Appointment not found")
+    if payload.status in ("cancelled", "no_show") and existing.data:
+        prior = existing.data[0]
+        if prior.get("google_event_id") and prior.get("staff_id"):
+            google_calendar_service.delete_event(prior["staff_id"], prior["google_event_id"])
+            db.table("salon_appointments").update({"google_event_id": None}).eq(
+                "id", appointment_id
+            ).execute()
     audit_service.write(
         actor_type="user",
         actor_id=actor_id,

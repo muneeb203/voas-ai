@@ -73,6 +73,21 @@ class Settings(BaseSettings):
     deepgram_base_url: str = "https://api.deepgram.com"
     deepgram_model: str = "nova-2"
 
+    # --- Google Calendar (salon two-way sync). No-op without these keys. ---
+    # One OAuth app (created once by us) that all salons connect through.
+    google_client_id: str | None = None
+    google_client_secret: str | None = None
+    # Where Google redirects after consent — must exactly match an Authorized
+    # redirect URI in the Google Cloud OAuth client.
+    google_oauth_redirect_uri: str = "http://localhost:8000/v1/google/oauth/callback"
+    # Frontend page to bounce back to after connecting (fallback if the connect
+    # request doesn't pass its own return URL).
+    public_app_url: str = "http://localhost:3001"
+
+    @property
+    def google_calendar_configured(self) -> bool:
+        return bool(self.google_client_id and self.google_client_secret)
+
     # --- Dashboard help bot (Gemini). No-op without GEMINI_API_KEY. ---
     gemini_api_key: str | None = None
     gemini_model: str = "gemini-3.1-flash-lite"
