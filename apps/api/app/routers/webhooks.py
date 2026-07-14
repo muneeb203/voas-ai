@@ -8,7 +8,7 @@ Webhook event shapes are documented at https://docs.vapi.ai/server-url.
 
 import contextlib
 import json
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from typing import Any
 
 from fastapi import APIRouter, BackgroundTasks, Header, Request, status
@@ -50,6 +50,30 @@ def _spoken_time(dt: datetime, workspace_id: str, location_id: str | None) -> st
     local = dt.astimezone(tz)
     hour = local.strftime("%I:%M %p").lstrip("0")
     return f"{local.strftime('%A, %b %d')} at {hour}"
+
+
+_WEEKDAYS = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]
+
+
+def _resolve_date(raw: str, workspace_id: str, location_id: str | None) -> str | None:
+    """Turn what the voice agent passes ('today', 'tomorrow', 'Friday', or an
+    ISO date) into a concrete YYYY-MM-DD in the location's timezone. Returns
+    None if it can't be understood."""
+    text = (raw or "").strip().lower()
+    if not text:
+        return None
+    with contextlib.suppress(ValueError):
+        return date.fromisoformat(text).isoformat()
+    tz = booking_service._location_tz(workspace_id, location_id)
+    today = datetime.now(tz).date()
+    if text in ("today", "tonight"):
+        return today.isoformat()
+    if text in ("tomorrow", "tmrw"):
+        return (today + timedelta(days=1)).isoformat()
+    for i, name in enumerate(_WEEKDAYS):
+        if name in text:  # next occurrence of that weekday (today counts)
+            return (today + timedelta(days=(i - today.weekday()) % 7)).isoformat()
+    return None
 
 
 log = get_logger(__name__)
@@ -194,10 +218,19 @@ async def vapi_webhook(
 
             elif name == "check_availability":
                 svc_id = (args or {}).get("service_id")
-                date_str = (args or {}).get("date")
-                if not svc_id or not date_str:
+                raw_date = (args or {}).get("date")
+                if not svc_id or not raw_date:
                     results.append(
                         {"toolCallId": tc_id, "result": "I need the service and a date to check times."}
+                    )
+                    continue
+                date_str = _resolve_date(raw_date, workspace_id, location_id)
+                if not date_str:
+                    results.append(
+                        {
+                            "toolCallId": tc_id,
+                            "result": "I didn't catch the date — ask for a day like 'tomorrow' or 'Friday'.",
+                        }
                     )
                     continue
                 try:

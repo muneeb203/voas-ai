@@ -161,7 +161,10 @@ CHECK_AVAILABILITY_TOOL: dict[str, Any] = {
                 },
                 "date": {
                     "type": "string",
-                    "description": "Date the customer wants, as YYYY-MM-DD.",
+                    "description": (
+                        "Date the customer wants. Accepts 'today', 'tomorrow', a "
+                        "weekday name (e.g. 'Friday'), or an exact YYYY-MM-DD."
+                    ),
                 },
             },
             "required": ["service_id", "date"],
@@ -217,10 +220,18 @@ CHECK_IN_TOOL: dict[str, Any] = {
 }
 
 
-def _tools_for_vertical(vertical: str) -> list[dict[str, Any]]:
-    if vertical == "salon":
-        return [CHECK_AVAILABILITY_TOOL, BOOK_APPOINTMENT_TOOL, CHECK_IN_TOOL]
-    return [PLACE_ORDER_TOOL]
+def _tools_for_vertical(vertical: str, server_url: str | None) -> list[dict[str, Any]]:
+    base = (
+        [CHECK_AVAILABILITY_TOOL, BOOK_APPOINTMENT_TOOL, CHECK_IN_TOOL]
+        if vertical == "salon"
+        else [PLACE_ORDER_TOOL]
+    )
+    if not server_url:
+        return base
+    # Attach the server URL to EACH tool. This is the most reliable way to make
+    # Vapi deliver the tool call to our backend — assistant-level serverUrl is
+    # ignored on newer Vapi API versions.
+    return [{**tool, "server": {"url": server_url}} for tool in base]
 
 
 def assistant_payload(
@@ -245,7 +256,7 @@ def assistant_payload(
             "provider": "openai",
             "model": model,
             "messages": [{"role": "system", "content": system_prompt}],
-            "tools": _tools_for_vertical(vertical),
+            "tools": _tools_for_vertical(vertical, server_url),
         },
         "voice": {
             "provider": "11labs",
@@ -288,7 +299,16 @@ def assistant_payload(
         },
     }
     if server_url:
+        # Belt and suspenders: legacy top-level, the current `server` object, and
+        # per-tool server (above) — so tool calls reach us on any Vapi API version.
         payload["serverUrl"] = server_url
+        payload["server"] = {"url": server_url}
+        payload["serverMessages"] = [
+            "tool-calls",
+            "end-of-call-report",
+            "status-update",
+            "transcript",
+        ]
     if end_call_phrases:
         payload["endCallPhrases"] = end_call_phrases
     return payload
