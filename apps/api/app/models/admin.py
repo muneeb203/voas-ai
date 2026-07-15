@@ -53,6 +53,35 @@ class AdminAuditEntry(BaseModel):
     created_at: datetime
 
 
+class AdminActivityItem(BaseModel):
+    """One thing the business actually did — a call/chat, an order, a booking."""
+
+    kind: Literal["conversation", "order", "appointment"]
+    id: str
+    at: datetime
+    title: str
+    subtitle: str | None = None
+    status: str | None = None
+    channel: str | None = None
+
+
+class AdminUsageHistoryPoint(BaseModel):
+    date: str  # YYYY-MM-DD
+    voice_minutes: float
+    whatsapp_messages: float
+    help_bot_turns: float
+
+
+class AdminErrorLogEntry(BaseModel):
+    id: str
+    workspace_id: str | None
+    kind: Literal["crash", "integration"]
+    source: str
+    message: str
+    context: dict | None
+    created_at: datetime
+
+
 class AdminContactSubmission(BaseModel):
     id: str
     name: str

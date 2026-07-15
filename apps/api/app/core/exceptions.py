@@ -1,3 +1,4 @@
+import contextlib
 from typing import Any
 
 from fastapi import Request, status
@@ -98,8 +99,32 @@ async def validation_exception_handler(_: Request, exc: RequestValidationError) 
     )
 
 
-async def unhandled_exception_handler(_: Request, exc: Exception) -> JSONResponse:
+def _workspace_id_from_path(path: str) -> str | None:
+    """Pull the workspace id out of /v1/workspaces/{id}/... so a crash can be
+    attributed to the business it happened to."""
+    parts = [p for p in path.split("/") if p]
+    with contextlib.suppress(ValueError, IndexError):
+        return parts[parts.index("workspaces") + 1]
+    return None
+
+
+async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONResponse:
     log.exception("unhandled_exception", error=str(exc))
+
+    # Surface the crash on the workspace's admin error log. Best-effort — this
+    # handler must return a response no matter what.
+    with contextlib.suppress(Exception):
+        from app.services import error_log_service
+
+        path = str(getattr(request, "url", "") and request.url.path)
+        error_log_service.record(
+            workspace_id=_workspace_id_from_path(path),
+            kind="crash",
+            source="unhandled_exception",
+            message=f"{type(exc).__name__}: {exc}",
+            context={"path": path, "method": getattr(request, "method", None)},
+        )
+
     return JSONResponse(
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
         content=_error_payload("INTERNAL_ERROR", "An unexpected error occurred"),

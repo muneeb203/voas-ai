@@ -190,6 +190,52 @@ export function updateContactSubmission(
   );
 }
 
+export interface AdminActivityItem {
+  kind: 'conversation' | 'order' | 'appointment';
+  id: string;
+  at: string;
+  title: string;
+  subtitle: string | null;
+  status: string | null;
+  channel: string | null;
+}
+
+export interface AdminUsageHistoryPoint {
+  date: string;
+  voice_minutes: number;
+  whatsapp_messages: number;
+  help_bot_turns: number;
+}
+
+export interface AdminErrorLogEntry {
+  id: string;
+  workspace_id: string | null;
+  kind: 'crash' | 'integration';
+  source: string;
+  message: string;
+  context: Record<string, unknown> | null;
+  created_at: string;
+}
+
+export function listAdminWorkspaceActivity(workspaceId: string) {
+  return apiCall<AdminActivityItem[]>(`/v1/admin/workspaces/${workspaceId}/activity`, {
+    cache: 'no-store',
+  });
+}
+
+export function getAdminWorkspaceUsageHistory(workspaceId: string, days = 30) {
+  return apiCall<AdminUsageHistoryPoint[]>(
+    `/v1/admin/workspaces/${workspaceId}/usage-history?days=${days}`,
+    { cache: 'no-store' },
+  );
+}
+
+export function listAdminWorkspaceErrors(workspaceId: string) {
+  return apiCall<AdminErrorLogEntry[]>(`/v1/admin/workspaces/${workspaceId}/errors`, {
+    cache: 'no-store',
+  });
+}
+
 export function listAdminAuditLogs(params: {
   actor_type?: string;
   action?: string;

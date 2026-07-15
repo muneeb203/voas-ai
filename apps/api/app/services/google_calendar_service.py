@@ -45,6 +45,30 @@ def is_configured() -> bool:
     return get_settings().google_calendar_configured
 
 
+def _record_error(staff_id: str, source: str, message: str) -> None:
+    """Surface a Google failure on the owning workspace's admin error log."""
+    try:
+        from app.services import error_log_service
+
+        res = (
+            get_supabase_admin()
+            .table("staff_google_calendar")
+            .select("workspace_id")
+            .eq("staff_id", staff_id)
+            .limit(1)
+            .execute()
+        )
+        error_log_service.record(
+            workspace_id=res.data[0]["workspace_id"] if res.data else None,
+            kind="integration",
+            source=source,
+            message=message,
+            context={"staff_id": staff_id},
+        )
+    except Exception:
+        pass  # logging must never break the calendar path
+
+
 # ── OAuth ────────────────────────────────────────────────────────────────────
 
 
@@ -248,6 +272,7 @@ def freebusy(staff_id: str, start: datetime, end: datetime) -> list[tuple[dateti
             intervals.append((s, e))
     except Exception as exc:
         log.error("google_freebusy_error", staff_id=staff_id, error=str(exc))
+        _record_error(staff_id, "google_freebusy_error", str(exc))
         return []
 
     _freebusy_cache[key] = (now_mono + _FREEBUSY_TTL, intervals)
@@ -278,6 +303,7 @@ def push_event(
         log.error("google_event_create_failed", status=res.status_code)
     except Exception as exc:
         log.error("google_event_create_error", staff_id=staff_id, error=str(exc))
+        _record_error(staff_id, "google_event_create_error", str(exc))
     return None
 
 
@@ -305,6 +331,7 @@ def update_event(
             )
     except Exception as exc:
         log.error("google_event_update_error", staff_id=staff_id, error=str(exc))
+        _record_error(staff_id, "google_event_update_error", str(exc))
 
 
 def delete_event(staff_id: str, event_id: str) -> None:

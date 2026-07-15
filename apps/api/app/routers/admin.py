@@ -6,9 +6,12 @@ from pydantic import BaseModel, Field
 from app.core.supabase import get_supabase_admin
 from app.deps import AdminContextDep
 from app.models.admin import (
+    AdminActivityItem,
     AdminAuditEntry,
     AdminContactSubmission,
     AdminContactUpdate,
+    AdminErrorLogEntry,
+    AdminUsageHistoryPoint,
     AdminUserSummary,
     AdminWorkspaceDetail,
     AdminWorkspaceListItem,
@@ -29,6 +32,7 @@ from app.models.ticket import (
 )
 from app.models.workspace import Workspace
 from app.services import (
+    admin_activity_service,
     admin_audit_service,
     admin_contact_service,
     admin_ticket_service,
@@ -36,6 +40,7 @@ from app.services import (
     admin_workspace_service,
     announcement_service,
     billing_service,
+    error_log_service,
     impersonation_service,
 )
 from app.utils.responses import DataResponse, ok
@@ -93,6 +98,42 @@ class ImpersonationPayload(BaseModel):
     workspace_id: str
     workspace_name: str
     started_at: str
+
+
+@router.get(
+    "/workspaces/{workspace_id}/activity",
+    response_model=DataResponse[list[AdminActivityItem]],
+)
+async def get_workspace_activity(
+    workspace_id: str,
+    _: AdminContextDep,
+    limit: int = Query(default=50, ge=1, le=200),
+) -> DataResponse[list[AdminActivityItem]]:
+    return ok(admin_activity_service.list_activity(workspace_id, limit=limit))
+
+
+@router.get(
+    "/workspaces/{workspace_id}/usage-history",
+    response_model=DataResponse[list[AdminUsageHistoryPoint]],
+)
+async def get_workspace_usage_history(
+    workspace_id: str,
+    _: AdminContextDep,
+    days: int = Query(default=30, ge=1, le=90),
+) -> DataResponse[list[AdminUsageHistoryPoint]]:
+    return ok(admin_activity_service.usage_history(workspace_id, days=days))
+
+
+@router.get(
+    "/workspaces/{workspace_id}/errors",
+    response_model=DataResponse[list[AdminErrorLogEntry]],
+)
+async def get_workspace_errors(
+    workspace_id: str,
+    _: AdminContextDep,
+    limit: int = Query(default=100, ge=1, le=200),
+) -> DataResponse[list[AdminErrorLogEntry]]:
+    return ok(error_log_service.list_for_workspace(workspace_id, limit=limit))
 
 
 @router.post(

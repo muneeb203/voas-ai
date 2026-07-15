@@ -265,6 +265,15 @@ def _handle_salon_reply(
                 conversation_id=conversation_id,
                 error=str(exc),
             )
+            from app.services import error_log_service
+
+            error_log_service.record(
+                workspace_id=workspace_id,
+                kind="integration",
+                source="whatsapp_booking_failed",
+                message=str(exc),
+                context={"conversation_id": conversation_id},
+            )
 
     return {
         "reply": customer_reply,

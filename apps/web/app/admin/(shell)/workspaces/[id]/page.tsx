@@ -4,7 +4,7 @@ import { notFound } from 'next/navigation';
 import { formatDistanceToNow } from 'date-fns';
 import { ArrowLeft } from 'lucide-react';
 import { requireAdminSession } from '@/lib/auth/admin';
-import { getAdminWorkspace, listAdminTickets, listAdminAuditLogs, getAdminWorkspaceUsage, listAdminWorkspaceGrants, getAdminKioskSettings, getAdminKioskMetrics } from '@/lib/api/admin';
+import { getAdminWorkspace, listAdminTickets, listAdminAuditLogs, getAdminWorkspaceUsage, listAdminWorkspaceGrants, getAdminKioskSettings, getAdminKioskMetrics, listAdminWorkspaceActivity, getAdminWorkspaceUsageHistory, listAdminWorkspaceErrors } from '@/lib/api/admin';
 import { isApiError } from '@/lib/types';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -41,16 +41,29 @@ export default async function AdminWorkspaceDetailPage({
 }) {
   await requireAdminSession(`/admin/workspaces/${params.id}`);
 
-  const [detailRes, ticketsRes, auditRes, usageRes, grantsRes, kioskRes, kioskMetricsRes] =
-    await Promise.all([
-      getAdminWorkspace(params.id),
-      listAdminTickets({ workspaceId: params.id }),
-      listAdminAuditLogs({ workspace_id: params.id }),
-      getAdminWorkspaceUsage(params.id),
-      listAdminWorkspaceGrants(params.id),
-      getAdminKioskSettings(params.id),
-      getAdminKioskMetrics(params.id),
-    ]);
+  const [
+    detailRes,
+    ticketsRes,
+    auditRes,
+    usageRes,
+    grantsRes,
+    kioskRes,
+    kioskMetricsRes,
+    activityRes,
+    usageHistoryRes,
+    errorsRes,
+  ] = await Promise.all([
+    getAdminWorkspace(params.id),
+    listAdminTickets({ workspaceId: params.id }),
+    listAdminAuditLogs({ workspace_id: params.id }),
+    getAdminWorkspaceUsage(params.id),
+    listAdminWorkspaceGrants(params.id),
+    getAdminKioskSettings(params.id),
+    getAdminKioskMetrics(params.id),
+    listAdminWorkspaceActivity(params.id),
+    getAdminWorkspaceUsageHistory(params.id),
+    listAdminWorkspaceErrors(params.id),
+  ]);
 
   if (isApiError(detailRes)) {
     if (detailRes.error.code === 'NOT_FOUND') notFound();
@@ -59,6 +72,9 @@ export default async function AdminWorkspaceDetailPage({
   const { workspace, members, locations } = detailRes.data;
   const tickets = !isApiError(ticketsRes) ? ticketsRes.data : [];
   const auditEntries = !isApiError(auditRes) ? auditRes.data : [];
+  const activity = !isApiError(activityRes) ? activityRes.data : [];
+  const usageHistory = !isApiError(usageHistoryRes) ? usageHistoryRes.data : [];
+  const errors = !isApiError(errorsRes) ? errorsRes.data : [];
   const kioskSettings = !isApiError(kioskRes)
     ? kioskRes.data
     : { kiosk_enabled: false, max_kiosk_urls: 1, theme: 'gradient' as const, session_lock_enabled: false, kiosk_monthly_limit: 500, kiosk_credits_balance: 0, kiosk_credits_used_this_month: 0, kiosk_month_start: null };
@@ -105,6 +121,9 @@ export default async function AdminWorkspaceDetailPage({
           <TabsTrigger value="members">Members ({members.length})</TabsTrigger>
           <TabsTrigger value="locations">Locations ({locations.length})</TabsTrigger>
           <TabsTrigger value="tickets">Tickets ({tickets.length})</TabsTrigger>
+          <TabsTrigger value="activity">Activity</TabsTrigger>
+          <TabsTrigger value="usage">Usage</TabsTrigger>
+          <TabsTrigger value="errors">Errors{errors.length ? ` (${errors.length})` : ''}</TabsTrigger>
           <TabsTrigger value="audit">Audit</TabsTrigger>
         </TabsList>
 
@@ -253,6 +272,130 @@ export default async function AdminWorkspaceDetailPage({
                   ))}
                 </TableBody>
               </Table>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="activity">
+          <Card>
+            <CardContent className="p-0">
+              {activity.length === 0 ? (
+                <p className="py-12 text-center text-sm text-muted-foreground">
+                  No calls, chats, orders or bookings yet.
+                </p>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>When</TableHead>
+                      <TableHead>Type</TableHead>
+                      <TableHead>What happened</TableHead>
+                      <TableHead>Status</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {activity.map((a) => (
+                      <TableRow key={`${a.kind}-${a.id}`}>
+                        <TableCell className="whitespace-nowrap text-xs text-muted-foreground">
+                          {formatDistanceToNow(new Date(a.at), { addSuffix: true })}
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant="secondary">{a.kind}</Badge>
+                        </TableCell>
+                        <TableCell className="text-sm">
+                          <p className="font-medium">{a.title}</p>
+                          {a.subtitle && (
+                            <p className="text-xs text-muted-foreground">{a.subtitle}</p>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-xs text-muted-foreground">
+                          {a.status ?? '—'}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="usage">
+          <Card>
+            <CardContent className="p-0">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Date</TableHead>
+                    <TableHead>Voice minutes</TableHead>
+                    <TableHead>WhatsApp messages</TableHead>
+                    <TableHead>Help-bot turns</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {usageHistory
+                    .filter(
+                      (p) => p.voice_minutes || p.whatsapp_messages || p.help_bot_turns,
+                    )
+                    .reverse()
+                    .map((p) => (
+                      <TableRow key={p.date}>
+                        <TableCell className="whitespace-nowrap text-sm">{p.date}</TableCell>
+                        <TableCell className="text-sm">{p.voice_minutes.toFixed(1)}</TableCell>
+                        <TableCell className="text-sm">{p.whatsapp_messages}</TableCell>
+                        <TableCell className="text-sm">{p.help_bot_turns}</TableCell>
+                      </TableRow>
+                    ))}
+                </TableBody>
+              </Table>
+              {usageHistory.every(
+                (p) => !p.voice_minutes && !p.whatsapp_messages && !p.help_bot_turns,
+              ) && (
+                <p className="py-12 text-center text-sm text-muted-foreground">
+                  No usage recorded in the last 30 days.
+                </p>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="errors">
+          <Card>
+            <CardContent className="p-0">
+              {errors.length === 0 ? (
+                <p className="py-12 text-center text-sm text-muted-foreground">
+                  No errors recorded for this business. 🎉
+                </p>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>When</TableHead>
+                      <TableHead>Kind</TableHead>
+                      <TableHead>Source</TableHead>
+                      <TableHead>Message</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {errors.map((e) => (
+                      <TableRow key={e.id}>
+                        <TableCell className="whitespace-nowrap text-xs text-muted-foreground">
+                          {formatDistanceToNow(new Date(e.created_at), { addSuffix: true })}
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant={e.kind === 'crash' ? 'destructive' : 'secondary'}>
+                            {e.kind}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="font-mono text-xs">{e.source}</TableCell>
+                        <TableCell className="max-w-md break-words text-xs text-muted-foreground">
+                          {e.message}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
             </CardContent>
           </Card>
         </TabsContent>
