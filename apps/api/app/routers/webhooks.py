@@ -74,6 +74,72 @@ def _resolve_date(raw: str, workspace_id: str, location_id: str | None) -> str |
     for i, name in enumerate(_WEEKDAYS):
         if name in text:  # next occurrence of that weekday (today counts)
             return (today + timedelta(days=(i - today.weekday()) % 7)).isoformat()
+
+    # Day-of-month: "the 15th", "15", "fifteenth" → next date with that day.
+    dom = _extract_day_of_month(text)
+    if dom:
+        resolved = _resolve_day_of_month(dom, today)
+        if resolved:
+            return resolved.isoformat()
+    return None
+
+
+# Ordinal + cardinal words for days 1..31 → number.
+def _build_day_words() -> dict[str, int]:
+    ordinals = [
+        "first", "second", "third", "fourth", "fifth", "sixth", "seventh", "eighth",
+        "ninth", "tenth", "eleventh", "twelfth", "thirteenth", "fourteenth", "fifteenth",
+        "sixteenth", "seventeenth", "eighteenth", "nineteenth", "twentieth", "twenty-first",
+        "twenty-second", "twenty-third", "twenty-fourth", "twenty-fifth", "twenty-sixth",
+        "twenty-seventh", "twenty-eighth", "twenty-ninth", "thirtieth", "thirty-first",
+    ]
+    cardinals = [
+        "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten",
+        "eleven", "twelve", "thirteen", "fourteen", "fifteen", "sixteen", "seventeen",
+        "eighteen", "nineteen", "twenty", "twenty-one", "twenty-two", "twenty-three",
+        "twenty-four", "twenty-five", "twenty-six", "twenty-seven", "twenty-eight",
+        "twenty-nine", "thirty", "thirty-one",
+    ]
+    words: dict[str, int] = {}
+    for n, w in enumerate(ordinals, start=1):
+        words[w] = n
+        words[w.replace("-", " ")] = n
+    for n, w in enumerate(cardinals, start=1):
+        words[w] = n
+        words[w.replace("-", " ")] = n
+    return words
+
+
+_DAY_WORDS = _build_day_words()
+# Longest first so 'twenty-first' matches before the substring 'first'.
+_DAY_WORDS_SORTED = sorted(_DAY_WORDS.items(), key=lambda kv: -len(kv[0]))
+
+
+def _extract_day_of_month(text: str) -> int | None:
+    m = re.search(r"\b(\d{1,2})(?:st|nd|rd|th)?\b", text)
+    if m:
+        day = int(m.group(1))
+        if 1 <= day <= 31:
+            return day
+    for word, num in _DAY_WORDS_SORTED:
+        if word in text:
+            return num
+    return None
+
+
+def _resolve_day_of_month(day: int, today: date) -> date | None:
+    """Nearest date on/after today whose day-of-month is `day`."""
+    y, mo = today.year, today.month
+    for _ in range(4):
+        try:
+            cand = date(y, mo, day)
+        except ValueError:
+            cand = None
+        if cand and cand >= today:
+            return cand
+        mo += 1
+        if mo > 12:
+            mo, y = 1, y + 1
     return None
 
 
