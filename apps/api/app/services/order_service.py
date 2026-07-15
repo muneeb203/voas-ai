@@ -4,6 +4,7 @@ from typing import Any
 from app.core.exceptions import AppError, NotFoundError
 from app.core.supabase import get_supabase_admin
 from app.models.order import Order, OrderStatus
+from app.services import audit_service
 
 
 def create_manual_order(
@@ -83,11 +84,24 @@ def get_order(workspace_id: str, order_id: str) -> Order:
     return Order.model_validate(res.data[0])
 
 
-def update_order_status(workspace_id: str, order_id: str, new_status: OrderStatus) -> Order:
+def update_order_status(
+    workspace_id: str,
+    order_id: str,
+    new_status: OrderStatus,
+    actor_id: str | None = None,
+) -> Order:
     """Move an order to a new status. Workspace-scoped to prevent cross-tenant
     updates. Returns the updated row or raises NotFoundError if the order
     doesn't belong to the workspace."""
     db = get_supabase_admin()
+    previous = (
+        db.table("orders")
+        .select("status")
+        .eq("id", order_id)
+        .eq("workspace_id", workspace_id)
+        .limit(1)
+        .execute()
+    )
     res = (
         db.table("orders")
         .update(
@@ -102,4 +116,18 @@ def update_order_status(workspace_id: str, order_id: str, new_status: OrderStatu
     )
     if not res.data:
         raise NotFoundError("Order not found")
+
+    # Who cancelled/fulfilled an order, and when, was previously untracked.
+    audit_service.write(
+        actor_type="user" if actor_id else "system",
+        actor_id=actor_id or order_id,
+        workspace_id=workspace_id,
+        action="order.status_changed",
+        resource_type="order",
+        resource_id=order_id,
+        metadata={
+            "from": previous.data[0]["status"] if previous.data else None,
+            "to": new_status,
+        },
+    )
     return Order.model_validate(res.data[0])

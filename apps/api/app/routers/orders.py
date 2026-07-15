@@ -68,5 +68,7 @@ async def update_status(
     payload: OrderStatusUpdate,
     ctx: WorkspaceContextDep,
 ) -> DataResponse[Order]:
-    order = order_service.update_order_status(ctx.workspace_id, order_id, payload.status)
+    order = order_service.update_order_status(
+        ctx.workspace_id, order_id, payload.status, actor_id=ctx.user.id
+    )
     return ok(order)
