@@ -31,7 +31,9 @@ def list_activity(workspace_id: str, limit: int = 50) -> list[AdminActivityItem]
 
     convs = (
         db.table("conversations")
-        .select("id, channel, status, started_at, customer_phone, summary, duration_seconds")
+        .select(
+            "id, channel, status, started_at, customer_phone, summary, duration_seconds, cost_usd"
+        )
         .eq("workspace_id", workspace_id)
         .order("started_at", desc=True)
         .limit(limit)
@@ -41,12 +43,14 @@ def list_activity(workspace_id: str, limit: int = 50) -> list[AdminActivityItem]
         channel = (c.get("channel") or "conversation").replace("_", " ")
         secs = c.get("duration_seconds")
         duration = f" · {secs // 60}m {secs % 60}s" if isinstance(secs, int) and secs else ""
+        cost = c.get("cost_usd")
+        cost_label = f" · ${float(cost):.3f}" if isinstance(cost, int | float) else ""
         items.append(
             AdminActivityItem(
                 kind="conversation",
                 id=c["id"],
                 at=_parse(c["started_at"]),
-                title=f"{channel.capitalize()} conversation{duration}",
+                title=f"{channel.capitalize()} conversation{duration}{cost_label}",
                 subtitle=c.get("summary") or c.get("customer_phone"),
                 status=c.get("status"),
                 channel=c.get("channel"),

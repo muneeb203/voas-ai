@@ -9,6 +9,7 @@ Webhook event shapes are documented at https://docs.vapi.ai/server-url.
 import contextlib
 import json
 import re
+import time
 from datetime import UTC, date, datetime, timedelta
 from typing import Any
 
@@ -142,6 +143,50 @@ def _resolve_day_of_month(day: int, today: date) -> date | None:
         if mo > 12:
             mo, y = 1, y + 1
     return None
+
+
+def _extract_call_cost(
+    message: dict[str, Any], call: dict[str, Any]
+) -> tuple[float | None, dict[str, Any] | None]:
+    """Pull the call's real cost out of Vapi's end-of-call-report.
+
+    Vapi bills a platform fee per minute plus pass-through STT/LLM/TTS/transport,
+    and reports the split. The exact field names have moved between Vapi
+    versions, so check the known shapes and accept whatever is present —
+    a miss just means no cost recorded for that call, never an error.
+    """
+    total: float | None = None
+    for source in (message, call):
+        raw = source.get("cost")
+        if isinstance(raw, int | float):
+            total = float(raw)
+            break
+
+    breakdown: dict[str, Any] | None = None
+    for source in (message, call):
+        for key in ("costBreakdown", "costs", "cost_breakdown"):
+            raw = source.get(key)
+            if isinstance(raw, dict) and raw:
+                breakdown = raw
+                break
+            # Newer Vapi sends `costs` as a list of per-component entries.
+            if isinstance(raw, list) and raw:
+                breakdown = {"items": raw}
+                break
+        if breakdown:
+            break
+
+    # Fall back to summing the breakdown when no explicit total came through.
+    if total is None and isinstance(breakdown, dict):
+        items = breakdown.get("items")
+        if isinstance(items, list):
+            nums = [i["cost"] for i in items if isinstance(i, dict) and isinstance(i.get("cost"), int | float)]
+        else:
+            nums = [v for v in breakdown.values() if isinstance(v, int | float)]
+        if nums:
+            total = float(sum(nums))
+
+    return total, breakdown
 
 
 def _resolve_service(workspace_id: str, service_text: str | None):
@@ -291,6 +336,7 @@ async def vapi_webhook(
     if event_type == "tool-calls":
         # Vapi assistant invoked one or more tools. We respond with a result
         # per tool call so the agent can read it back to the customer.
+        tools_t0 = time.perf_counter()
         tool_calls = message.get("toolCalls") or message.get("toolCallList") or []
         if not isinstance(tool_calls, list):
             tool_calls = []
@@ -548,6 +594,16 @@ async def vapi_webhook(
                 log.warning("vapi_unknown_tool", name=name, args_preview=str(args)[:120])
                 results.append({"toolCallId": tc_id, "result": f"Unknown tool {name}, sorry."})
 
+        # How long WE kept the caller waiting. Vapi owns the STT/LLM/TTS pipeline,
+        # but this round-trip is ours — it's the one piece of voice latency we can
+        # honestly measure and act on.
+        log.info(
+            "vapi_tool_call_latency",
+            workspace_id=workspace_id,
+            call_id=call_id,
+            tools=[(tc.get("function") or {}).get("name") for tc in tool_calls],
+            elapsed_ms=int((time.perf_counter() - tools_t0) * 1000),
+        )
         return {"results": results}
 
     if event_type == "transcript":
@@ -589,6 +645,11 @@ async def vapi_webhook(
             except (TypeError, ValueError):
                 pass
 
+            # Vapi reports what the call actually cost, split by component.
+            # Captured defensively: field names vary by Vapi version, and a
+            # missing cost must never block the call from being closed out.
+            cost_usd, cost_breakdown = _extract_call_cost(message, call)
+
             db.table("conversations").update(
                 {
                     "ended_at": ended,
@@ -597,8 +658,19 @@ async def vapi_webhook(
                     "sentiment": sentiment,
                     "summary": summary,
                     "recording_url": recording_url,
+                    "cost_usd": cost_usd,
+                    "cost_breakdown": cost_breakdown,
                 }
             ).eq("id", conv["id"]).execute()
+
+            log.info(
+                "vapi_call_cost_captured",
+                workspace_id=workspace_id,
+                call_id=call_id,
+                duration_seconds=duration,
+                cost_usd=cost_usd,
+                has_breakdown=bool(cost_breakdown),
+            )
 
             billing_service.record_voice_call_minutes(
                 workspace_id=workspace_id,
