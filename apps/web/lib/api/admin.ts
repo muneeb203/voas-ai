@@ -217,6 +217,88 @@ export interface AdminErrorLogEntry {
   created_at: string;
 }
 
+export interface AdminKbModifierOption {
+  id: string;
+  name: string;
+  price_delta_cents: number;
+  is_default: boolean;
+}
+
+export interface AdminKbModifierGroup {
+  id: string;
+  name: string;
+  min_select: number;
+  max_select: number;
+  required: boolean;
+  options: AdminKbModifierOption[];
+}
+
+export interface AdminKbMenuItem {
+  id: string;
+  category_id: string;
+  name: string;
+  description: string | null;
+  price_cents: number;
+  is_active: boolean;
+  modifier_groups: AdminKbModifierGroup[];
+}
+
+export interface AdminKbCategory {
+  id: string;
+  name: string;
+  description: string | null;
+  is_active: boolean;
+}
+
+export interface AdminKbSalonService {
+  id: string;
+  name: string;
+  description: string | null;
+  price_cents: number;
+  duration_minutes: number;
+  buffer_after_minutes: number;
+  is_active: boolean;
+}
+
+export interface AdminKbStaffHours {
+  weekday: number;
+  start_time: string;
+  end_time: string;
+}
+
+export interface AdminKbSalonStaff {
+  id: string;
+  name: string;
+  title: string | null;
+  is_active: boolean;
+  service_ids: string[];
+  hours: AdminKbStaffHours[];
+  google_connected: boolean;
+  google_email: string | null;
+}
+
+export interface AdminKnowledgeBase {
+  vertical: string;
+  voice: {
+    enabled: boolean;
+    system_prompt: string;
+    greeting: string;
+    voice: string;
+    model: string;
+    language: string;
+  } | null;
+  categories: AdminKbCategory[];
+  items: AdminKbMenuItem[];
+  services: AdminKbSalonService[];
+  staff: AdminKbSalonStaff[];
+}
+
+export function getAdminWorkspaceKnowledgeBase(workspaceId: string) {
+  return apiCall<AdminKnowledgeBase>(`/v1/admin/workspaces/${workspaceId}/knowledge-base`, {
+    cache: 'no-store',
+  });
+}
+
 export function listAdminWorkspaceActivity(workspaceId: string) {
   return apiCall<AdminActivityItem[]>(`/v1/admin/workspaces/${workspaceId}/activity`, {
     cache: 'no-store',

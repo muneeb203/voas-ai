@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { redirect } from 'next/navigation';
 import { requireDashboardSession } from '@/lib/auth/workspace';
 import { listCategories, listItems } from '@/lib/api/menu';
 import { isApiError, type MenuItem } from '@/lib/types';
@@ -10,6 +11,13 @@ export const metadata: Metadata = { title: 'Knowledge Base' };
 
 export default async function KnowledgeBasePage() {
   const session = await requireDashboardSession('/knowledge-base');
+
+  // This page IS the restaurant menu. A salon's knowledge base is its services,
+  // so send them to the real page — the sidebar already swaps this nav item for
+  // them, but a bookmark or stale link would otherwise land them on an empty
+  // menu editor captioned "this is what your AI agent knows".
+  if (session.active.workspace.vertical === 'salon') redirect('/services');
+
   const isOwner = session.active.role === 'owner';
 
   const [catsRes, itemsRes] = await Promise.all([

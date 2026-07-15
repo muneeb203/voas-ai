@@ -4,7 +4,7 @@ import { notFound } from 'next/navigation';
 import { formatDistanceToNow } from 'date-fns';
 import { ArrowLeft } from 'lucide-react';
 import { requireAdminSession } from '@/lib/auth/admin';
-import { getAdminWorkspace, listAdminTickets, listAdminAuditLogs, getAdminWorkspaceUsage, listAdminWorkspaceGrants, getAdminKioskSettings, getAdminKioskMetrics, listAdminWorkspaceActivity, getAdminWorkspaceUsageHistory, listAdminWorkspaceErrors } from '@/lib/api/admin';
+import { getAdminWorkspace, listAdminTickets, listAdminAuditLogs, getAdminWorkspaceUsage, listAdminWorkspaceGrants, getAdminKioskSettings, getAdminKioskMetrics, listAdminWorkspaceActivity, getAdminWorkspaceUsageHistory, listAdminWorkspaceErrors, getAdminWorkspaceKnowledgeBase } from '@/lib/api/admin';
 import { isApiError } from '@/lib/types';
 import { cn } from '@/lib/utils';
 import { Card, CardContent } from '@/components/ui/card';
@@ -13,6 +13,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { AdminWorkspaceBillingPanel } from '@/components/admin/admin-workspace-billing-panel';
 import { AdminKioskSettingsCard } from '@/components/admin/admin-kiosk-settings-card';
 import { AdminKioskMetricsCard } from '@/components/admin/admin-kiosk-metrics-card';
+import { AdminKnowledgeBasePanel } from '@/components/admin/admin-knowledge-base-panel';
 import {
   Table,
   TableBody,
@@ -42,6 +43,7 @@ const TABS = [
   'tickets',
   'log',
   'usage',
+  'kb',
 ];
 
 type LogCategory = 'config' | 'operation' | 'error';
@@ -87,6 +89,7 @@ export default async function AdminWorkspaceDetailPage({
     activityRes,
     usageHistoryRes,
     errorsRes,
+    kbRes,
   ] = await Promise.all([
     getAdminWorkspace(params.id),
     listAdminTickets({ workspaceId: params.id }),
@@ -98,6 +101,7 @@ export default async function AdminWorkspaceDetailPage({
     listAdminWorkspaceActivity(params.id),
     getAdminWorkspaceUsageHistory(params.id),
     listAdminWorkspaceErrors(params.id),
+    getAdminWorkspaceKnowledgeBase(params.id),
   ]);
 
   if (isApiError(detailRes)) {
@@ -115,6 +119,8 @@ export default async function AdminWorkspaceDetailPage({
   const usageHistoryError = isApiError(usageHistoryRes) ? usageHistoryRes.error.message : null;
   const errors = !isApiError(errorsRes) ? errorsRes.data : [];
   const errorsError = isApiError(errorsRes) ? errorsRes.error.message : null;
+  const kb = !isApiError(kbRes) ? kbRes.data : null;
+  const kbError = isApiError(kbRes) ? kbRes.error.message : null;
 
   // One timeline instead of three tabs: config changes (audit), what the
   // business did (activity), and what broke (errors) are the same story told in
@@ -201,6 +207,7 @@ export default async function AdminWorkspaceDetailPage({
           <TabsTrigger value="tickets">Tickets ({tickets.length})</TabsTrigger>
           <TabsTrigger value="log">Log</TabsTrigger>
           <TabsTrigger value="usage">Usage</TabsTrigger>
+          <TabsTrigger value="kb">Knowledge base</TabsTrigger>
         </TabsList>
 
         <TabsContent value="overview">
@@ -459,6 +466,19 @@ export default async function AdminWorkspaceDetailPage({
           </Card>
         </TabsContent>
 
+
+        <TabsContent value="kb">
+          {kbError ? (
+            <Card>
+              <CardContent className="px-6 py-12 text-center">
+                <p className="text-sm font-medium text-error">Couldn&apos;t load the knowledge base</p>
+                <p className="mt-1 text-xs text-muted-foreground">{kbError}</p>
+              </CardContent>
+            </Card>
+          ) : kb ? (
+            <AdminKnowledgeBasePanel kb={kb} />
+          ) : null}
+        </TabsContent>
       </Tabs>
     </div>
   );

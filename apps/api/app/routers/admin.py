@@ -11,6 +11,7 @@ from app.models.admin import (
     AdminContactSubmission,
     AdminContactUpdate,
     AdminErrorLogEntry,
+    AdminKnowledgeBase,
     AdminUsageHistoryPoint,
     AdminUserSummary,
     AdminWorkspaceDetail,
@@ -35,6 +36,7 @@ from app.services import (
     admin_activity_service,
     admin_audit_service,
     admin_contact_service,
+    admin_kb_service,
     admin_ticket_service,
     admin_user_service,
     admin_workspace_service,
@@ -134,6 +136,16 @@ async def get_workspace_errors(
     limit: int = Query(default=100, ge=1, le=200),
 ) -> DataResponse[list[AdminErrorLogEntry]]:
     return ok(error_log_service.list_for_workspace(workspace_id, limit=limit))
+
+
+@router.get(
+    "/workspaces/{workspace_id}/knowledge-base",
+    response_model=DataResponse[AdminKnowledgeBase],
+)
+async def get_workspace_knowledge_base(
+    workspace_id: str, _: AdminContextDep
+) -> DataResponse[AdminKnowledgeBase]:
+    return ok(admin_kb_service.get_knowledge_base(workspace_id))
 
 
 @router.post(
