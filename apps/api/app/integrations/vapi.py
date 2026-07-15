@@ -161,8 +161,10 @@ CHECK_AVAILABILITY_TOOL: dict[str, Any] = {
                 "date": {
                     "type": "string",
                     "description": (
-                        "The day the customer wants. Accepts 'today', 'tomorrow', a "
-                        "weekday name (e.g. 'Friday'), or an exact YYYY-MM-DD."
+                        "The day the customer wants, in their own words: 'today', "
+                        "'tomorrow', a weekday ('Friday'), a day of the month ('the "
+                        "15th'), or an exact YYYY-MM-DD. Pass what they said — don't "
+                        "convert it yourself."
                     ),
                 },
             },
@@ -188,7 +190,10 @@ BOOK_APPOINTMENT_TOOL: dict[str, Any] = {
                 "service": {"type": "string", "description": "The service in plain words."},
                 "date": {
                     "type": "string",
-                    "description": "The day: 'today', 'tomorrow', a weekday, or YYYY-MM-DD.",
+                    "description": (
+                        "The day in the customer's words: 'today', 'tomorrow', a "
+                        "weekday, a day of the month ('the 15th'), or YYYY-MM-DD."
+                    ),
                 },
                 "time": {
                     "type": "string",
