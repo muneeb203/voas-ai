@@ -102,7 +102,7 @@ class ImpersonationPayload(BaseModel):
 async def start_impersonation(
     workspace_id: str, ctx: AdminContextDep
 ) -> DataResponse[ImpersonationPayload]:
-    data = impersonation_service.start(workspace_id, ctx.admin_id)
+    data = impersonation_service.start(workspace_id, ctx.admin_id, ctx.user.id)
     return ok(ImpersonationPayload(**data))
 
 
@@ -112,7 +112,7 @@ class ExitImpersonationBody(BaseModel):
 
 @router.post("/impersonate/exit", status_code=status.HTTP_204_NO_CONTENT)
 async def end_impersonation(body: ExitImpersonationBody, ctx: AdminContextDep) -> None:
-    impersonation_service.end(body.workspace_id, ctx.admin_id)
+    impersonation_service.end(body.workspace_id, ctx.admin_id, ctx.user.id)
 
 
 # ---------- Users -----------------------------------------------------------

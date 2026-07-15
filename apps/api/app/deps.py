@@ -58,8 +58,12 @@ async def get_workspace_context(
     user: CurrentUserDep,
 ) -> WorkspaceContext:
     """Resolve the caller's role inside `workspace_id`. 404 if the workspace
-    doesn't exist, 403 if the user isn't a member. Admins do NOT bypass here
-    on purpose — admin endpoints have their own surface under /v1/admin/*.
+    doesn't exist, 403 if the user isn't a member.
+
+    Being an admin is NOT enough on its own — admin endpoints have their own
+    surface under /v1/admin/*. The single exception is an admin holding a live
+    impersonation grant for this workspace, which is recorded and audited when
+    they start impersonating and revoked the moment they exit or it expires.
     """
     db = get_supabase_admin()
     ws = db.table("workspaces").select("id, status").eq("id", workspace_id).limit(1).execute()
@@ -77,6 +81,11 @@ async def get_workspace_context(
         .execute()
     )
     if not membership.data:
+        # Imported here to keep the deps module free of service-layer imports.
+        from app.services import impersonation_service
+
+        if user.is_admin and impersonation_service.has_active_grant(user.id, workspace_id):
+            return WorkspaceContext(user=user, workspace_id=workspace_id, role="owner")
         raise ForbiddenError("You do not have access to this workspace")
 
     return WorkspaceContext(
