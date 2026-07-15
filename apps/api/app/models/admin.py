@@ -5,6 +5,8 @@ from pydantic import BaseModel
 
 from app.models.location import Location
 from app.models.member import Member
+from app.models.menu import MenuCategory, MenuItem
+from app.models.salon import SalonService, SalonStaff
 from app.models.workspace import Workspace, WorkspaceStatus
 
 
@@ -70,6 +72,34 @@ class AdminUsageHistoryPoint(BaseModel):
     voice_minutes: float
     whatsapp_messages: float
     help_bot_turns: float
+
+
+class AdminKbVoice(BaseModel):
+    """The agent's instructions — arguably the biggest part of what it 'knows'."""
+
+    enabled: bool
+    system_prompt: str
+    greeting: str
+    voice: str
+    model: str
+    language: str
+
+
+class AdminKnowledgeBase(BaseModel):
+    """Read-only view of everything a business's AI is working from.
+
+    Vertical decides which half is populated: a restaurant's knowledge is its
+    menu; a salon's is its services, staff and the hours they work.
+    """
+
+    vertical: str
+    voice: AdminKbVoice | None = None
+    # restaurant
+    categories: list[MenuCategory] = []
+    items: list[MenuItem] = []
+    # salon
+    services: list[SalonService] = []
+    staff: list[SalonStaff] = []
 
 
 class AdminErrorLogEntry(BaseModel):
