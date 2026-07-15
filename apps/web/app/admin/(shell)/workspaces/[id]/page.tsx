@@ -6,6 +6,7 @@ import { ArrowLeft } from 'lucide-react';
 import { requireAdminSession } from '@/lib/auth/admin';
 import { getAdminWorkspace, listAdminTickets, listAdminAuditLogs, getAdminWorkspaceUsage, listAdminWorkspaceGrants, getAdminKioskSettings, getAdminKioskMetrics, listAdminWorkspaceActivity, getAdminWorkspaceUsageHistory, listAdminWorkspaceErrors } from '@/lib/api/admin';
 import { isApiError } from '@/lib/types';
+import { cn } from '@/lib/utils';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -32,12 +33,46 @@ export const metadata: Metadata = {
   robots: { index: false, follow: false },
 };
 
+const TABS = [
+  'overview',
+  'billing',
+  'kiosk',
+  'members',
+  'locations',
+  'tickets',
+  'log',
+  'usage',
+];
+
+type LogCategory = 'config' | 'operation' | 'error';
+
+interface LogRow {
+  at: string;
+  category: LogCategory;
+  label: string;
+  title: string;
+  subtitle: string | null;
+}
+
+const LOG_FILTERS: { id: 'all' | LogCategory; label: string }[] = [
+  { id: 'all', label: 'All' },
+  { id: 'operation', label: 'Operations' },
+  { id: 'config', label: 'Config changes' },
+  { id: 'error', label: 'Errors' },
+];
+
+function categoryBadge(category: LogCategory) {
+  if (category === 'error') return <Badge variant="destructive">error</Badge>;
+  if (category === 'config') return <Badge variant="outline">config</Badge>;
+  return <Badge variant="secondary">activity</Badge>;
+}
+
 export default async function AdminWorkspaceDetailPage({
   params,
   searchParams,
 }: {
   params: { id: string };
-  searchParams: { tab?: string };
+  searchParams: { tab?: string; log?: string };
 }) {
   await requireAdminSession(`/admin/workspaces/${params.id}`);
 
@@ -80,6 +115,42 @@ export default async function AdminWorkspaceDetailPage({
   const usageHistoryError = isApiError(usageHistoryRes) ? usageHistoryRes.error.message : null;
   const errors = !isApiError(errorsRes) ? errorsRes.data : [];
   const errorsError = isApiError(errorsRes) ? errorsRes.error.message : null;
+
+  // One timeline instead of three tabs: config changes (audit), what the
+  // business did (activity), and what broke (errors) are the same story told in
+  // sequence — you shouldn't have to guess which tab an event landed in.
+  const logRows: LogRow[] = [
+    ...auditEntries.map((e) => ({
+      at: e.created_at,
+      category: 'config' as const,
+      label: e.action,
+      title: e.actor_name ?? e.actor_email ?? e.actor_type,
+      subtitle: e.resource_type ? `${e.resource_type} ${e.resource_id ?? ''}`.trim() : null,
+    })),
+    ...activity.map((a) => ({
+      at: a.at,
+      category: 'operation' as const,
+      label: a.kind,
+      title: a.title,
+      subtitle: a.subtitle,
+    })),
+    ...errors.map((e) => ({
+      at: e.created_at,
+      category: 'error' as const,
+      label: e.kind,
+      title: e.source,
+      subtitle: e.message,
+    })),
+  ].sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime());
+
+  const logFilter = (['config', 'operation', 'error'] as const).includes(
+    searchParams.log as 'config' | 'operation' | 'error',
+  )
+    ? (searchParams.log as 'config' | 'operation' | 'error')
+    : 'all';
+  const visibleLog =
+    logFilter === 'all' ? logRows : logRows.filter((r) => r.category === logFilter);
+  const logLoadError = activityError ?? errorsError;
   const kioskSettings = !isApiError(kioskRes)
     ? kioskRes.data
     : { kiosk_enabled: false, max_kiosk_urls: 1, theme: 'gradient' as const, session_lock_enabled: false, kiosk_monthly_limit: 500, kiosk_credits_balance: 0, kiosk_credits_used_this_month: 0, kiosk_month_start: null };
@@ -94,7 +165,9 @@ export default async function AdminWorkspaceDetailPage({
   const kioskMetrics = !isApiError(kioskMetricsRes)
     ? kioskMetricsRes.data
     : { window_7d: emptyWindow, window_30d: emptyWindow, window_all: emptyWindow };
-  const defaultTab = searchParams.tab === 'billing' ? 'billing' : 'overview';
+  // Must honour ?tab= for every tab: the Log filter links round-trip through the
+  // server, so anything not listed here would bounce the admin back to Overview.
+  const defaultTab = TABS.includes(searchParams.tab ?? '') ? searchParams.tab! : 'overview';
 
   return (
     <div>
@@ -126,10 +199,8 @@ export default async function AdminWorkspaceDetailPage({
           <TabsTrigger value="members">Members ({members.length})</TabsTrigger>
           <TabsTrigger value="locations">Locations ({locations.length})</TabsTrigger>
           <TabsTrigger value="tickets">Tickets ({tickets.length})</TabsTrigger>
-          <TabsTrigger value="activity">Activity</TabsTrigger>
+          <TabsTrigger value="log">Log</TabsTrigger>
           <TabsTrigger value="usage">Usage</TabsTrigger>
-          <TabsTrigger value="errors">Errors{errors.length ? ` (${errors.length})` : ''}</TabsTrigger>
-          <TabsTrigger value="audit">Audit</TabsTrigger>
         </TabsList>
 
         <TabsContent value="overview">
@@ -281,17 +352,33 @@ export default async function AdminWorkspaceDetailPage({
           </Card>
         </TabsContent>
 
-        <TabsContent value="activity">
+        <TabsContent value="log">
+          <div className="mb-4 flex items-center gap-1 border-b border-border">
+            {LOG_FILTERS.map((f) => (
+              <Link
+                key={f.id}
+                href={`/admin/workspaces/${params.id}?tab=log${f.id === 'all' ? '' : `&log=${f.id}`}`}
+                className={cn(
+                  '-mb-px border-b-2 px-4 py-2 text-sm font-medium transition-colors',
+                  logFilter === f.id
+                    ? 'border-accent text-foreground'
+                    : 'border-transparent text-muted-foreground hover:text-foreground',
+                )}
+              >
+                {f.label}
+              </Link>
+            ))}
+          </div>
           <Card>
             <CardContent className="p-0">
-              {activityError ? (
+              {logLoadError ? (
                 <div className="px-6 py-12 text-center">
-                  <p className="text-sm font-medium text-error">Couldn&apos;t load activity</p>
-                  <p className="mt-1 text-xs text-muted-foreground">{activityError}</p>
+                  <p className="text-sm font-medium text-error">Couldn&apos;t load the log</p>
+                  <p className="mt-1 text-xs text-muted-foreground">{logLoadError}</p>
                 </div>
-              ) : activity.length === 0 ? (
+              ) : visibleLog.length === 0 ? (
                 <p className="py-12 text-center text-sm text-muted-foreground">
-                  No calls, chats, orders or bookings yet.
+                  Nothing logged yet.
                 </p>
               ) : (
                 <Table>
@@ -299,27 +386,23 @@ export default async function AdminWorkspaceDetailPage({
                     <TableRow>
                       <TableHead>When</TableHead>
                       <TableHead>Type</TableHead>
-                      <TableHead>What happened</TableHead>
-                      <TableHead>Status</TableHead>
+                      <TableHead>Event</TableHead>
+                      <TableHead>Details</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {activity.map((a) => (
-                      <TableRow key={`${a.kind}-${a.id}`}>
+                    {visibleLog.map((r, i) => (
+                      <TableRow key={`${r.category}-${r.at}-${i}`}>
                         <TableCell className="whitespace-nowrap text-xs text-muted-foreground">
-                          {formatDistanceToNow(new Date(a.at), { addSuffix: true })}
+                          {formatDistanceToNow(new Date(r.at), { addSuffix: true })}
                         </TableCell>
-                        <TableCell>
-                          <Badge variant="secondary">{a.kind}</Badge>
-                        </TableCell>
+                        <TableCell>{categoryBadge(r.category)}</TableCell>
                         <TableCell className="text-sm">
-                          <p className="font-medium">{a.title}</p>
-                          {a.subtitle && (
-                            <p className="text-xs text-muted-foreground">{a.subtitle}</p>
-                          )}
+                          <p className="font-medium">{r.title}</p>
+                          <p className="font-mono text-xs text-muted-foreground">{r.label}</p>
                         </TableCell>
-                        <TableCell className="text-xs text-muted-foreground">
-                          {a.status ?? '—'}
+                        <TableCell className="max-w-md break-words text-xs text-muted-foreground">
+                          {r.subtitle ?? '—'}
                         </TableCell>
                       </TableRow>
                     ))}
@@ -376,85 +459,6 @@ export default async function AdminWorkspaceDetailPage({
           </Card>
         </TabsContent>
 
-        <TabsContent value="errors">
-          <Card>
-            <CardContent className="p-0">
-              {errorsError ? (
-                <div className="px-6 py-12 text-center">
-                  <p className="text-sm font-medium text-error">Couldn&apos;t load errors</p>
-                  <p className="mt-1 text-xs text-muted-foreground">{errorsError}</p>
-                </div>
-              ) : errors.length === 0 ? (
-                <p className="py-12 text-center text-sm text-muted-foreground">
-                  No errors recorded for this business. 🎉
-                </p>
-              ) : (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>When</TableHead>
-                      <TableHead>Kind</TableHead>
-                      <TableHead>Source</TableHead>
-                      <TableHead>Message</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {errors.map((e) => (
-                      <TableRow key={e.id}>
-                        <TableCell className="whitespace-nowrap text-xs text-muted-foreground">
-                          {formatDistanceToNow(new Date(e.created_at), { addSuffix: true })}
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant={e.kind === 'crash' ? 'destructive' : 'secondary'}>
-                            {e.kind}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="font-mono text-xs">{e.source}</TableCell>
-                        <TableCell className="max-w-md break-words text-xs text-muted-foreground">
-                          {e.message}
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="audit">
-          <Card>
-            <CardContent className="p-0">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>When</TableHead>
-                    <TableHead>Actor</TableHead>
-                    <TableHead>Action</TableHead>
-                    <TableHead>Resource</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {auditEntries.map((e) => (
-                    <TableRow key={e.id}>
-                      <TableCell className="text-xs text-muted-foreground">
-                        {formatDistanceToNow(new Date(e.created_at), { addSuffix: true })}
-                      </TableCell>
-                      <TableCell className="text-sm">
-                        {e.actor_name ?? e.actor_email ?? e.actor_id.slice(0, 8)}
-                        <p className="text-xs text-muted-foreground">{e.actor_type}</p>
-                      </TableCell>
-                      <TableCell className="font-mono text-xs">{e.action}</TableCell>
-                      <TableCell className="text-xs text-muted-foreground">
-                        {e.resource_type ? `${e.resource_type} · ${(e.resource_id ?? '').slice(0, 8)}` : '—'}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
-        </TabsContent>
       </Tabs>
     </div>
   );
