@@ -63,6 +63,15 @@ const LOG_FILTERS: { id: 'all' | LogCategory; label: string }[] = [
   { id: 'error', label: 'Errors' },
 ];
 
+function OverviewField({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="min-w-0">
+      <p className="text-xs uppercase tracking-wider text-muted-foreground">{label}</p>
+      <div className="mt-1 break-words text-sm font-medium">{children}</div>
+    </div>
+  );
+}
+
 function categoryBadge(category: LogCategory) {
   if (category === 'error') return <Badge variant="destructive">error</Badge>;
   if (category === 'config') return <Badge variant="outline">config</Badge>;
@@ -175,6 +184,14 @@ export default async function AdminWorkspaceDetailPage({
   // server, so anything not listed here would bounce the admin back to Overview.
   const defaultTab = TABS.includes(searchParams.tab ?? '') ? searchParams.tab! : 'overview';
 
+  // Support-facing summary: who to contact, where they are, and whether the
+  // account is actually alive — without hopping between tabs.
+  const owner = members.find((m) => m.role === 'owner');
+  const primaryLocation = locations.find((l) => l.is_active) ?? locations[0];
+  const lastActivityAt = activity[0]?.at ?? null;
+  // errors is capped at the endpoint's limit, so don't imply an exact count.
+  const errorCount = errors.length >= 100 ? '100+' : String(errors.length);
+
   return (
     <div>
       <Link
@@ -210,29 +227,109 @@ export default async function AdminWorkspaceDetailPage({
           <TabsTrigger value="kb">Knowledge base</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="overview">
+        <TabsContent value="overview" className="space-y-6">
           <Card>
-            <CardContent className="grid grid-cols-1 gap-4 p-6 sm:grid-cols-2">
-              <div>
-                <p className="text-xs uppercase tracking-wider text-muted-foreground">Status</p>
-                <p className="mt-1 text-sm font-medium capitalize">{workspace.status}</p>
-              </div>
-              <div>
-                <p className="text-xs uppercase tracking-wider text-muted-foreground">Vertical</p>
-                <p className="mt-1 text-sm font-medium capitalize">{workspace.vertical}</p>
-              </div>
-              <div>
-                <p className="text-xs uppercase tracking-wider text-muted-foreground">Plan</p>
-                <p className="mt-1 text-sm font-medium capitalize">{workspace.plan}</p>
-              </div>
-              <div>
-                <p className="text-xs uppercase tracking-wider text-muted-foreground">Created</p>
-                <p className="mt-1 text-sm font-medium">
-                  {formatDistanceToNow(new Date(workspace.created_at), { addSuffix: true })}
-                </p>
-              </div>
+            <CardContent className="grid grid-cols-1 gap-4 p-6 sm:grid-cols-2 lg:grid-cols-4">
+              <OverviewField label="Status">
+                <span className="capitalize">{workspace.status}</span>
+              </OverviewField>
+              <OverviewField label="Vertical">
+                <span className="capitalize">{workspace.vertical}</span>
+              </OverviewField>
+              <OverviewField label="Plan">
+                <span className="capitalize">{workspace.plan}</span>
+              </OverviewField>
+              <OverviewField label="Created">
+                {formatDistanceToNow(new Date(workspace.created_at), { addSuffix: true })}
+              </OverviewField>
             </CardContent>
           </Card>
+
+          <div className="grid gap-6 lg:grid-cols-3">
+            <Card>
+              <CardContent className="space-y-4 p-6">
+                <p className="text-sm font-semibold">Owner</p>
+                {owner ? (
+                  <>
+                    <OverviewField label="Name">{owner.full_name ?? '—'}</OverviewField>
+                    <OverviewField label="Email">
+                      {owner.email ? (
+                        <a href={`mailto:${owner.email}`} className="text-accent underline">
+                          {owner.email}
+                        </a>
+                      ) : (
+                        '—'
+                      )}
+                    </OverviewField>
+                    <OverviewField label="Joined">
+                      {owner.joined_at
+                        ? formatDistanceToNow(new Date(owner.joined_at), { addSuffix: true })
+                        : 'Not yet accepted'}
+                    </OverviewField>
+                  </>
+                ) : (
+                  <p className="text-sm text-muted-foreground">
+                    No owner on this workspace — that&apos;s unusual, worth a look.
+                  </p>
+                )}
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardContent className="space-y-4 p-6">
+                <p className="text-sm font-semibold">Primary location</p>
+                {primaryLocation ? (
+                  <>
+                    <OverviewField label="Name">{primaryLocation.name}</OverviewField>
+                    <OverviewField label="Phone">
+                      {primaryLocation.phone ? (
+                        <a href={`tel:${primaryLocation.phone}`} className="text-accent underline">
+                          {primaryLocation.phone}
+                        </a>
+                      ) : (
+                        '—'
+                      )}
+                    </OverviewField>
+                    <OverviewField label="City">{primaryLocation.city ?? '—'}</OverviewField>
+                    <OverviewField label="Timezone">
+                      <span className="font-mono text-xs">{primaryLocation.timezone}</span>
+                    </OverviewField>
+                  </>
+                ) : (
+                  <p className="text-sm text-muted-foreground">
+                    No location set — bookings and hours can&apos;t work without one.
+                  </p>
+                )}
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardContent className="space-y-4 p-6">
+                <p className="text-sm font-semibold">Health</p>
+                <OverviewField label="Voice agent">
+                  {kb?.voice ? (
+                    <Badge variant={kb.voice.enabled ? 'success' : 'secondary'}>
+                      {kb.voice.enabled ? 'Enabled' : 'Off'}
+                    </Badge>
+                  ) : (
+                    <Badge variant="secondary">Not set up</Badge>
+                  )}
+                </OverviewField>
+                <OverviewField label="Errors (30d)">
+                  {errorsError ? (
+                    <span className="text-xs text-muted-foreground">unavailable</span>
+                  ) : (
+                    <span className={errors.length ? 'text-error' : undefined}>{errorCount}</span>
+                  )}
+                </OverviewField>
+                <OverviewField label="Last activity">
+                  {lastActivityAt
+                    ? formatDistanceToNow(new Date(lastActivityAt), { addSuffix: true })
+                    : 'Never used'}
+                </OverviewField>
+              </CardContent>
+            </Card>
+          </div>
         </TabsContent>
 
         <TabsContent value="billing">
