@@ -6,11 +6,22 @@ chats, orders and bookings the AI handled. Read-only, service-role, admin-only.
 """
 
 from datetime import UTC, datetime, timedelta
+from typing import ClassVar
 
+from app.core.logging import get_logger
 from app.core.supabase import get_supabase_admin
 from app.models.admin import AdminActivityItem, AdminUsageHistoryPoint
 
+log = get_logger(__name__)
+
 _WHATSAPP_EVENTS = ("whatsapp_in", "whatsapp_out")
+
+
+class _Empty:
+    """Stand-in for a query result when one source fails — lets the rest of the
+    timeline render instead of blanking the whole tab."""
+
+    data: ClassVar[list] = []
 
 
 def _parse(value: str | datetime) -> datetime:
@@ -24,21 +35,45 @@ def _money(cents: int | None) -> str:
     return f"${(cents or 0) / 100:.2f}"
 
 
+def _conversations(db, workspace_id: str, limit: int):
+    """cost_usd only exists once migration 00029 is applied. Fall back without
+    it rather than taking the whole Activity tab down over one column."""
+    base = "id, channel, status, started_at, customer_phone, summary, duration_seconds"
+    try:
+        return (
+            db.table("conversations")
+            .select(f"{base}, cost_usd")
+            .eq("workspace_id", workspace_id)
+            .order("started_at", desc=True)
+            .limit(limit)
+            .execute()
+        )
+    except Exception as exc:
+        log.warning("activity_cost_column_missing", error=str(exc))
+        return (
+            db.table("conversations")
+            .select(base)
+            .eq("workspace_id", workspace_id)
+            .order("started_at", desc=True)
+            .limit(limit)
+            .execute()
+        )
+
+
 def list_activity(workspace_id: str, limit: int = 50) -> list[AdminActivityItem]:
-    """Recent conversations, orders and appointments merged into one timeline."""
+    """Recent conversations, orders and appointments merged into one timeline.
+
+    Each source is independent: if one table errors (a missing column, a schema
+    drift), the others still render. A partial timeline beats a blank tab.
+    """
     db = get_supabase_admin()
     items: list[AdminActivityItem] = []
 
-    convs = (
-        db.table("conversations")
-        .select(
-            "id, channel, status, started_at, customer_phone, summary, duration_seconds, cost_usd"
-        )
-        .eq("workspace_id", workspace_id)
-        .order("started_at", desc=True)
-        .limit(limit)
-        .execute()
-    )
+    try:
+        convs = _conversations(db, workspace_id, limit)
+    except Exception as exc:
+        log.error("activity_conversations_failed", workspace_id=workspace_id, error=str(exc))
+        convs = _Empty()
     for c in convs.data or []:
         channel = (c.get("channel") or "conversation").replace("_", " ")
         secs = c.get("duration_seconds")
@@ -57,14 +92,18 @@ def list_activity(workspace_id: str, limit: int = 50) -> list[AdminActivityItem]
             )
         )
 
-    orders = (
-        db.table("orders")
-        .select("id, status, total_cents, customer_name, created_at, channel")
-        .eq("workspace_id", workspace_id)
-        .order("created_at", desc=True)
-        .limit(limit)
-        .execute()
-    )
+    try:
+        orders = (
+            db.table("orders")
+            .select("id, status, total_cents, customer_name, created_at, channel")
+            .eq("workspace_id", workspace_id)
+            .order("created_at", desc=True)
+            .limit(limit)
+            .execute()
+        )
+    except Exception as exc:
+        log.error("activity_orders_failed", workspace_id=workspace_id, error=str(exc))
+        orders = _Empty()
     for o in orders.data or []:
         who = o.get("customer_name") or "Walk-in"
         items.append(
@@ -79,14 +118,18 @@ def list_activity(workspace_id: str, limit: int = 50) -> list[AdminActivityItem]
             )
         )
 
-    appts = (
-        db.table("salon_appointments")
-        .select("id, service_name, staff_name, customer_name, starts_at, status, created_at")
-        .eq("workspace_id", workspace_id)
-        .order("created_at", desc=True)
-        .limit(limit)
-        .execute()
-    )
+    try:
+        appts = (
+            db.table("salon_appointments")
+            .select("id, service_name, staff_name, customer_name, starts_at, status, created_at")
+            .eq("workspace_id", workspace_id)
+            .order("created_at", desc=True)
+            .limit(limit)
+            .execute()
+        )
+    except Exception as exc:
+        log.error("activity_appointments_failed", workspace_id=workspace_id, error=str(exc))
+        appts = _Empty()
     for a in appts.data or []:
         with_staff = f" with {a['staff_name']}" if a.get("staff_name") else ""
         starts = _parse(a["starts_at"]).strftime("%b %d, %I:%M %p").replace(" 0", " ")
