@@ -72,9 +72,14 @@ export default async function AdminWorkspaceDetailPage({
   const { workspace, members, locations } = detailRes.data;
   const tickets = !isApiError(ticketsRes) ? ticketsRes.data : [];
   const auditEntries = !isApiError(auditRes) ? auditRes.data : [];
+  // Keep the failure reason: an errored endpoint and a genuinely empty tab look
+  // identical otherwise, which makes "no logs showing" impossible to diagnose.
   const activity = !isApiError(activityRes) ? activityRes.data : [];
+  const activityError = isApiError(activityRes) ? activityRes.error.message : null;
   const usageHistory = !isApiError(usageHistoryRes) ? usageHistoryRes.data : [];
+  const usageHistoryError = isApiError(usageHistoryRes) ? usageHistoryRes.error.message : null;
   const errors = !isApiError(errorsRes) ? errorsRes.data : [];
+  const errorsError = isApiError(errorsRes) ? errorsRes.error.message : null;
   const kioskSettings = !isApiError(kioskRes)
     ? kioskRes.data
     : { kiosk_enabled: false, max_kiosk_urls: 1, theme: 'gradient' as const, session_lock_enabled: false, kiosk_monthly_limit: 500, kiosk_credits_balance: 0, kiosk_credits_used_this_month: 0, kiosk_month_start: null };
@@ -279,7 +284,12 @@ export default async function AdminWorkspaceDetailPage({
         <TabsContent value="activity">
           <Card>
             <CardContent className="p-0">
-              {activity.length === 0 ? (
+              {activityError ? (
+                <div className="px-6 py-12 text-center">
+                  <p className="text-sm font-medium text-error">Couldn&apos;t load activity</p>
+                  <p className="mt-1 text-xs text-muted-foreground">{activityError}</p>
+                </div>
+              ) : activity.length === 0 ? (
                 <p className="py-12 text-center text-sm text-muted-foreground">
                   No calls, chats, orders or bookings yet.
                 </p>
@@ -348,12 +358,19 @@ export default async function AdminWorkspaceDetailPage({
                     ))}
                 </TableBody>
               </Table>
-              {usageHistory.every(
-                (p) => !p.voice_minutes && !p.whatsapp_messages && !p.help_bot_turns,
-              ) && (
-                <p className="py-12 text-center text-sm text-muted-foreground">
-                  No usage recorded in the last 30 days.
-                </p>
+              {usageHistoryError ? (
+                <div className="px-6 py-12 text-center">
+                  <p className="text-sm font-medium text-error">Couldn&apos;t load usage</p>
+                  <p className="mt-1 text-xs text-muted-foreground">{usageHistoryError}</p>
+                </div>
+              ) : (
+                usageHistory.every(
+                  (p) => !p.voice_minutes && !p.whatsapp_messages && !p.help_bot_turns,
+                ) && (
+                  <p className="py-12 text-center text-sm text-muted-foreground">
+                    No usage recorded in the last 30 days.
+                  </p>
+                )
               )}
             </CardContent>
           </Card>
@@ -362,7 +379,12 @@ export default async function AdminWorkspaceDetailPage({
         <TabsContent value="errors">
           <Card>
             <CardContent className="p-0">
-              {errors.length === 0 ? (
+              {errorsError ? (
+                <div className="px-6 py-12 text-center">
+                  <p className="text-sm font-medium text-error">Couldn&apos;t load errors</p>
+                  <p className="mt-1 text-xs text-muted-foreground">{errorsError}</p>
+                </div>
+              ) : errors.length === 0 ? (
                 <p className="py-12 text-center text-sm text-muted-foreground">
                   No errors recorded for this business. 🎉
                 </p>
