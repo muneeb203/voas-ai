@@ -6,6 +6,7 @@ minus existing appointments minus buffers. Booking re-checks the slot at commit
 time so two concurrent bookings can't double-book the same staff member.
 """
 
+import calendar
 from datetime import UTC, date, datetime, time, timedelta
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
@@ -22,6 +23,30 @@ from app.services import google_calendar_service, salon_service
 SLOT_STEP_MINUTES = 15
 BOOKED_STATUSES = ["pending", "confirmed"]
 _MIN_LEAD = timedelta(minutes=1)
+
+
+def _one_month_ahead(d: date) -> date:
+    """The same day one calendar month later, clamped to the month's length."""
+    year = d.year + (1 if d.month == 12 else 0)
+    month = 1 if d.month == 12 else d.month + 1
+    last_day = calendar.monthrange(year, month)[1]
+    return date(year, month, min(d.day, last_day))
+
+
+def max_booking_date(workspace_id: str, location_id: str | None = None) -> date:
+    """Latest date a salon appointment may be booked for — one month out."""
+    tz = _location_tz(workspace_id, location_id)
+    return _one_month_ahead(datetime.now(tz).date())
+
+
+def beyond_booking_window(
+    workspace_id: str, date_str: str, location_id: str | None = None
+) -> bool:
+    try:
+        day = date.fromisoformat(date_str)
+    except ValueError:
+        return False
+    return day > max_booking_date(workspace_id, location_id)
 
 
 def _parse_time(value: str) -> time:
@@ -127,6 +152,9 @@ def get_availability(
 
     tz = _location_tz(workspace_id, location_id)
     day = date.fromisoformat(date_str)
+    # Bookings are capped to one month out — nothing offered beyond that.
+    if day > _one_month_ahead(datetime.now(tz).date()):
+        return AvailabilityResult(date=date_str, service_id=service_id, slots=[])
     pg_dow = (day.weekday() + 1) % 7  # python Mon=0..Sun=6 → pg Sun=0..Sat=6
     now_utc = datetime.now(UTC)
 
@@ -208,6 +236,9 @@ def create_appointment(
     block_end = starts_at + timedelta(minutes=service.duration_minutes + service.buffer_after_minutes)
 
     tz = _location_tz(workspace_id, data.location_id)
+    if starts_at.astimezone(tz).date() > _one_month_ahead(datetime.now(tz).date()):
+        raise AppError("Appointments can only be booked up to a month in advance.")
+
     eligible = _eligible_staff(db, workspace_id, data.service_id, data.staff_id)
     if not eligible:
         raise AppError("No staff member can perform that service.")
@@ -334,6 +365,8 @@ def reschedule_appointment(
         raise AppError("That staff member doesn't perform this service.")
 
     tz = _location_tz(workspace_id, appt.location_id)
+    if starts_at.astimezone(tz).date() > _one_month_ahead(datetime.now(tz).date()):
+        raise AppError("Appointments can only be booked up to a month in advance.")
     if not _slot_bookable(db, target_staff, starts_at, block_end, tz, exclude_appointment_id=appointment_id):
         raise ConflictError("That time isn't available — please pick another slot.")
 

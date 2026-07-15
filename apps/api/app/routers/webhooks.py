@@ -365,6 +365,14 @@ async def vapi_webhook(
                         }
                     )
                     continue
+                if booking_service.beyond_booking_window(workspace_id, date_str, location_id):
+                    results.append(
+                        {
+                            "toolCallId": tc_id,
+                            "result": "We can only book up to a month ahead — ask the customer for an earlier day.",
+                        }
+                    )
+                    continue
                 try:
                     avail = booking_service.get_availability(
                         workspace_id,
@@ -420,6 +428,14 @@ async def vapi_webhook(
                 if not svc or not date_str or not parsed:
                     results.append(
                         {"toolCallId": tc_id, "result": "I need the service, day, and time to book — could you confirm them?"}
+                    )
+                    continue
+                if booking_service.beyond_booking_window(workspace_id, date_str, location_id):
+                    results.append(
+                        {
+                            "toolCallId": tc_id,
+                            "result": "We can only book up to a month ahead — ask the customer for an earlier day.",
+                        }
                     )
                     continue
                 try:

@@ -21,11 +21,21 @@ import {
 } from '@/app/actions/salon-action';
 import type { AvailabilitySlot, SalonService } from '@/lib/api/salon';
 
-function todayStr(): string {
-  const d = new Date();
+function fmtDate(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(
     d.getDate(),
   ).padStart(2, '0')}`;
+}
+
+function todayStr(): string {
+  return fmtDate(new Date());
+}
+
+// Bookings are capped to one month ahead (enforced by the backend too).
+function maxDateStr(): string {
+  const d = new Date();
+  d.setMonth(d.getMonth() + 1);
+  return fmtDate(d);
 }
 
 interface Props {
@@ -147,6 +157,7 @@ export function AppointmentDialog({
                 id="appt-date"
                 type="date"
                 min={todayStr()}
+                max={maxDateStr()}
                 value={date}
                 onChange={(e) => {
                   setDate(e.target.value);
