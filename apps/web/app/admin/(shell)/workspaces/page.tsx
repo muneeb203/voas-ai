@@ -28,6 +28,19 @@ function statusBadge(status: 'active' | 'suspended' | 'deleted') {
   return <Badge variant="destructive">Deleted</Badge>;
 }
 
+// Which engine the business runs on: booking (salon) vs ordering (restaurant).
+const VERTICAL_LABELS: Record<string, string> = {
+  restaurant: '🍽 Restaurant',
+  salon: '✂️ Salon',
+  dental: '🦷 Dental',
+  auto: '🔧 Auto',
+  other: 'Other',
+};
+
+function verticalBadge(vertical: string) {
+  return <Badge variant="secondary">{VERTICAL_LABELS[vertical] ?? vertical}</Badge>;
+}
+
 export default async function AdminWorkspacesPage({
   searchParams,
 }: {
@@ -98,6 +111,7 @@ export default async function AdminWorkspacesPage({
               <TableHeader>
                 <TableRow>
                   <TableHead>Workspace</TableHead>
+                  <TableHead>Vertical</TableHead>
                   <TableHead>Plan</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Members</TableHead>
@@ -118,6 +132,7 @@ export default async function AdminWorkspacesPage({
                       </Link>
                       <p className="text-xs text-muted-foreground">{w.slug}</p>
                     </TableCell>
+                    <TableCell>{verticalBadge(w.vertical)}</TableCell>
                     <TableCell>
                       <Badge variant="outline">{w.plan}</Badge>
                     </TableCell>

@@ -8,6 +8,7 @@ import { PAY_AS_YOU_GO } from '@/lib/constants';
 import { isApiError } from '@/lib/types';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { PageHeader } from '@/components/dashboard/page-header';
+import { PageErrorCard } from '@/components/dashboard/page-error-card';
 import { VoiceSettingsForm } from '@/components/dashboard/voice-settings-form';
 import { TestCallButton } from '@/components/dashboard/test-call-button';
 import { MenuSyncCard } from '@/components/dashboard/menu-sync-card';
@@ -28,8 +29,21 @@ export default async function VoiceSettingsPage() {
     getBillingUsage(workspaceId),
   ]);
 
-  if (isApiError(settingsRes)) throw new Error(settingsRes.error.message);
-  if (isApiError(capsRes)) throw new Error(capsRes.error.message);
+  // Degrade gracefully: a 403, a 500, or the API restarting should explain
+  // itself here, not blow the page up into a generic "something went wrong".
+  if (isApiError(settingsRes) || isApiError(capsRes)) {
+    const err = isApiError(settingsRes) ? settingsRes.error : (capsRes as { error: { message: string } }).error;
+    return (
+      <div className="space-y-6">
+        <PageHeader eyebrow="Integration" title="Voice" />
+        <PageErrorCard
+          title="Couldn't load voice settings"
+          message={err.message}
+          retryHref="/integrations/voice"
+        />
+      </div>
+    );
+  }
 
   const settings = settingsRes.data;
   const caps = capsRes.data;

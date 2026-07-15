@@ -25,6 +25,7 @@ from app.services import (
     billing_service,
     booking_service,
     customer_service,
+    error_log_service,
     salon_service,
     voice_order_service,
     voice_service,
@@ -383,6 +384,13 @@ async def vapi_webhook(
                     )
                 except Exception as exc:
                     log.error("vapi_check_availability_failed", error=str(exc))
+                    error_log_service.record(
+                        workspace_id=workspace_id,
+                        kind="integration",
+                        source="vapi_check_availability_failed",
+                        message=str(exc),
+                        context={"service": svc.name, "date": date_str},
+                    )
                     results.append(
                         {"toolCallId": tc_id, "result": "Sorry, I couldn't pull up open times just now."}
                     )
@@ -448,6 +456,12 @@ async def vapi_webhook(
                     )
                 except Exception as exc:
                     log.error("vapi_book_failed", workspace_id=workspace_id, error=str(exc))
+                    error_log_service.record(
+                        workspace_id=workspace_id,
+                        kind="integration",
+                        source="vapi_book_failed",
+                        message=str(exc),
+                    )
                     results.append(
                         {"toolCallId": tc_id, "result": "Sorry, I couldn't book that right now — please try again."}
                     )
@@ -487,6 +501,12 @@ async def vapi_webhook(
                     continue
                 except Exception as exc:
                     log.error("vapi_book_failed", workspace_id=workspace_id, error=str(exc))
+                    error_log_service.record(
+                        workspace_id=workspace_id,
+                        kind="integration",
+                        source="vapi_book_failed",
+                        message=str(exc),
+                    )
                     results.append(
                         {
                             "toolCallId": tc_id,

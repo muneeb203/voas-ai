@@ -27,6 +27,7 @@ from app.models.salon import SalonAppointment
 log = get_logger(__name__)
 
 _SWEEP_INTERVAL_SECONDS = 300
+_PRUNE_EVERY_TICKS = 12  # 12 sweeps x 5min = roughly hourly error-log prune
 _BOOKED_STATUSES = ["pending", "confirmed"]
 _DEFAULT_LEAD_MINUTES = [1440]  # 24h before
 
@@ -291,12 +292,23 @@ def _maybe_remind(
 
 
 async def run_reminder_loop() -> None:
-    """Sweep for due reminders on a fixed interval until cancelled."""
+    """Sweep for due reminders on a fixed interval until cancelled.
+
+    Also piggybacks the error-log retention prune — it needs a periodic tick and
+    this is the one we already have.
+    """
     log.info("appointment_reminder_loop_started", interval_seconds=_SWEEP_INTERVAL_SECONDS)
+    ticks = 0
     while True:
         try:
             await asyncio.sleep(_SWEEP_INTERVAL_SECONDS)
             await asyncio.to_thread(sweep)
+
+            ticks += 1
+            if ticks % _PRUNE_EVERY_TICKS == 0:  # ~hourly, not every sweep
+                from app.services import error_log_service
+
+                await asyncio.to_thread(error_log_service.prune)
         except asyncio.CancelledError:
             log.info("appointment_reminder_loop_stopped")
             raise

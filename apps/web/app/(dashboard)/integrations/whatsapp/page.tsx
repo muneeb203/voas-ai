@@ -11,6 +11,7 @@ import { listLocations } from '@/lib/api/locations';
 import { isApiError, type LocationWhatsAppConfigSafe } from '@/lib/types';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { PageHeader } from '@/components/dashboard/page-header';
+import { PageErrorCard } from '@/components/dashboard/page-error-card';
 import { WhatsAppSettingsForm } from '@/components/dashboard/whatsapp-settings-form';
 import { LocationWhatsAppCard } from '@/components/dashboard/location-whatsapp-card';
 
@@ -27,11 +28,21 @@ export default async function WhatsAppSettingsPage() {
     listLocations(workspaceId),
   ]);
 
-  if (isApiError(settingsRes)) {
-    throw new Error(settingsRes.error.message);
-  }
-  if (isApiError(capsRes)) {
-    throw new Error(capsRes.error.message);
+  // Degrade gracefully rather than throwing into the generic error boundary.
+  if (isApiError(settingsRes) || isApiError(capsRes)) {
+    const err = isApiError(settingsRes)
+      ? settingsRes.error
+      : (capsRes as { error: { message: string } }).error;
+    return (
+      <div className="space-y-6">
+        <PageHeader eyebrow="Integration" title="WhatsApp" />
+        <PageErrorCard
+          title="Couldn't load WhatsApp settings"
+          message={err.message}
+          retryHref="/integrations/whatsapp"
+        />
+      </div>
+    );
   }
   const settings = settingsRes.data;
   const caps = capsRes.data;
