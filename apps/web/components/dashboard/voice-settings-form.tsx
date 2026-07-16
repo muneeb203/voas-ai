@@ -431,6 +431,22 @@ export function VoiceSettingsForm({
         </div>
       </Field>
 
+      <Field
+        label="Transfer to a human"
+        htmlFor="fallback_phone_number"
+        error={fieldErrors?.fallback_phone_number}
+        hint="When a caller asks for a person, the agent transfers the call here. Leave empty to keep every call with the AI. Use a staff line — not the number callers dial to reach the agent."
+      >
+        <Input
+          id="fallback_phone_number"
+          name="fallback_phone_number"
+          type="tel"
+          placeholder="+14155551234"
+          defaultValue={settings.fallback_phone_number ?? ''}
+          disabled={disabled || pending}
+        />
+      </Field>
+
       <Button type="submit" disabled={disabled || pending}>
         {pending ? 'Saving…' : 'Save & Sync'}
       </Button>

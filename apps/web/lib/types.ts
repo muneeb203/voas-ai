@@ -319,6 +319,7 @@ export interface VoiceSettings {
   last_synced_at: string | null;
   sync_status: 'pending' | 'synced' | 'error';
   sync_error: string | null;
+  fallback_phone_number: string | null;
   created_at: string;
   updated_at: string;
   menu_dirty: boolean;

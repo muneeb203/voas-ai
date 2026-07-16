@@ -196,6 +196,18 @@ def _sync_assistant(workspace_id: str, settings: VoiceSettings) -> str | None:
         context_md = _menu_context_for_workspace(workspace_id)
     full_prompt = f"{settings.system_prompt}\n\n{context_md}".strip()
 
+    # The owner's prompt doesn't know about the transfer tool, so state the rule
+    # here — and only when a number is actually set, so the agent never offers a
+    # handoff it can't perform.
+    fallback = (settings.fallback_phone_number or "").strip()
+    if fallback:
+        full_prompt = (
+            f"{full_prompt}\n\n--- HUMAN HANDOFF ---\n"
+            "If the customer asks to speak to a human, a person, a manager, or "
+            "the front desk, call the `transferCall` tool to put them through. "
+            "Don't argue or try to handle it yourself — transfer them."
+        )
+
     payload = vapi.assistant_payload(
         system_prompt=full_prompt,
         greeting=settings.greeting,
@@ -205,6 +217,7 @@ def _sync_assistant(workspace_id: str, settings: VoiceSettings) -> str | None:
         end_call_phrases=settings.end_call_phrases,
         language=settings.language,
         vertical=vertical,
+        fallback_number=fallback or None,
     )
 
     if settings.vapi_assistant_id:

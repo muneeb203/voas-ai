@@ -229,6 +229,24 @@ CHECK_IN_TOOL: dict[str, Any] = {
 }
 
 
+def _transfer_tool(number: str) -> dict[str, Any]:
+    """Vapi's built-in transferCall — hands the live call to a human.
+
+    Not a function tool: Vapi bridges the call itself, so it carries no `server`
+    and never reaches our webhook.
+    """
+    return {
+        "type": "transferCall",
+        "destinations": [
+            {
+                "type": "number",
+                "number": number,
+                "message": "Sure — putting you through to the team now.",
+            }
+        ],
+    }
+
+
 def _tools_for_vertical(vertical: str, server_url: str | None) -> list[dict[str, Any]]:
     base = (
         [CHECK_AVAILABILITY_TOOL, BOOK_APPOINTMENT_TOOL, CHECK_IN_TOOL]
@@ -253,10 +271,16 @@ def assistant_payload(
     end_call_phrases: list[str] | None = None,
     language: str = "en",
     vertical: str = "restaurant",
+    fallback_number: str | None = None,
 ) -> dict[str, Any]:
     """Shape the JSON Vapi expects for create/update of an assistant."""
     voice_id = _VOICE_ID_MAP.get(voice.lower(), voice)
     lang_cfg = LANGUAGE_CONFIG.get(language, LANGUAGE_CONFIG["en"])
+    tools = _tools_for_vertical(vertical, server_url)
+    # Only offer a transfer when there's somewhere to transfer TO — otherwise the
+    # agent could promise a handoff it can't make.
+    if fallback_number:
+        tools = [*tools, _transfer_tool(fallback_number)]
 
     payload: dict[str, Any] = {
         "name": "VOAS workspace agent",
@@ -265,7 +289,7 @@ def assistant_payload(
             "provider": "openai",
             "model": model,
             "messages": [{"role": "system", "content": system_prompt}],
-            "tools": _tools_for_vertical(vertical, server_url),
+            "tools": tools,
         },
         "voice": {
             "provider": "11labs",

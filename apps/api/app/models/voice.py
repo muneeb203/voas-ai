@@ -1,7 +1,8 @@
+import re
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 # Supported voice agent languages. Adding a new one requires (1) extending
 # this Literal + AVAILABLE_LANGUAGES, (2) extending the migration's CHECK
@@ -188,6 +189,8 @@ class VoiceSettings(BaseModel):
     last_synced_at: datetime | None
     sync_status: str = "synced"  # pending | synced | error
     sync_error: str | None = None
+    # Where a caller who asks for a human gets transferred. Empty = no transfer.
+    fallback_phone_number: str | None = None
     created_at: datetime
     updated_at: datetime
     # Computed: true if menu has changed since the assistant was last synced.
@@ -205,6 +208,21 @@ class VoiceSettingsUpdate(BaseModel):
     end_call_phrases: list[str] | None = None
     enabled: bool | None = None
     send_order_confirmations: bool | None = None
+    fallback_phone_number: str | None = Field(default=None, max_length=40)
+
+    @field_validator("fallback_phone_number")
+    @classmethod
+    def _valid_fallback(cls, v: str | None) -> str | None:
+        """Vapi requires E.164. An empty string is how the owner clears it —
+        it must survive validation so it can overwrite an existing number."""
+        if v is None:
+            return v
+        v = v.strip()
+        if not v:
+            return ""
+        if not re.fullmatch(r"\+\d{8,15}", v):
+            raise ValueError("Use E.164 format, e.g. +14155551234")
+        return v
 
 
 class LocationVoiceConfig(BaseModel):
