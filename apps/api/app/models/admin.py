@@ -20,6 +20,11 @@ class AdminWorkspaceListItem(BaseModel):
     member_count: int
     location_count: int
     open_ticket_count: int
+    # Health at a glance, so a broken or dormant business is visible from the
+    # list instead of only after opening it.
+    last_activity_at: datetime | None = None
+    error_count: int = 0
+    voice_enabled: bool = False
     created_at: datetime
     updated_at: datetime
 

@@ -1,9 +1,58 @@
+from datetime import UTC, datetime, timedelta
+
 from app.core.exceptions import NotFoundError
+from app.core.logging import get_logger
 from app.core.supabase import get_supabase_admin
 from app.models.admin import AdminWorkspaceDetail, AdminWorkspaceListItem
 from app.models.location import Location
 from app.models.workspace import Workspace, WorkspaceStatus
 from app.services import audit_service, member_service
+
+log = get_logger(__name__)
+
+
+def _last_activity() -> dict[str, str]:
+    """workspace_id -> last activity timestamp, aggregated DB-side.
+
+    Each health lookup is isolated: a missing migration should cost one column,
+    not the whole workspaces list.
+    """
+    try:
+        res = get_supabase_admin().rpc("workspace_last_activity", {}).execute()
+        return {r["workspace_id"]: r["last_activity_at"] for r in (res.data or [])}
+    except Exception as exc:
+        log.warning("admin_last_activity_unavailable", error=str(exc))
+        return {}
+
+
+def _error_counts(days: int = 30) -> dict[str, int]:
+    since = (datetime.now(UTC) - timedelta(days=days)).isoformat()
+    try:
+        res = (
+            get_supabase_admin()
+            .table("error_logs")
+            .select("workspace_id")
+            .gte("created_at", since)
+            .execute()
+        )
+    except Exception as exc:
+        log.warning("admin_error_counts_unavailable", error=str(exc))
+        return {}
+    counts: dict[str, int] = {}
+    for row in res.data or []:
+        ws = row.get("workspace_id")
+        if ws:
+            counts[ws] = counts.get(ws, 0) + 1
+    return counts
+
+
+def _voice_enabled() -> dict[str, bool]:
+    try:
+        res = get_supabase_admin().table("voice_settings").select("workspace_id, enabled").execute()
+        return {r["workspace_id"]: bool(r.get("enabled")) for r in (res.data or [])}
+    except Exception as exc:
+        log.warning("admin_voice_enabled_unavailable", error=str(exc))
+        return {}
 
 
 def _list_with_counts() -> dict[str, dict[str, int]]:
@@ -55,6 +104,9 @@ def list_workspaces(
 
     res = query.execute()
     counts = _list_with_counts() if res.data else {}
+    last_activity = _last_activity() if res.data else {}
+    error_counts = _error_counts() if res.data else {}
+    voice_enabled = _voice_enabled() if res.data else {}
 
     return [
         AdminWorkspaceListItem(
@@ -67,6 +119,9 @@ def list_workspaces(
             member_count=counts.get(row["id"], {}).get("member_count", 0),
             location_count=counts.get(row["id"], {}).get("location_count", 0),
             open_ticket_count=counts.get(row["id"], {}).get("open_ticket_count", 0),
+            last_activity_at=last_activity.get(row["id"]),
+            error_count=error_counts.get(row["id"], 0),
+            voice_enabled=voice_enabled.get(row["id"], False),
             created_at=row["created_at"],
             updated_at=row["updated_at"],
         )

@@ -27,6 +27,9 @@ export interface AdminWorkspaceListItem {
   member_count: number;
   location_count: number;
   open_ticket_count: number;
+  last_activity_at: string | null;
+  error_count: number;
+  voice_enabled: boolean;
   created_at: string;
   updated_at: string;
 }
