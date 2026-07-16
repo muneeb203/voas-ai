@@ -16,6 +16,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { AdminPageHeader } from '@/components/admin/admin-page-header';
+import { RefreshButton } from '@/components/admin/refresh-button';
 
 export const metadata: Metadata = {
   title: 'Admin · Workspaces',
@@ -61,6 +62,7 @@ export default async function AdminWorkspacesPage({
         eyebrow="Operations"
         title="Workspaces"
         description={`${workspaces.length} workspace${workspaces.length === 1 ? '' : 's'}`}
+        action={<RefreshButton />}
       />
 
       <form className="mb-4 flex flex-wrap items-center gap-2">
@@ -114,9 +116,12 @@ export default async function AdminWorkspacesPage({
                   <TableHead>Vertical</TableHead>
                   <TableHead>Plan</TableHead>
                   <TableHead>Status</TableHead>
+                  <TableHead>Voice</TableHead>
                   <TableHead>Members</TableHead>
                   <TableHead>Locations</TableHead>
                   <TableHead>Open tickets</TableHead>
+                  <TableHead>Errors 30d</TableHead>
+                  <TableHead>Last activity</TableHead>
                   <TableHead>Created</TableHead>
                 </TableRow>
               </TableHeader>
@@ -137,9 +142,28 @@ export default async function AdminWorkspacesPage({
                       <Badge variant="outline">{w.plan}</Badge>
                     </TableCell>
                     <TableCell>{statusBadge(w.status)}</TableCell>
+                    <TableCell>
+                      {w.voice_enabled ? (
+                        <Badge variant="success">On</Badge>
+                      ) : (
+                        <Badge variant="secondary">Off</Badge>
+                      )}
+                    </TableCell>
                     <TableCell>{w.member_count}</TableCell>
                     <TableCell>{w.location_count}</TableCell>
                     <TableCell>{w.open_ticket_count}</TableCell>
+                    <TableCell>
+                      {w.error_count > 0 ? (
+                        <span className="font-medium text-error">{w.error_count}</span>
+                      ) : (
+                        <span className="text-muted-foreground">0</span>
+                      )}
+                    </TableCell>
+                    <TableCell className="whitespace-nowrap text-sm text-muted-foreground">
+                      {w.last_activity_at
+                        ? formatDistanceToNow(new Date(w.last_activity_at), { addSuffix: true })
+                        : 'Never'}
+                    </TableCell>
                     <TableCell className="text-sm text-muted-foreground">
                       {formatDistanceToNow(new Date(w.created_at), { addSuffix: true })}
                     </TableCell>
