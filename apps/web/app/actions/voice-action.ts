@@ -20,6 +20,11 @@ const SettingsSchema = z.object({
   language: z.enum(['en', 'ar', 'ur']),
   enabled: z.boolean(),
   send_order_confirmations: z.boolean(),
+  // Empty is valid — that's how an owner turns the handoff off.
+  fallback_phone_number: z
+    .string()
+    .trim()
+    .regex(/^(\+\d{8,15})?$/, 'Use E.164 format, e.g. +14155551234'),
 });
 
 const LocationVoiceSchema = z.object({
@@ -65,6 +70,7 @@ export async function updateVoiceSettingsAction(
     language: String(formData.get('language') ?? 'en'),
     enabled: formData.get('enabled') === 'on',
     send_order_confirmations: formData.get('send_order_confirmations') === 'on',
+    fallback_phone_number: String(formData.get('fallback_phone_number') ?? ''),
   });
   if (!parsed.success) {
     return {

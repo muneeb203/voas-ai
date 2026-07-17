@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Sparkles, CheckCircle2, AlertCircle, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useActionState } from '@/lib/use-action-state';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { Input } from '@/components/ui/input';
@@ -429,6 +430,27 @@ export function VoiceSettingsForm({
             Automatically send a WhatsApp/SMS confirmation after every order
           </span>
         </div>
+      </Field>
+
+      <Field
+        label="Transfer to a human"
+        htmlFor="fallback_phone_number"
+        help={
+          <Badge variant="accent" className="px-1.5 py-0 text-[10px] uppercase tracking-wide">
+            Beta
+          </Badge>
+        }
+        error={fieldErrors?.fallback_phone_number}
+        hint="When a caller asks for a person, the agent transfers the call here. Leave empty to keep every call with the AI. Use a staff line — not the number callers dial to reach the agent."
+      >
+        <Input
+          id="fallback_phone_number"
+          name="fallback_phone_number"
+          type="tel"
+          placeholder="+14155551234"
+          defaultValue={settings.fallback_phone_number ?? ''}
+          disabled={disabled || pending}
+        />
       </Field>
 
       <Button type="submit" disabled={disabled || pending}>

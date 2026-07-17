@@ -1,7 +1,7 @@
 from datetime import UTC, datetime
 
 from app.config import get_settings
-from app.core.exceptions import AppError, NotFoundError
+from app.core.exceptions import AppError, ConflictError, NotFoundError
 from app.core.logging import get_logger
 from app.core.supabase import get_supabase_admin
 from app.integrations import vapi
@@ -196,6 +196,18 @@ def _sync_assistant(workspace_id: str, settings: VoiceSettings) -> str | None:
         context_md = _menu_context_for_workspace(workspace_id)
     full_prompt = f"{settings.system_prompt}\n\n{context_md}".strip()
 
+    # The owner's prompt doesn't know about the transfer tool, so state the rule
+    # here — and only when a number is actually set, so the agent never offers a
+    # handoff it can't perform.
+    fallback = (settings.fallback_phone_number or "").strip()
+    if fallback:
+        full_prompt = (
+            f"{full_prompt}\n\n--- HUMAN HANDOFF ---\n"
+            "If the customer asks to speak to a human, a person, a manager, or "
+            "the front desk, call the `transferCall` tool to put them through. "
+            "Don't argue or try to handle it yourself — transfer them."
+        )
+
     payload = vapi.assistant_payload(
         system_prompt=full_prompt,
         greeting=settings.greeting,
@@ -205,6 +217,7 @@ def _sync_assistant(workspace_id: str, settings: VoiceSettings) -> str | None:
         end_call_phrases=settings.end_call_phrases,
         language=settings.language,
         vertical=vertical,
+        fallback_number=fallback or None,
     )
 
     if settings.vapi_assistant_id:
@@ -212,6 +225,35 @@ def _sync_assistant(workspace_id: str, settings: VoiceSettings) -> str | None:
         return settings.vapi_assistant_id
 
     return vapi.create_assistant(payload)
+
+
+def _digits(number: str) -> str:
+    return "".join(c for c in number if c.isdigit())
+
+
+def _reject_self_transfer(workspace_id: str, fallback: str | None) -> None:
+    """Stop an owner pointing the human-handoff at their own AI line.
+
+    Transferring to the number customers dial to reach the assistant loops the
+    call straight back into the AI — the caller asks for a person and gets the
+    bot again. Compared on digits so +1 415 555-1234 and +14155551234 match.
+    """
+    if not fallback:
+        return
+    db = get_supabase_admin()
+    res = (
+        db.table("location_voice_config")
+        .select("twilio_phone_number")
+        .eq("workspace_id", workspace_id)
+        .execute()
+    )
+    own = {_digits(r["twilio_phone_number"]) for r in (res.data or []) if r.get("twilio_phone_number")}
+    if _digits(fallback) in own:
+        raise ConflictError(
+            "That's the number customers call to reach your AI agent — "
+            "transferring to it would send them back to the agent. "
+            "Use a staff line instead."
+        )
 
 
 def update_settings(
@@ -231,6 +273,8 @@ def update_settings(
     db = get_supabase_admin()
 
     changes = payload.model_dump(exclude_none=True)
+
+    _reject_self_transfer(workspace_id, changes.get("fallback_phone_number"))
 
     # If language is changing AND the prompt/greeting being submitted are
     # still the canned defaults from the previous language (i.e. owner never
