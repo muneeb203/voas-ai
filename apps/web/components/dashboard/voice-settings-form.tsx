@@ -418,7 +418,15 @@ export function VoiceSettingsForm({
         Voice agent enabled (incoming calls answered)
       </label>
 
-      <Field label="Order confirmations" htmlFor="send_order_confirmations">
+      <Field
+        label="Order confirmations"
+        htmlFor="send_order_confirmations"
+        help={
+          <Badge variant="accent" className="px-1.5 py-0 text-[10px] uppercase tracking-wide">
+            Beta
+          </Badge>
+        }
+      >
         <div className="flex items-center gap-3">
           <Switch
             id="send_order_confirmations"
