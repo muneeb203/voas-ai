@@ -150,7 +150,12 @@ function WhatsAppCard({
         </div>
 
         <div>
-          <h3 className="text-base font-semibold">WhatsApp</h3>
+          <div className="flex items-center gap-1.5">
+            <h3 className="text-base font-semibold">WhatsApp</h3>
+            <Badge variant="accent" className="px-1.5 py-0 text-[10px] uppercase tracking-wide">
+              Beta
+            </Badge>
+          </div>
           <p className="mt-1 text-sm text-muted-foreground">
             AI answers WhatsApp messages via Twilio. Configure your agent and assign a WhatsApp
             number per location.
