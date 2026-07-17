@@ -171,7 +171,6 @@ AVAILABLE_VOICES = [
 AVAILABLE_MODELS = [
     {"id": "gpt-4o-mini", "label": "GPT-4o mini (fast, cheap, recommended)"},
     {"id": "gpt-4o", "label": "GPT-4o (smarter, slower)"},
-    {"id": "claude-3-5-sonnet", "label": "Claude 3.5 Sonnet"},
 ]
 
 

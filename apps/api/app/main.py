@@ -16,6 +16,7 @@ from app.core.exceptions import (
     validation_exception_handler,
 )
 from app.core.logging import configure_logging, get_logger
+from app.core.rate_limit import RateLimitMiddleware
 from app.routers import (
     admin,
     analytics,
@@ -105,6 +106,10 @@ def create_app() -> FastAPI:
         lifespan=lifespan,
     )
 
+    # Order matters: Starlette runs the LAST-added middleware outermost. Add the
+    # rate limiter FIRST and CORS LAST so CORS wraps it — a 429 then still carries
+    # CORS headers and the browser can read it, instead of an opaque CORS error.
+    app.add_middleware(RateLimitMiddleware)
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors_origins_list,

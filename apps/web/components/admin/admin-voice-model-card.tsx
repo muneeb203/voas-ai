@@ -18,7 +18,6 @@ import { setWorkspaceVoiceModelAction } from '@/app/actions/admin-action';
 const VOICE_MODEL_OPTIONS = [
   { id: 'gpt-4o-mini', label: 'GPT-4o mini (fast, cheap, default)' },
   { id: 'gpt-4o', label: 'GPT-4o (smarter, slower)' },
-  { id: 'claude-3-5-sonnet', label: 'Claude 3.5 Sonnet (untested via Vapi)' },
 ] as const;
 
 export function AdminVoiceModelCard({

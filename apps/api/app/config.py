@@ -34,6 +34,7 @@ class Settings(BaseSettings):
     smtp_user: str | None = None
     smtp_password: str | None = None
 
+    rate_limit_enabled: bool = True
     rate_limit_global_per_hour: int = Field(default=1000, ge=1)
     rate_limit_writes_per_minute: int = Field(default=100, ge=1)
 
