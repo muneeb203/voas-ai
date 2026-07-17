@@ -168,6 +168,15 @@ export async function updateAdminKioskSettingsAction(
   return { error: null };
 }
 
+export async function setWorkspaceVoiceModelAction(workspaceId: string, model: string) {
+  await requireAdminSession(`/admin/workspaces/${workspaceId}`);
+  const { setWorkspaceVoiceModel } = await import('@/lib/api/admin');
+  const res = await setWorkspaceVoiceModel(workspaceId, model);
+  if (isApiError(res)) return { error: res.error.message };
+  revalidatePath(`/admin/workspaces/${workspaceId}`);
+  return { error: null };
+}
+
 export async function topupKioskCreditsAction(workspaceId: string, amount: number) {
   await requireAdminSession(`/admin/workspaces/${workspaceId}`);
   const { topupKioskCredits } = await import('@/lib/api/admin');

@@ -455,6 +455,13 @@ export function updateAdminKioskSettings(
   });
 }
 
+export function setWorkspaceVoiceModel(workspaceId: string, model: string) {
+  return apiCall<{ model: string }>(`/v1/admin/workspaces/${workspaceId}/voice-model`, {
+    method: 'PATCH',
+    body: { model },
+  });
+}
+
 export function topupKioskCredits(workspaceId: string, amount: number) {
   return apiCall<AdminKioskSettings>(`/v1/admin/workspaces/${workspaceId}/kiosk-topup`, {
     method: 'POST',

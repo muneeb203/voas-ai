@@ -16,7 +16,9 @@ const SettingsSchema = z.object({
   system_prompt: z.string().min(20, 'Add a bit more detail to the prompt').max(8000),
   greeting: z.string().min(5).max(500),
   voice: z.string().min(1).max(80),
-  model: z.string().min(1).max(80),
+  // model is intentionally NOT owner-editable — it's fixed to a default and only
+  // the VOAS admin panel can change it. Leaving it out means owner saves never
+  // overwrite an admin-set model.
   language: z.enum(['en', 'ar', 'ur']),
   enabled: z.boolean(),
   send_order_confirmations: z.boolean(),
@@ -66,7 +68,6 @@ export async function updateVoiceSettingsAction(
     system_prompt: String(formData.get('system_prompt') ?? '').trim(),
     greeting: String(formData.get('greeting') ?? '').trim(),
     voice: String(formData.get('voice') ?? 'rachel'),
-    model: String(formData.get('model') ?? 'gpt-4o-mini'),
     language: String(formData.get('language') ?? 'en'),
     enabled: formData.get('enabled') === 'on',
     send_order_confirmations: formData.get('send_order_confirmations') === 'on',

@@ -96,14 +96,3 @@ export const DASHBOARD_NAV = [
   { href: '/settings', label: 'Settings', icon: 'Settings' },
   { href: '/support', label: 'Support', icon: 'LifeBuoy' },
 ] as const;
-
-export const ADMIN_NAV = [
-  { href: '/admin/workspaces', label: 'Workspaces', icon: 'Building2' },
-  { href: '/admin/users', label: 'Users', icon: 'Users' },
-  { href: '/admin/support', label: 'Support Inbox', icon: 'LifeBuoy' },
-  { href: '/admin/audit-log', label: 'Audit Log', icon: 'ScrollText' },
-  { href: '/admin/contact-submissions', label: 'Contact Forms', icon: 'Mail' },
-  { href: '/admin/announcements', label: 'Announcements', icon: 'Megaphone' },
-  { href: '/admin/usage', label: 'Usage & billing', icon: 'Gauge' },
-  { href: '/admin/settings', label: 'Settings', icon: 'Settings' },
-] as const;
