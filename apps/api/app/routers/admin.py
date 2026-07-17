@@ -1,6 +1,6 @@
 from datetime import UTC, datetime, timedelta
 
-from fastapi import APIRouter, Query, status
+from fastapi import APIRouter, BackgroundTasks, Query, status
 from pydantic import BaseModel, Field
 
 from app.core.supabase import get_supabase_admin
@@ -32,6 +32,7 @@ from app.models.ticket import (
     TicketStatus,
     TicketWithMessages,
 )
+from app.models.voice import VoiceSettings
 from app.models.workspace import Workspace
 from app.services import (
     admin_activity_service,
@@ -45,6 +46,7 @@ from app.services import (
     billing_service,
     error_log_service,
     impersonation_service,
+    voice_service,
 )
 from app.utils.responses import DataResponse, ok
 
@@ -156,6 +158,25 @@ async def get_workspace_knowledge_base(
     workspace_id: str, _: AdminContextDep
 ) -> DataResponse[AdminKnowledgeBase]:
     return ok(admin_kb_service.get_knowledge_base(workspace_id))
+
+
+class AdminVoiceModelBody(BaseModel):
+    model: str = Field(..., min_length=1, max_length=80)
+
+
+@router.patch(
+    "/workspaces/{workspace_id}/voice-model",
+    response_model=DataResponse[VoiceSettings],
+)
+async def set_workspace_voice_model(
+    workspace_id: str,
+    body: AdminVoiceModelBody,
+    ctx: AdminContextDep,
+    background_tasks: BackgroundTasks,
+) -> DataResponse[VoiceSettings]:
+    settings = voice_service.set_model_admin(workspace_id, body.model, ctx.user.id)
+    background_tasks.add_task(voice_service.sync_assistant_now, workspace_id)
+    return ok(settings)
 
 
 @router.post(

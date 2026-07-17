@@ -190,6 +190,26 @@ def _sync_assistant(workspace_id: str, settings: VoiceSettings) -> str | None:
     Returns the assistant id (creates if missing)."""
     cfg = get_settings()
     vertical = _vertical(workspace_id)
+
+    # Agent switched off: push a minimal "closed" assistant so incoming calls get
+    # a short message and hang up, instead of a live AI. No menu/services context
+    # or tools needed — skip that work entirely.
+    if not settings.enabled:
+        payload = vapi.assistant_payload(
+            system_prompt="",
+            greeting="",
+            voice=settings.voice,
+            model=settings.model,
+            server_url=cfg.vapi_server_url,
+            language=settings.language,
+            vertical=vertical,
+            enabled=False,
+        )
+        if settings.vapi_assistant_id:
+            vapi.update_assistant(settings.vapi_assistant_id, payload)
+            return settings.vapi_assistant_id
+        return vapi.create_assistant(payload)
+
     if vertical == "salon":
         context_md = _services_context_for_workspace(workspace_id)
     else:
@@ -362,6 +382,37 @@ def apply_vertical_to_voice(workspace_id: str, vertical: str) -> None:
     if _is_canned_greeting(cur.get("greeting", "")):
         updates["greeting"] = SALON_DEFAULT_GREETING if is_salon else DEFAULT_GREETING
     db.table("voice_settings").update(updates).eq("workspace_id", workspace_id).execute()
+
+
+def set_model_admin(workspace_id: str, model: str, admin_actor_id: str) -> VoiceSettings:
+    """Admin-only: change which LLM a workspace's agent uses.
+
+    Owners no longer pick the model (it's fixed to a sensible default); this is
+    the escape hatch for the VOAS team. Validated against the known list so a
+    typo can't push an unroutable model to Vapi. The route schedules the resync.
+    """
+    if model not in {m["id"] for m in AVAILABLE_MODELS}:
+        raise AppError(f"Unknown model: {model}")
+    db = get_supabase_admin()
+    get_or_create_settings(workspace_id)  # ensure a row exists
+    res = (
+        db.table("voice_settings")
+        .update({"model": model, "sync_status": "pending", "sync_error": None})
+        .eq("workspace_id", workspace_id)
+        .execute()
+    )
+    if not res.data:
+        raise NotFoundError("Voice settings not found")
+    audit_service.write(
+        actor_type="admin",
+        actor_id=admin_actor_id,
+        workspace_id=workspace_id,
+        action="admin.voice.model_changed",
+        resource_type="voice_settings",
+        resource_id=workspace_id,
+        metadata={"model": model},
+    )
+    return _hydrate_settings(res.data[0], workspace_id)
 
 
 def sync_assistant_now(workspace_id: str) -> None:

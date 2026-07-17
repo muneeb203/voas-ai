@@ -13,6 +13,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { AdminWorkspaceBillingPanel } from '@/components/admin/admin-workspace-billing-panel';
 import { AdminKioskSettingsCard } from '@/components/admin/admin-kiosk-settings-card';
 import { AdminKioskMetricsCard } from '@/components/admin/admin-kiosk-metrics-card';
+import { AdminVoiceModelCard } from '@/components/admin/admin-voice-model-card';
 import { AdminKnowledgeBasePanel } from '@/components/admin/admin-knowledge-base-panel';
 import {
   Table,
@@ -329,6 +330,13 @@ export default async function AdminWorkspaceDetailPage({
                 </OverviewField>
               </CardContent>
             </Card>
+
+            <div className="md:col-span-2">
+              <AdminVoiceModelCard
+                workspaceId={workspace.id}
+                currentModel={kb?.voice?.model ?? null}
+              />
+            </div>
           </div>
         </TabsContent>
 

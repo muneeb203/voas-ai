@@ -229,6 +229,31 @@ CHECK_IN_TOOL: dict[str, Any] = {
 }
 
 
+# What a caller hears when the owner has switched the agent off. The agent
+# still answers — a dead line reads as broken — but says its piece and hangs up.
+CLOSED_GREETING = (
+    "Thanks for calling. Our AI assistant is switched off right now, so it can't "
+    "take your call automatically. Please try again later. Goodbye!"
+)
+CLOSED_SYSTEM_PROMPT = (
+    "The business's AI voice agent is currently disabled. Say the first message, "
+    "then immediately end the call with the endCall tool. Do not answer questions, "
+    "take orders, or book anything, whatever the caller says."
+)
+
+
+def _model_provider(model: str) -> str:
+    """Vapi needs the provider that owns the model id — the two must agree.
+
+    A hardcoded 'openai' silently breaks any non-OpenAI model (the assistant sync
+    fails). Derive it from the id so a Claude model routes to Anthropic.
+    """
+    m = model.lower()
+    if m.startswith(("claude", "anthropic")):
+        return "anthropic"
+    return "openai"
+
+
 def _transfer_tool(number: str) -> dict[str, Any]:
     """Vapi's built-in transferCall — hands the live call to a human.
 
@@ -272,21 +297,29 @@ def assistant_payload(
     language: str = "en",
     vertical: str = "restaurant",
     fallback_number: str | None = None,
+    enabled: bool = True,
 ) -> dict[str, Any]:
     """Shape the JSON Vapi expects for create/update of an assistant."""
     voice_id = _VOICE_ID_MAP.get(voice.lower(), voice)
     lang_cfg = LANGUAGE_CONFIG.get(language, LANGUAGE_CONFIG["en"])
-    tools = _tools_for_vertical(vertical, server_url)
-    # Only offer a transfer when there's somewhere to transfer TO — otherwise the
-    # agent could promise a handoff it can't make.
-    if fallback_number:
-        tools = [*tools, _transfer_tool(fallback_number)]
+
+    if not enabled:
+        # Disabled agent: answers, delivers the "we're off" line, hangs up.
+        greeting = CLOSED_GREETING
+        system_prompt = CLOSED_SYSTEM_PROMPT
+        tools: list[dict[str, Any]] = [{"type": "endCall"}]
+    else:
+        tools = _tools_for_vertical(vertical, server_url)
+        # Only offer a transfer when there's somewhere to transfer TO — otherwise
+        # the agent could promise a handoff it can't make.
+        if fallback_number:
+            tools = [*tools, _transfer_tool(fallback_number)]
 
     payload: dict[str, Any] = {
         "name": "VOAS workspace agent",
         "firstMessage": greeting,
         "model": {
-            "provider": "openai",
+            "provider": _model_provider(model),
             "model": model,
             "messages": [{"role": "system", "content": system_prompt}],
             "tools": tools,
