@@ -1,10 +1,10 @@
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, BackgroundTasks, Query
 from fastapi import status as http_status
 from pydantic import BaseModel, Field
 
 from app.deps import WorkspaceContextDep
 from app.models.order import Order, OrderStatus
-from app.services import order_service
+from app.services import order_confirmation_service, order_service
 from app.utils.responses import DataResponse, ok
 
 router = APIRouter(tags=["orders"])
@@ -32,13 +32,31 @@ class ManualOrderInput(BaseModel):
     response_model=DataResponse[Order],
     status_code=http_status.HTTP_201_CREATED,
 )
-async def create_order(payload: ManualOrderInput, ctx: WorkspaceContextDep) -> DataResponse[Order]:
+async def create_order(
+    payload: ManualOrderInput,
+    ctx: WorkspaceContextDep,
+    background_tasks: BackgroundTasks,
+) -> DataResponse[Order]:
     order = order_service.create_manual_order(
         ctx.workspace_id,
         items=[{"name": i.name, "quantity": i.quantity} for i in payload.items],
         location_id=payload.location_id,
         customer_name=payload.customer_name,
         customer_phone=payload.customer_phone,
+        fulfillment=payload.fulfillment,
+    )
+    # Same confirmation the voice agent sends — fired after the response so
+    # Twilio latency never slows the staff member's save. The service itself
+    # no-ops when confirmations are off or there's no customer phone.
+    background_tasks.add_task(
+        order_confirmation_service.send_order_confirmation,
+        workspace_id=ctx.workspace_id,
+        location_id=order.location_id,
+        customer_phone=order.customer_phone,
+        customer_name=order.customer_name,
+        order_id=order.id,
+        items_json=[{"name": i.name, "quantity": i.quantity} for i in order.items_json],
+        total_cents=order.total_cents,
         fulfillment=payload.fulfillment,
     )
     return ok(order)
