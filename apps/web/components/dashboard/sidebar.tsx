@@ -7,7 +7,6 @@ import {
   LayoutDashboard,
   MessageSquare,
   ShoppingBag,
-  Users2,
   BookOpen,
   Plug,
   BarChart3,
@@ -49,7 +48,6 @@ function buildSections(vertical: string): NavSection[] {
     isSalon
       ? { href: '/appointments', labelKey: 'appointments', label: 'Appointments', icon: CalendarDays }
       : { href: '/orders', labelKey: 'orders', icon: ShoppingBag },
-    { href: '/customers', labelKey: 'customers', icon: Users2 },
   ];
   const setup: NavItem[] = [
     isSalon
