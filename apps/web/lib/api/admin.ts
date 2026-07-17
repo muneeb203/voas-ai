@@ -203,6 +203,18 @@ export interface AdminActivityItem {
   channel: string | null;
 }
 
+export type AdminLogCategory = 'config' | 'operation' | 'error';
+
+export interface AdminGlobalLogItem {
+  at: string;
+  category: AdminLogCategory;
+  label: string;
+  title: string;
+  subtitle: string | null;
+  workspace_id: string | null;
+  workspace_name: string;
+}
+
 export interface AdminUsageHistoryPoint {
   date: string;
   voice_minutes: number;
@@ -332,6 +344,16 @@ export function listAdminAuditLogs(params: {
   if (params.workspace_id) qs.set('workspace_id', params.workspace_id);
   const suffix = qs.toString() ? `?${qs}` : '';
   return apiCall<AdminAuditEntry[]>(`/v1/admin/audit-logs${suffix}`, { cache: 'no-store' });
+}
+
+export function listAdminGlobalLog(
+  params: { workspace_id?: string; limit?: number } = {},
+) {
+  const qs = new URLSearchParams();
+  if (params.workspace_id) qs.set('workspace_id', params.workspace_id);
+  if (params.limit) qs.set('limit', String(params.limit));
+  const suffix = qs.toString() ? `?${qs}` : '';
+  return apiCall<AdminGlobalLogItem[]>(`/v1/admin/logs${suffix}`, { cache: 'no-store' });
 }
 
 export function listAnnouncements() {

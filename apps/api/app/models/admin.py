@@ -72,6 +72,23 @@ class AdminActivityItem(BaseModel):
     channel: str | None = None
 
 
+class AdminGlobalLogItem(BaseModel):
+    """One row of the cross-workspace log: what happened, to whom, and where.
+
+    Same three categories as a workspace's own Log tab — config changes, things
+    the AI did, things that broke — but carrying the workspace so a row still
+    makes sense when every business shares one table.
+    """
+
+    at: datetime
+    category: Literal["config", "operation", "error"]
+    label: str
+    title: str
+    subtitle: str | None = None
+    workspace_id: str | None = None
+    workspace_name: str
+
+
 class AdminUsageHistoryPoint(BaseModel):
     date: str  # YYYY-MM-DD
     voice_minutes: float

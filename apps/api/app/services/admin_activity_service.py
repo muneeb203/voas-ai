@@ -10,7 +10,11 @@ from typing import ClassVar
 
 from app.core.logging import get_logger
 from app.core.supabase import get_supabase_admin
-from app.models.admin import AdminActivityItem, AdminUsageHistoryPoint
+from app.models.admin import (
+    AdminActivityItem,
+    AdminGlobalLogItem,
+    AdminUsageHistoryPoint,
+)
 
 log = get_logger(__name__)
 
@@ -142,6 +146,172 @@ def list_activity(workspace_id: str, limit: int = 50) -> list[AdminActivityItem]
                 subtitle=f"{a.get('customer_name') or 'Walk-in'} · for {starts}",
                 status=a.get("status"),
             )
+        )
+
+    items.sort(key=lambda i: i.at, reverse=True)
+    return items[:limit]
+
+
+def _workspace_names(db) -> dict[str, str]:
+    try:
+        res = db.table("workspaces").select("id, name").execute()
+    except Exception as exc:
+        log.error("global_log_workspace_names_failed", error=str(exc))
+        return {}
+    return {r["id"]: r["name"] for r in res.data or []}
+
+
+def _scoped(query, workspace_id: str | None):
+    return query.eq("workspace_id", workspace_id) if workspace_id else query
+
+
+def list_global_log(
+    workspace_id: str | None = None, limit: int = 100
+) -> list[AdminGlobalLogItem]:
+    """The whole estate's log in one timeline, newest first.
+
+    Same shape as a single workspace's Log tab, but unscoped by default. Each
+    source is fetched independently: one bad table degrades that source's rows,
+    not the page. Rows whose workspace we can't name still render — an event we
+    can't attribute is exactly the kind of thing an operator needs to see.
+    """
+    db = get_supabase_admin()
+    names = _workspace_names(db)
+    items: list[AdminGlobalLogItem] = []
+
+    def name_of(ws_id: str | None) -> str:
+        if not ws_id:
+            return "System"
+        return names.get(ws_id, "Unknown workspace")
+
+    def add(
+        *,
+        at: str | datetime,
+        category: str,
+        label: str,
+        title: str,
+        subtitle: str | None,
+        ws_id: str | None,
+    ) -> None:
+        items.append(
+            AdminGlobalLogItem(
+                at=_parse(at),
+                category=category,
+                label=label,
+                title=title,
+                subtitle=subtitle,
+                workspace_id=ws_id,
+                workspace_name=name_of(ws_id),
+            )
+        )
+
+    # --- operations: what the AI actually did ---
+    try:
+        convs = _scoped(
+            db.table("conversations").select(
+                "id, workspace_id, channel, status, started_at, customer_phone,"
+                " summary, duration_seconds"
+            ),
+            workspace_id,
+        ).order("started_at", desc=True).limit(limit).execute()
+    except Exception as exc:
+        log.error("global_log_conversations_failed", error=str(exc))
+        convs = _Empty()
+    for c in convs.data or []:
+        channel = (c.get("channel") or "conversation").replace("_", " ")
+        secs = c.get("duration_seconds")
+        duration = f" · {secs // 60}m {secs % 60}s" if isinstance(secs, int) and secs else ""
+        add(
+            at=c["started_at"],
+            category="operation",
+            label=c.get("channel") or "conversation",
+            title=f"{channel.capitalize()} conversation{duration}",
+            subtitle=c.get("summary") or c.get("customer_phone"),
+            ws_id=c.get("workspace_id"),
+        )
+
+    try:
+        orders = _scoped(
+            db.table("orders").select(
+                "id, workspace_id, status, total_cents, customer_name, created_at"
+            ),
+            workspace_id,
+        ).order("created_at", desc=True).limit(limit).execute()
+    except Exception as exc:
+        log.error("global_log_orders_failed", error=str(exc))
+        orders = _Empty()
+    for o in orders.data or []:
+        add(
+            at=o["created_at"],
+            category="operation",
+            label="order",
+            title=f"Order #{str(o['id'])[:8]} · {_money(o.get('total_cents'))}",
+            subtitle=o.get("customer_name") or "Walk-in",
+            ws_id=o.get("workspace_id"),
+        )
+
+    try:
+        appts = _scoped(
+            db.table("salon_appointments").select(
+                "id, workspace_id, service_name, staff_name, customer_name,"
+                " starts_at, status, created_at"
+            ),
+            workspace_id,
+        ).order("created_at", desc=True).limit(limit).execute()
+    except Exception as exc:
+        log.error("global_log_appointments_failed", error=str(exc))
+        appts = _Empty()
+    for a in appts.data or []:
+        with_staff = f" with {a['staff_name']}" if a.get("staff_name") else ""
+        starts = _parse(a["starts_at"]).strftime("%b %d, %I:%M %p").replace(" 0", " ")
+        add(
+            at=a["created_at"],
+            category="operation",
+            label="appointment",
+            title=f"{a.get('service_name') or 'Appointment'}{with_staff}",
+            subtitle=f"{a.get('customer_name') or 'Walk-in'} · for {starts}",
+            ws_id=a.get("workspace_id"),
+        )
+
+    # --- config: who changed what ---
+    try:
+        audits = _scoped(
+            db.table("audit_logs").select(
+                "id, workspace_id, actor_type, action, resource_type, resource_id, created_at"
+            ),
+            workspace_id,
+        ).order("created_at", desc=True).limit(limit).execute()
+    except Exception as exc:
+        log.error("global_log_audit_failed", error=str(exc))
+        audits = _Empty()
+    for e in audits.data or []:
+        resource = e.get("resource_type")
+        add(
+            at=e["created_at"],
+            category="config",
+            label=e.get("action") or "changed",
+            title=e.get("actor_type") or "system",
+            subtitle=f"{resource} {e.get('resource_id') or ''}".strip() if resource else None,
+            ws_id=e.get("workspace_id"),
+        )
+
+    # --- errors: what broke ---
+    try:
+        errors = _scoped(
+            db.table("error_logs").select("id, workspace_id, kind, source, message, created_at"),
+            workspace_id,
+        ).order("created_at", desc=True).limit(limit).execute()
+    except Exception as exc:
+        log.error("global_log_errors_failed", error=str(exc))
+        errors = _Empty()
+    for e in errors.data or []:
+        add(
+            at=e["created_at"],
+            category="error",
+            label=e.get("kind") or "error",
+            title=e.get("source") or "Unknown source",
+            subtitle=e.get("message"),
+            ws_id=e.get("workspace_id"),
         )
 
     items.sort(key=lambda i: i.at, reverse=True)

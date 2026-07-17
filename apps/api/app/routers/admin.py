@@ -11,6 +11,7 @@ from app.models.admin import (
     AdminContactSubmission,
     AdminContactUpdate,
     AdminErrorLogEntry,
+    AdminGlobalLogItem,
     AdminKnowledgeBase,
     AdminUsageHistoryPoint,
     AdminUserSummary,
@@ -112,6 +113,15 @@ async def get_workspace_activity(
     limit: int = Query(default=50, ge=1, le=200),
 ) -> DataResponse[list[AdminActivityItem]]:
     return ok(admin_activity_service.list_activity(workspace_id, limit=limit))
+
+
+@router.get("/logs", response_model=DataResponse[list[AdminGlobalLogItem]])
+async def get_global_log(
+    _: AdminContextDep,
+    workspace_id: str | None = Query(default=None),
+    limit: int = Query(default=100, ge=1, le=300),
+) -> DataResponse[list[AdminGlobalLogItem]]:
+    return ok(admin_activity_service.list_global_log(workspace_id, limit=limit))
 
 
 @router.get(
