@@ -1,5 +1,6 @@
 from datetime import UTC, datetime
 
+from app.config import get_settings
 from app.core.exceptions import AppError, ForbiddenError, NotFoundError
 from app.core.logging import get_logger
 from app.core.supabase import get_supabase_admin
@@ -273,6 +274,14 @@ def add_user_message(
         resource_id=ticket_id,
         metadata={"sender_type": "user", "status_after": new_status},
     )
+
+    # Tell the support team a customer is waiting. Without this the reply only
+    # shows up if someone happens to open the admin inbox.
+    support_inbox = get_settings().support_notification_email
+    if support_inbox:
+        email_service.send_ticket_user_replied(
+            to=support_inbox, ticket_id=ticket_id, subject=ticket["subject"]
+        )
 
     return _hydrate_message(msg_res.data[0])
 

@@ -29,6 +29,8 @@ class Settings(BaseSettings):
 
     resend_api_key: str | None = None
     email_from: str = "no-reply@voas.ai"
+    # Where "a customer replied on a ticket" alerts go. Unset = no alert sent.
+    support_notification_email: str | None = None
     smtp_host: str | None = None
     smtp_port: int = 587
     smtp_user: str | None = None
