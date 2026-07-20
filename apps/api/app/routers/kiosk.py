@@ -1218,22 +1218,26 @@ async def place_manual_order(
             "fulfillment": "pickup",
             "special_instructions": "Placed at kiosk (manual)",
         },
+        assign_token=True,
     )
     if not result.get("success"):
         raise AppError(result.get("message") or "Could not place the order.")
 
+    token = result.get("order_token")
     log.info(
         "kiosk_manual_order",
         workspace_id=workspace_id,
         order_id=result.get("order_id"),
+        order_token=token,
         lines=len(tool_items),
     )
     return ok(
         ManualOrderResult(
             success=True,
             order_id=str(result.get("order_id")) if result.get("order_id") else None,
-            order_number=result.get("order_number"),
-            total=result.get("total"),
+            # The short token IS the number the customer shows staff.
+            order_number=str(token) if token else None,
+            total=result.get("total_dollars") and f"${result['total_dollars']:.2f}",
         )
     )
 
