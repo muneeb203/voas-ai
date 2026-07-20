@@ -2,10 +2,11 @@
 
 import { useState } from 'react';
 import { toast } from 'sonner';
-import { Loader2 } from 'lucide-react';
+import { Loader2, Sparkles } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
+import { KioskToneGeneratorModal } from '@/components/dashboard/kiosk-tone-generator-modal';
 import { updateKioskSettingsAction } from '@/app/actions/kiosk-action';
 import type { KioskSettings } from '@/lib/api/kiosk';
 
@@ -75,6 +76,7 @@ export function KioskSettingsCard({ initialSettings, vertical }: KioskSettingsCa
   const [tone, setTone] = useState(initialSettings[toneKey] ?? '');
   const [handover, setHandover] = useState(initialSettings[handoverKey] ?? '');
   const [saving, setSaving] = useState(false);
+  const [generatorOpen, setGeneratorOpen] = useState(false);
 
   const isDirty =
     theme !== initialSettings.theme ||
@@ -156,12 +158,24 @@ export function KioskSettingsCard({ initialSettings, vertical }: KioskSettingsCa
 
         {/* Owner-editable kiosk voice */}
         <div className="space-y-4 border-t pt-6">
-          <div>
-            <p className="text-sm font-medium text-foreground">How your kiosk speaks</p>
-            <p className="mt-0.5 text-xs text-muted-foreground">
-              Optional. The kiosk always follows its ordering rules — this changes the wording
-              and what customers are told, not how orders are placed.
-            </p>
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <p className="text-sm font-medium text-foreground">How your kiosk speaks</p>
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                Optional. The kiosk always follows its ordering rules — this changes the wording
+                and what customers are told, not how orders are placed.
+              </p>
+            </div>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="flex-shrink-0"
+              onClick={() => setGeneratorOpen(true)}
+            >
+              <Sparkles className="h-3.5 w-3.5" />
+              Auto-generate
+            </Button>
           </div>
 
           <div className="space-y-1.5">
@@ -212,6 +226,16 @@ export function KioskSettingsCard({ initialSettings, vertical }: KioskSettingsCa
           </Button>
         </div>
       </CardContent>
+
+      <KioskToneGeneratorModal
+        open={generatorOpen}
+        onOpenChange={setGeneratorOpen}
+        isSalon={isSalon}
+        onApply={({ tone: t, handover: h }) => {
+          setTone(t);
+          setHandover(h);
+        }}
+      />
     </Card>
   );
 }
