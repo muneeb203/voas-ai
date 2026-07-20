@@ -30,7 +30,7 @@ export default async function SelfOrderPage() {
   const billing = !isApiError(billingRes) ? billingRes.data : null;
   const kioskSettings = !isApiError(settingsRes)
     ? settingsRes.data
-    : { theme: 'gradient' as const, session_lock_enabled: false, kiosk_enabled: false, max_kiosk_urls: 1, kiosk_monthly_limit: 500, kiosk_credits_balance: 0, kiosk_credits_used_this_month: 0, kiosk_month_start: null };
+    : { theme: 'gradient' as const, session_lock_enabled: false, kiosk_enabled: false, max_kiosk_urls: 1, kiosk_monthly_limit: 500, kiosk_credits_balance: 0, kiosk_credits_used_this_month: 0, kiosk_month_start: null, restaurant_tone: null, restaurant_handover: null, salon_tone: null, salon_handover: null };
 
   const tokenByLocation = Object.fromEntries(tokens.map((t) => [t.location_id, t]));
 
@@ -86,7 +86,12 @@ export default async function SelfOrderPage() {
         </CardContent>
       </Card>
 
-      {isOwner && <KioskSettingsCard initialSettings={kioskSettings} />}
+      {isOwner && (
+        <KioskSettingsCard
+          initialSettings={kioskSettings}
+          vertical={session.active.workspace.vertical}
+        />
+      )}
 
       {kioskEnabled && (
         <p className="text-sm text-muted-foreground">

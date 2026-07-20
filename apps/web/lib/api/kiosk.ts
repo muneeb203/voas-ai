@@ -21,6 +21,10 @@ export interface KioskSettings {
   kiosk_credits_balance: number;
   kiosk_credits_used_this_month: number;
   kiosk_month_start: string | null;
+  restaurant_tone: string | null;
+  restaurant_handover: string | null;
+  salon_tone: string | null;
+  salon_handover: string | null;
 }
 
 export interface KioskInfo {

@@ -5,11 +5,13 @@ import { toast } from 'sonner';
 import { Loader2 } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Textarea } from '@/components/ui/textarea';
 import { updateKioskSettingsAction } from '@/app/actions/kiosk-action';
 import type { KioskSettings } from '@/lib/api/kiosk';
 
 interface KioskSettingsCardProps {
   initialSettings: KioskSettings;
+  vertical: string;
 }
 
 type Theme = KioskSettings['theme'];
@@ -64,18 +66,31 @@ const THEMES: { id: Theme; label: string; description: string; preview: React.Re
   },
 ];
 
-export function KioskSettingsCard({ initialSettings }: KioskSettingsCardProps) {
+export function KioskSettingsCard({ initialSettings, vertical }: KioskSettingsCardProps) {
+  const isSalon = vertical === 'salon';
+  const toneKey = isSalon ? 'salon_tone' : 'restaurant_tone';
+  const handoverKey = isSalon ? 'salon_handover' : 'restaurant_handover';
+
   const [theme, setTheme] = useState<Theme>(initialSettings.theme);
+  const [tone, setTone] = useState(initialSettings[toneKey] ?? '');
+  const [handover, setHandover] = useState(initialSettings[handoverKey] ?? '');
   const [saving, setSaving] = useState(false);
 
-  const isDirty = theme !== initialSettings.theme;
+  const isDirty =
+    theme !== initialSettings.theme ||
+    tone !== (initialSettings[toneKey] ?? '') ||
+    handover !== (initialSettings[handoverKey] ?? '');
 
   const balance = initialSettings.kiosk_credits_balance;
   const outOfCredits = balance <= 0;
 
   async function handleSave() {
     setSaving(true);
-    const res = await updateKioskSettingsAction({ theme });
+    const res = await updateKioskSettingsAction({
+      theme,
+      [toneKey]: tone,
+      [handoverKey]: handover,
+    });
     setSaving(false);
     if (res.error) toast.error(res.error);
     else toast.success('Kiosk settings saved');
@@ -136,6 +151,57 @@ export function KioskSettingsCard({ initialSettings }: KioskSettingsCardProps) {
                 </p>
               </button>
             ))}
+          </div>
+        </div>
+
+        {/* Owner-editable kiosk voice */}
+        <div className="space-y-4 border-t pt-6">
+          <div>
+            <p className="text-sm font-medium text-foreground">How your kiosk speaks</p>
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              Optional. The kiosk always follows its ordering rules — this changes the wording
+              and what customers are told, not how orders are placed.
+            </p>
+          </div>
+
+          <div className="space-y-1.5">
+            <label htmlFor="kiosk-tone" className="text-sm font-medium">
+              Tone
+            </label>
+            <Textarea
+              id="kiosk-tone"
+              rows={2}
+              maxLength={1000}
+              value={tone}
+              onChange={(e) => setTone(e.target.value)}
+              placeholder="e.g. Warm and friendly. Greet customers in Urdu, then continue in English."
+            />
+            <p className="text-xs text-muted-foreground">
+              How the kiosk should sound. Leave empty for the default neutral tone.
+            </p>
+          </div>
+
+          <div className="space-y-1.5">
+            <label htmlFor="kiosk-handover" className="text-sm font-medium">
+              {isSalon ? 'What happens after booking' : 'How the order is handed over'}
+            </label>
+            <Textarea
+              id="kiosk-handover"
+              rows={2}
+              maxLength={1000}
+              value={handover}
+              onChange={(e) => setHandover(e.target.value)}
+              placeholder={
+                isSalon
+                  ? 'e.g. Take a seat in the waiting area, your stylist will call you.'
+                  : 'e.g. Wait at the counter, we call your number when it is ready.'
+              }
+            />
+            <p className="text-xs text-muted-foreground">
+              {isSalon
+                ? 'Told to the customer once their appointment is booked.'
+                : 'Told to the customer once their order is placed — table service, counter pickup, etc.'}
+            </p>
           </div>
         </div>
 

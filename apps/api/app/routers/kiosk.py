@@ -6,7 +6,7 @@ from typing import Annotated, Literal
 import httpx
 from fastapi import APIRouter, Path, status
 from fastapi.responses import Response, StreamingResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from app.config import get_settings
 from app.core.exceptions import (
@@ -161,11 +161,21 @@ class KioskSettings(BaseModel):
     kiosk_credits_balance: int = 0
     kiosk_credits_used_this_month: int = 0
     kiosk_month_start: str | None = None
+    restaurant_tone: str | None = None
+    restaurant_handover: str | None = None
+    salon_tone: str | None = None
+    salon_handover: str | None = None
 
 
 class KioskSettingsUpdate(BaseModel):
     theme: str | None = None
     session_lock_enabled: bool | None = None
+    # Owner-editable voice. Empty string clears the field, so these can't use
+    # None-as-absent alone — the router checks for `is not None`.
+    restaurant_tone: str | None = Field(default=None, max_length=1000)
+    restaurant_handover: str | None = Field(default=None, max_length=1000)
+    salon_tone: str | None = Field(default=None, max_length=1000)
+    salon_handover: str | None = Field(default=None, max_length=1000)
 
 
 class KioskInfo(BaseModel):
@@ -231,7 +241,8 @@ def _get_ws_kiosk_settings(db, workspace_id: str) -> KioskSettings:
         db.table("workspace_kiosk_settings")
         .select(
             "theme, session_lock_enabled, kiosk_enabled, max_kiosk_urls, "
-            "kiosk_monthly_limit, kiosk_credits_balance, kiosk_credits_used_this_month, kiosk_month_start"
+            "kiosk_monthly_limit, kiosk_credits_balance, kiosk_credits_used_this_month, "
+            "kiosk_month_start, restaurant_tone, restaurant_handover, salon_tone, salon_handover"
         )
         .eq("workspace_id", workspace_id)
         .limit(1)
@@ -269,13 +280,44 @@ def _is_lock_held(row: dict, session_id: str) -> bool:
     return (datetime.now(UTC) - heartbeat_at) < timedelta(seconds=SESSION_LOCK_TTL_SECONDS)
 
 
+def _owner_voice_block(db, workspace_id: str, vertical: str) -> str:
+    """The owner's tone + order-handover text, as a prompt section.
+
+    Appended AFTER the locked operational rules so it can shape how the kiosk
+    sounds and what it tells customers about collecting their order, but can
+    never remove the rule that an order only exists once place_order is called.
+    """
+    cfg = _get_ws_kiosk_settings(db, workspace_id)
+    tone = (cfg.salon_tone if vertical == "salon" else cfg.restaurant_tone) or ""
+    handover = (cfg.salon_handover if vertical == "salon" else cfg.restaurant_handover) or ""
+    tone, handover = tone.strip(), handover.strip()
+    if not tone and not handover:
+        return ""
+
+    parts = ["\n\n--- HOW THIS BUSINESS WANTS YOU TO SOUND ---"]
+    if tone:
+        parts.append(f"Tone: {tone}")
+    if handover:
+        parts.append(
+            "After the order is placed, tell the customer this is what happens next: "
+            f"{handover}"
+        )
+    parts.append(
+        "Follow this for style and for what you tell the customer — but never at the "
+        "expense of the rules above. Still one short sentence, and still only a real "
+        "tool call places an order."
+    )
+    return "\n".join(parts)
+
+
 def _build_kiosk_system_prompt(db, workspace_id: str) -> str:
     # Self-contained kiosk prompt. We deliberately do NOT reuse the voice
     # system prompt: it requires collecting name/phone and confirming
     # delivery, which a walk-up kiosk never has — that contradiction made the
     # model acknowledge orders verbally instead of calling place_order.
     menu_md = _menu_context_for_workspace(workspace_id)
-    return f"{KIOSK_SYSTEM_PROMPT}{menu_md}".strip()
+    voice = _owner_voice_block(db, workspace_id, "restaurant")
+    return f"{KIOSK_SYSTEM_PROMPT}{menu_md}{voice}".strip()
 
 
 def _get_kiosk_system_prompt(db, workspace_id: str) -> str:
@@ -290,10 +332,12 @@ def _get_kiosk_system_prompt(db, workspace_id: str) -> str:
     return prompt
 
 
-def _build_salon_kiosk_system_prompt(workspace_id: str) -> str:
+def _build_salon_kiosk_system_prompt(db, workspace_id: str) -> str:
     # Not cached: availability changes with every booking, and create_appointment
     # re-checks the slot at commit anyway.
-    return f"{SALON_KIOSK_SYSTEM_PROMPT}{booking_service.availability_prompt_context(workspace_id)}".strip()
+    availability = booking_service.availability_prompt_context(workspace_id)
+    voice = _owner_voice_block(db, workspace_id, "salon")
+    return f"{SALON_KIOSK_SYSTEM_PROMPT}{availability}{voice}".strip()
 
 
 def _appt_display(appt, kind: str, workspace_id: str, location_id: str | None) -> dict:
@@ -596,6 +640,11 @@ async def update_kiosk_settings(
         changes["theme"] = body.theme
     if body.session_lock_enabled is not None:
         changes["session_lock_enabled"] = body.session_lock_enabled
+    for field in ("restaurant_tone", "restaurant_handover", "salon_tone", "salon_handover"):
+        value = getattr(body, field)
+        if value is not None:
+            # "" is a real value here — it's how an owner clears the field.
+            changes[field] = value.strip() or None
 
     if existing.data:
         res = (
@@ -611,6 +660,11 @@ async def update_kiosk_settings(
         changes.setdefault("kiosk_enabled", False)
         changes.setdefault("max_kiosk_urls", 1)
         res = db.table("workspace_kiosk_settings").insert(changes).execute()
+
+    # The restaurant prompt is cached for SYSTEM_PROMPT_TTL_SECONDS. Without this
+    # an owner would edit the tone, walk to the kiosk, and hear the old wording
+    # for up to two minutes — and reasonably conclude it didn't save.
+    _system_prompt_cache.pop(ctx.workspace_id, None)
 
     return ok(KioskSettings(**res.data[0]))
 
@@ -807,7 +861,7 @@ async def kiosk_chat(
 
     vertical = ctx.get("vertical", "restaurant")
     if vertical == "salon":
-        system_prompt = _build_salon_kiosk_system_prompt(workspace_id)
+        system_prompt = _build_salon_kiosk_system_prompt(db, workspace_id)
         tools = [BOOK_APPOINTMENT_TOOL, CHECK_IN_TOOL]
     else:
         system_prompt = _get_kiosk_system_prompt(db, workspace_id)
