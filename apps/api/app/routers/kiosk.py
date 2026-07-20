@@ -165,6 +165,7 @@ class KioskSettings(BaseModel):
     restaurant_handover: str | None = None
     salon_tone: str | None = None
     salon_handover: str | None = None
+    manual_ordering_enabled: bool = False
 
 
 class KioskSettingsUpdate(BaseModel):
@@ -176,6 +177,7 @@ class KioskSettingsUpdate(BaseModel):
     restaurant_handover: str | None = Field(default=None, max_length=1000)
     salon_tone: str | None = Field(default=None, max_length=1000)
     salon_handover: str | None = Field(default=None, max_length=1000)
+    manual_ordering_enabled: bool | None = None
 
 
 class KioskInfo(BaseModel):
@@ -184,6 +186,66 @@ class KioskInfo(BaseModel):
     theme: str
     session_lock_enabled: bool
     vertical: str = "restaurant"
+    # Drives the "Order by tapping" button on the kiosk. Restaurant only.
+    manual_ordering_enabled: bool = False
+
+
+class KioskMenuOption(BaseModel):
+    id: str
+    name: str
+    price_delta_cents: int
+    is_default: bool
+
+
+class KioskMenuGroup(BaseModel):
+    id: str
+    name: str
+    min_select: int
+    max_select: int
+    required: bool
+    options: list[KioskMenuOption]
+
+
+class KioskMenuItem(BaseModel):
+    id: str
+    name: str
+    description: str | None
+    price_cents: int
+    image_url: str | None
+    modifier_groups: list[KioskMenuGroup]
+
+
+class KioskMenuCategory(BaseModel):
+    id: str
+    name: str
+    items: list[KioskMenuItem]
+
+
+class KioskMenu(BaseModel):
+    categories: list[KioskMenuCategory]
+    currency_symbol: str = "$"
+
+
+class ManualOrderOption(BaseModel):
+    option_id: str
+
+
+class ManualOrderLine(BaseModel):
+    item_id: str
+    quantity: int = Field(default=1, ge=1, le=99)
+    option_ids: list[str] = Field(default_factory=list)
+
+
+class ManualOrderBody(BaseModel):
+    items: list[ManualOrderLine] = Field(..., min_length=1, max_length=50)
+
+
+class ManualOrderResult(BaseModel):
+    success: bool
+    order_id: str | None = None
+    order_number: str | None = None
+    total: str | None = None
+    message: str | None = None
 
 
 class KioskSttToken(BaseModel):
@@ -242,7 +304,8 @@ def _get_ws_kiosk_settings(db, workspace_id: str) -> KioskSettings:
         .select(
             "theme, session_lock_enabled, kiosk_enabled, max_kiosk_urls, "
             "kiosk_monthly_limit, kiosk_credits_balance, kiosk_credits_used_this_month, "
-            "kiosk_month_start, restaurant_tone, restaurant_handover, salon_tone, salon_handover"
+            "kiosk_month_start, restaurant_tone, restaurant_handover, salon_tone, salon_handover, "
+            "manual_ordering_enabled"
         )
         .eq("workspace_id", workspace_id)
         .limit(1)
@@ -701,6 +764,11 @@ async def get_kiosk_info(token: Annotated[str, Path()]) -> DataResponse[KioskInf
             theme=kiosk_cfg.theme,
             session_lock_enabled=kiosk_cfg.session_lock_enabled,
             vertical=ws_row.get("vertical") or "restaurant",
+            # Tap-to-order is restaurant-only; a salon kiosk never shows the button.
+            manual_ordering_enabled=(
+                kiosk_cfg.manual_ordering_enabled
+                and (ws_row.get("vertical") or "restaurant") != "salon"
+            ),
         )
     )
 
@@ -1006,6 +1074,168 @@ async def kiosk_chat(
         "Sorry, could you repeat that?",
     )
     return ok(KioskChatResponse(response=text, order_confirmed=False, debug=debug_info))
+
+
+# ── Manual (tap-to-order) mode ────────────────────────────────────────────────
+
+
+def _require_manual_ordering(db, workspace_id: str, vertical: str) -> None:
+    """Manual mode is admin-gated and restaurant-only. Enforced server-side so
+    a crafted request can't order through a kiosk that hasn't been enabled."""
+    if vertical == "salon":
+        raise NotFoundError("Manual ordering is not available on this kiosk")
+    cfg = _get_ws_kiosk_settings(db, workspace_id)
+    if not cfg.manual_ordering_enabled:
+        raise NotFoundError("Manual ordering is not enabled for this kiosk")
+
+
+@public_router.get(
+    "/kiosk/{token}/menu",
+    response_model=DataResponse[KioskMenu],
+)
+async def get_kiosk_menu(token: Annotated[str, Path()]) -> DataResponse[KioskMenu]:
+    """Menu for tap-to-order. Public (kiosk has no login) but token-scoped and
+    gated on manual ordering being enabled."""
+    db = get_supabase_admin()
+    ctx = _get_kiosk_chat_context(db, token)
+    workspace_id = ctx["workspace_id"]
+    _require_manual_ordering(db, workspace_id, ctx.get("vertical", "restaurant"))
+
+    from app.services import menu_service
+
+    categories = menu_service.list_categories(workspace_id)
+    items = menu_service.list_items(workspace_id)
+
+    by_category: dict[str, list[KioskMenuItem]] = {}
+    for it in items:
+        if not it.is_active:
+            continue
+        groups = [
+            KioskMenuGroup(
+                id=g.id,
+                name=g.name,
+                min_select=g.min_select,
+                max_select=g.max_select,
+                required=g.required,
+                options=[
+                    KioskMenuOption(
+                        id=o.id,
+                        name=o.name,
+                        price_delta_cents=o.price_delta_cents,
+                        is_default=o.is_default,
+                    )
+                    for o in g.options
+                ],
+            )
+            for g in it.modifier_groups
+        ]
+        by_category.setdefault(it.category_id, []).append(
+            KioskMenuItem(
+                id=it.id,
+                name=it.name,
+                description=it.description,
+                price_cents=it.price_cents,
+                image_url=it.image_url,
+                modifier_groups=groups,
+            )
+        )
+
+    out = [
+        KioskMenuCategory(id=c.id, name=c.name, items=by_category.get(c.id, []))
+        for c in categories
+        if c.is_active and by_category.get(c.id)
+    ]
+    return ok(KioskMenu(categories=out))
+
+
+@public_router.post(
+    "/kiosk/{token}/manual-order",
+    response_model=DataResponse[ManualOrderResult],
+)
+async def place_manual_order(
+    token: Annotated[str, Path()], body: ManualOrderBody
+) -> DataResponse[ManualOrderResult]:
+    """Place an order from tap-to-order. No AI involved, so no kiosk credit is
+    consumed and the credit balance is not checked — a business that has run out
+    can still take manual orders.
+
+    Prices come from the database, never from the client: the request carries
+    only ids, so a tampered payload can't change what anything costs.
+    """
+    db = get_supabase_admin()
+    ctx = _get_kiosk_chat_context(db, token)
+    workspace_id = ctx["workspace_id"]
+    location_id = ctx["location_id"]
+    _require_manual_ordering(db, workspace_id, ctx.get("vertical", "restaurant"))
+
+    item_ids = [line.item_id for line in body.items]
+    items_res = (
+        db.table("menu_items")
+        .select("id, name, is_active")
+        .eq("workspace_id", workspace_id)
+        .in_("id", item_ids)
+        .execute()
+    )
+    items_by_id = {r["id"]: r for r in (items_res.data or []) if r.get("is_active")}
+
+    option_ids = [oid for line in body.items for oid in line.option_ids]
+    options_by_id: dict[str, dict] = {}
+    if option_ids:
+        # Only option NAMES are needed — downstream pricing re-resolves each
+        # name against this workspace's own item, so a foreign or tampered id
+        # can never change what anything costs (it just won't match, delta 0).
+        opts_res = (
+            db.table("menu_modifier_options")
+            .select("id, name")
+            .in_("id", option_ids)
+            .execute()
+        )
+        options_by_id = {r["id"]: r for r in (opts_res.data or [])}
+
+    tool_items: list[dict] = []
+    for line in body.items:
+        item = items_by_id.get(line.item_id)
+        if not item:
+            continue
+        names = [options_by_id[o]["name"] for o in line.option_ids if o in options_by_id]
+        tool_items.append(
+            {"name": item["name"], "quantity": line.quantity, "modifiers": names}
+        )
+
+    if not tool_items:
+        raise AppError("None of those items are available right now.")
+
+    # Same path the voice agent uses — one pricing, tax and order-row
+    # implementation rather than a second one that can drift.
+    result = voice_order_service.place_order_from_tool_call(
+        workspace_id=workspace_id,
+        location_id=location_id,
+        conversation_id=None,
+        customer_id=None,
+        customer_phone=None,
+        arguments={
+            "items": tool_items,
+            "fulfillment": "pickup",
+            "special_instructions": "Placed at kiosk (manual)",
+        },
+    )
+    if not result.get("success"):
+        raise AppError(result.get("message") or "Could not place the order.")
+
+    log.info(
+        "kiosk_manual_order",
+        workspace_id=workspace_id,
+        order_id=result.get("order_id"),
+        lines=len(tool_items),
+    )
+    return ok(
+        ManualOrderResult(
+            success=True,
+            order_id=str(result.get("order_id")) if result.get("order_id") else None,
+            order_number=result.get("order_number"),
+            total=result.get("total"),
+        )
+    )
 
 
 @public_router.post("/kiosk/{token}/speak")

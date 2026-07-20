@@ -169,7 +169,7 @@ export default async function AdminWorkspaceDetailPage({
   const logLoadError = activityError ?? errorsError;
   const kioskSettings = !isApiError(kioskRes)
     ? kioskRes.data
-    : { kiosk_enabled: false, max_kiosk_urls: 1, theme: 'gradient' as const, session_lock_enabled: false, kiosk_monthly_limit: 500, kiosk_credits_balance: 0, kiosk_credits_used_this_month: 0, kiosk_month_start: null };
+    : { kiosk_enabled: false, max_kiosk_urls: 1, theme: 'gradient' as const, session_lock_enabled: false, kiosk_monthly_limit: 500, kiosk_credits_balance: 0, kiosk_credits_used_this_month: 0, kiosk_month_start: null, manual_ordering_enabled: false };
   const emptyWindow = {
     total_turns: 0,
     deepgram_turns: 0,
@@ -359,7 +359,7 @@ export default async function AdminWorkspaceDetailPage({
         <TabsContent value="kiosk">
           <div className="space-y-6">
             <AdminKioskMetricsCard metrics={kioskMetrics} />
-            <AdminKioskSettingsCard workspaceId={workspace.id} settings={kioskSettings} plan={workspace.plan} />
+            <AdminKioskSettingsCard workspaceId={workspace.id} settings={kioskSettings} plan={workspace.plan} vertical={workspace.vertical} />
           </div>
         </TabsContent>
 

@@ -436,6 +436,7 @@ export interface AdminKioskSettings {
   kiosk_credits_balance: number;
   kiosk_credits_used_this_month: number;
   kiosk_month_start: string | null;
+  manual_ordering_enabled: boolean;
 }
 
 export function getAdminKioskSettings(workspaceId: string) {
@@ -447,7 +448,7 @@ export function getAdminKioskSettings(workspaceId: string) {
 
 export function updateAdminKioskSettings(
   workspaceId: string,
-  body: { kiosk_enabled?: boolean; max_kiosk_urls?: number; kiosk_monthly_limit?: number },
+  body: { kiosk_enabled?: boolean; max_kiosk_urls?: number; kiosk_monthly_limit?: number; manual_ordering_enabled?: boolean },
 ) {
   return apiCall<AdminKioskSettings>(`/v1/admin/workspaces/${workspaceId}/kiosk-settings`, {
     method: 'PATCH',

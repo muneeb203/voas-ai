@@ -107,3 +107,70 @@ export async function kioskSpeak(token: string, text: string): Promise<Blob | nu
     return null;
   }
 }
+
+
+// ── Manual (tap-to-order) mode ────────────────────────────────────────────────
+
+export interface KioskMenuOption {
+  id: string;
+  name: string;
+  price_delta_cents: number;
+  is_default: boolean;
+}
+
+export interface KioskMenuGroup {
+  id: string;
+  name: string;
+  min_select: number;
+  max_select: number;
+  required: boolean;
+  options: KioskMenuOption[];
+}
+
+export interface KioskMenuItem {
+  id: string;
+  name: string;
+  description: string | null;
+  price_cents: number;
+  image_url: string | null;
+  modifier_groups: KioskMenuGroup[];
+}
+
+export interface KioskMenuCategory {
+  id: string;
+  name: string;
+  items: KioskMenuItem[];
+}
+
+export interface KioskMenu {
+  categories: KioskMenuCategory[];
+  currency_symbol: string;
+}
+
+export interface ManualOrderLine {
+  item_id: string;
+  quantity: number;
+  option_ids: string[];
+}
+
+export interface ManualOrderResult {
+  success: boolean;
+  order_id: string | null;
+  order_number: string | null;
+  total: string | null;
+  message: string | null;
+}
+
+export function getKioskMenu(token: string): Promise<ApiResponse<KioskMenu>> {
+  return publicFetch(`/v1/kiosk/${token}/menu`, { cache: 'no-store' });
+}
+
+export function placeManualOrder(
+  token: string,
+  items: ManualOrderLine[],
+): Promise<ApiResponse<ManualOrderResult>> {
+  return publicFetch(`/v1/kiosk/${token}/manual-order`, {
+    method: 'POST',
+    body: JSON.stringify({ items }),
+  });
+}
