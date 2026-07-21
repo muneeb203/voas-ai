@@ -73,13 +73,19 @@ export function KioskManualOrder({ token, accentColor, isLight, onExit }: KioskM
   const [confirmed, setConfirmed] = useState<{ number: string | null; total: string | null } | null>(
     null,
   );
+  // McDonald's-style: one category shown at a time, chosen from a rail.
+  const [activeCat, setActiveCat] = useState<string | null>(null);
+  const [cartOpen, setCartOpen] = useState(false);
 
   useEffect(() => {
     let active = true;
     getKioskMenu(token).then((res) => {
       if (!active) return;
       if ('error' in res) setLoadError(res.error.message);
-      else setMenu(res.data);
+      else {
+        setMenu(res.data);
+        setActiveCat(res.data.categories[0]?.id ?? null);
+      }
     });
     return () => {
       active = false;
@@ -199,65 +205,100 @@ export function KioskManualOrder({ token, accentColor, isLight, onExit }: KioskM
         </div>
       ) : (
         <div className="flex flex-1 gap-4 overflow-hidden">
-          {/* Menu */}
-          <div className="flex-1 overflow-y-auto pr-1">
-            {menu.categories.map((cat) => (
-              <div key={cat.id} className="mb-5">
-                <p className={`mb-2 text-sm font-semibold uppercase tracking-wide ${c.textMuted}`}>
+          {/* Category rail — always visible, one tap to switch */}
+          <nav className="w-44 flex-shrink-0 space-y-1 overflow-y-auto pr-1">
+            {menu.categories.map((cat) => {
+              const on = cat.id === activeCat;
+              return (
+                <button
+                  key={cat.id}
+                  type="button"
+                  onClick={() => setActiveCat(cat.id)}
+                  className={`w-full rounded-lg px-3 py-3 text-left text-sm font-semibold transition-colors ${
+                    on ? 'text-white' : `${c.tileBg} border ${c.textMain}`
+                  }`}
+                  style={on ? { background: accentColor } : undefined}
+                >
                   {cat.name}
-                </p>
-                <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-                  {cat.items.map((item) => (
-                    <button
-                      key={item.id}
-                      type="button"
-                      onClick={() => onItemTap(item)}
-                      className={`rounded-xl border p-3 text-left transition-colors ${c.tileBg}`}
-                    >
-                      <p className={`text-sm font-semibold ${c.textMain}`}>{item.name}</p>
-                      <p className={`mt-1 text-xs ${c.textMuted}`}>
-                        {money(item.price_cents, symbol)}
-                        {item.modifier_groups.length > 0 && ' · options'}
-                      </p>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            ))}
-          </div>
+                  <span className={`ml-1 text-xs font-normal ${on ? 'text-white/70' : c.textMuted}`}>
+                    ({cat.items.length})
+                  </span>
+                </button>
+              );
+            })}
+          </nav>
 
-          {/* Cart */}
-          <div className={`flex w-64 flex-shrink-0 flex-col rounded-xl border ${c.cartBg}`}>
-            <div className={`flex items-center gap-2 border-b p-3 ${c.border} ${c.textMain}`}>
-              <ShoppingCart className="h-4 w-4" />
-              <span className="text-sm font-semibold">Your order ({cartCount})</span>
+          {/* Items for the selected category */}
+          <div className="flex-1 overflow-y-auto pr-1">
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+              {menu.categories
+                .find((cat) => cat.id === activeCat)
+                ?.items.map((item) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => onItemTap(item)}
+                    className={`rounded-xl border p-4 text-left transition-colors ${c.tileBg}`}
+                  >
+                    <p className={`text-base font-semibold ${c.textMain}`}>{item.name}</p>
+                    <p className={`mt-1 text-sm ${c.textMuted}`}>
+                      {money(item.price_cents, symbol)}
+                      {item.modifier_groups.length > 0 && ' · options'}
+                    </p>
+                  </button>
+                ))}
             </div>
-            <div className="flex-1 overflow-y-auto p-2">
-              {cart.length === 0 ? (
-                <p className={`px-2 py-6 text-center text-xs ${c.textFaint}`}>
-                  Tap items to add them here.
-                </p>
-              ) : (
-                cart.map((l) => (
-                  <div key={l.key} className={`mb-2 rounded-lg p-2 ${c.lineBg}`}>
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="min-w-0">
-                        <p className={`truncate text-sm font-medium ${c.textMain}`}>{l.item.name}</p>
-                        {l.optionNames.length > 0 && (
-                          <p className={`truncate text-[11px] ${c.textMuted}`}>
-                            {l.optionNames.join(', ')}
-                          </p>
-                        )}
-                        <p className={`text-xs ${c.textMuted}`}>{money(l.unitCents, symbol)}</p>
-                      </div>
-                    </div>
-                    <div className="mt-1.5 flex items-center gap-2">
+          </div>
+        </div>
+      )}
+
+      {/* Floating "view order" button — appears once something's in the cart */}
+      {cartCount > 0 && !cartOpen && (
+        <button
+          type="button"
+          onClick={() => setCartOpen(true)}
+          className="absolute bottom-5 left-1/2 z-20 flex -translate-x-1/2 items-center gap-3 rounded-full px-7 py-4 text-base font-bold text-white shadow-xl"
+          style={{ background: accentColor }}
+        >
+          <ShoppingCart className="h-5 w-5" />
+          View order ({cartCount})
+          <span className="opacity-80">·</span>
+          {money(cartTotal, symbol)}
+        </button>
+      )}
+
+      {/* Cart drawer */}
+      {cartOpen && (
+        <div className="absolute inset-0 z-20 flex justify-end bg-black/40" onClick={() => setCartOpen(false)}>
+          <div
+            className={`flex h-full w-full max-w-sm flex-col ${isLight ? 'bg-[#fafaf8]' : 'bg-[#0A2540]'}`}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className={`flex items-center justify-between border-b p-4 ${c.border}`}>
+              <span className={`text-lg font-bold ${c.textMain}`}>Your order ({cartCount})</span>
+              <button
+                type="button"
+                onClick={() => setCartOpen(false)}
+                className={`rounded-full p-1.5 ${c.chip}`}
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-3">
+              {cart.map((l) => (
+                <div key={l.key} className={`mb-2 rounded-lg p-3 ${c.lineBg}`}>
+                  <p className={`text-sm font-medium ${c.textMain}`}>{l.item.name}</p>
+                  {l.optionNames.length > 0 && (
+                    <p className={`text-[11px] ${c.textMuted}`}>{l.optionNames.join(', ')}</p>
+                  )}
+                  <div className="mt-2 flex items-center justify-between">
+                    <div className="flex items-center gap-2">
                       <button
                         type="button"
                         onClick={() => changeQty(l.key, -1)}
-                        className={`flex h-6 w-6 items-center justify-center rounded-full ${c.chip}`}
+                        className={`flex h-7 w-7 items-center justify-center rounded-full ${c.chip}`}
                       >
-                        <Minus className="h-3 w-3" />
+                        <Minus className="h-3.5 w-3.5" />
                       </button>
                       <span className={`w-5 text-center text-sm font-semibold ${c.textMain}`}>
                         {l.qty}
@@ -265,29 +306,32 @@ export function KioskManualOrder({ token, accentColor, isLight, onExit }: KioskM
                       <button
                         type="button"
                         onClick={() => changeQty(l.key, 1)}
-                        className={`flex h-6 w-6 items-center justify-center rounded-full ${c.chip}`}
+                        className={`flex h-7 w-7 items-center justify-center rounded-full ${c.chip}`}
                       >
-                        <Plus className="h-3 w-3" />
+                        <Plus className="h-3.5 w-3.5" />
                       </button>
                     </div>
+                    <span className={`text-sm ${c.textMuted}`}>
+                      {money(l.unitCents * l.qty, symbol)}
+                    </span>
                   </div>
-                ))
-              )}
+                </div>
+              ))}
             </div>
-            <div className={`border-t p-3 ${c.border}`}>
-              <div className={`mb-2 flex justify-between text-sm ${c.textMuted}`}>
+            <div className={`border-t p-4 ${c.border}`}>
+              <div className={`mb-1 flex justify-between text-sm ${c.textMuted}`}>
                 <span>Subtotal</span>
                 <span className={`font-semibold ${c.textMain}`}>{money(cartTotal, symbol)}</span>
               </div>
-              <p className={`mb-2 text-[10px] ${c.textFaint}`}>Tax added at checkout.</p>
+              <p className={`mb-3 text-[10px] ${c.textFaint}`}>Tax added at checkout.</p>
               <button
                 type="button"
                 onClick={submit}
                 disabled={cart.length === 0 || placing}
-                className="flex w-full items-center justify-center gap-2 rounded-lg py-3 text-sm font-bold text-white disabled:opacity-40"
+                className="flex w-full items-center justify-center gap-2 rounded-lg py-4 text-base font-bold text-white disabled:opacity-40"
                 style={{ background: accentColor }}
               >
-                {placing ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Place order'}
+                {placing ? <Loader2 className="h-5 w-5 animate-spin" /> : 'Place order'}
               </button>
             </div>
           </div>
