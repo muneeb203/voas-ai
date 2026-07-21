@@ -39,6 +39,7 @@ class Order(BaseModel):
     customer_name: str | None
     payment_status: PaymentStatus
     pos_order_id: str | None
+    order_token: str | None = None
     notes: str | None
     created_at: datetime
     updated_at: datetime

@@ -421,12 +421,15 @@ class AdminKioskSettings(BaseModel):
     kiosk_credits_balance: int = 0
     kiosk_credits_used_this_month: int = 0
     kiosk_month_start: str | None = None
+    manual_ordering_enabled: bool = False
 
 
 class AdminKioskSettingsUpdate(BaseModel):
     kiosk_enabled: bool | None = None
     max_kiosk_urls: int | None = Field(default=None, ge=1, le=10)
     kiosk_monthly_limit: int | None = Field(default=None, ge=0)
+    # Admin-gated while tap-to-order rolls out. Restaurant kiosks only.
+    manual_ordering_enabled: bool | None = None
 
 
 class KioskTopupBody(BaseModel):
@@ -435,7 +438,8 @@ class KioskTopupBody(BaseModel):
 
 _KIOSK_SELECT = (
     "kiosk_enabled, max_kiosk_urls, theme, session_lock_enabled, "
-    "kiosk_monthly_limit, kiosk_credits_balance, kiosk_credits_used_this_month, kiosk_month_start"
+    "kiosk_monthly_limit, kiosk_credits_balance, kiosk_credits_used_this_month, "
+    "kiosk_month_start, manual_ordering_enabled"
 )
 
 
@@ -563,6 +567,8 @@ async def update_admin_kiosk_settings(
         changes["kiosk_enabled"] = body.kiosk_enabled
     if body.max_kiosk_urls is not None:
         changes["max_kiosk_urls"] = body.max_kiosk_urls
+    if body.manual_ordering_enabled is not None:
+        changes["manual_ordering_enabled"] = body.manual_ordering_enabled
     if body.kiosk_monthly_limit is not None:
         changes["kiosk_monthly_limit"] = body.kiosk_monthly_limit
         # First time monthly limit is set: seed balance and start the billing cycle

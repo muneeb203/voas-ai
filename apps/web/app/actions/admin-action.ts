@@ -158,7 +158,12 @@ export async function updateWorkspaceBillingAction(
 
 export async function updateAdminKioskSettingsAction(
   workspaceId: string,
-  body: { kiosk_enabled?: boolean; max_kiosk_urls?: number; kiosk_monthly_limit?: number },
+  body: {
+    kiosk_enabled?: boolean;
+    max_kiosk_urls?: number;
+    kiosk_monthly_limit?: number;
+    manual_ordering_enabled?: boolean;
+  },
 ) {
   await requireAdminSession(`/admin/workspaces/${workspaceId}`);
   const { updateAdminKioskSettings } = await import('@/lib/api/admin');

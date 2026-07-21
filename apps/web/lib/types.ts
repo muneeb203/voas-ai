@@ -249,6 +249,7 @@ export interface Order {
   customer_name: string | null;
   payment_status: PaymentStatus;
   pos_order_id: string | null;
+  order_token: string | null;
   notes: string | null;
   created_at: string;
   updated_at: string;

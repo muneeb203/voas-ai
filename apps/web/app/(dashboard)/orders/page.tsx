@@ -120,9 +120,16 @@ export default async function OrdersPage({
                     <TableCell>
                       <Link
                         href={`/orders/${o.id}`}
-                        className="font-mono text-xs hover:text-accent-700"
+                        className="flex items-center gap-2 hover:text-accent-700"
                       >
-                        #{o.id.slice(0, 8)}
+                        {o.order_token && (
+                          <span className="inline-flex items-center rounded-md bg-accent/10 px-2 py-0.5 text-sm font-bold tabular-nums text-accent-700">
+                            #{o.order_token}
+                          </span>
+                        )}
+                        <span className="font-mono text-xs text-muted-foreground">
+                          {o.id.slice(0, 8)}
+                        </span>
                       </Link>
                     </TableCell>
                     <TableCell className="text-sm">

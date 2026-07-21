@@ -1,21 +1,33 @@
 """Transactional email for SaaS users.
 
 All sends go through `_dispatch`. When SMTP credentials are configured we send
-via Gmail (or any SMTP provider). Otherwise we log a stub entry so local dev
-and CI keep working without mail credentials.
+via the configured provider (Hostinger, Resend, Gmail — any SMTP host).
+Otherwise we log a stub entry so local dev and CI keep working without mail
+credentials.
+
+Sending happens on a small background thread pool: an SMTP handshake takes
+hundreds of ms (up to a 15s timeout on a bad day) and must never sit inside an
+API request. Callers get fire-and-forget semantics — a mail failure is logged,
+never raised, and can't break the action that triggered it.
 """
 
 from __future__ import annotations
 
 import smtplib
+from concurrent.futures import ThreadPoolExecutor
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
+from email.utils import parseaddr
 from typing import Any
 
 from app.config import get_settings
 from app.core.logging import get_logger
 
 log = get_logger(__name__)
+
+# Small and bounded: email volume is low, and this caps how much work a burst of
+# tickets can queue up. Non-daemon so pending sends flush on shutdown.
+_executor = ThreadPoolExecutor(max_workers=4, thread_name_prefix="email")
 
 _ROLE_LABELS = {
     "owner": "Owner",
@@ -27,6 +39,40 @@ _ROLE_LABELS = {
 def _smtp_configured() -> bool:
     settings = get_settings()
     return bool(settings.smtp_host and settings.smtp_user and settings.smtp_password)
+
+
+def _send_now(
+    *,
+    to: str,
+    subject: str,
+    body: str,
+    html: str | None,
+    context: dict[str, Any],
+) -> None:
+    """The actual SMTP send. Runs on a worker thread; never raises."""
+    settings = get_settings()
+    try:
+        msg = MIMEMultipart("alternative")
+        msg["Subject"] = subject
+        msg["From"] = settings.email_from
+        msg["To"] = to
+        msg.attach(MIMEText(body, "plain", "utf-8"))
+        if html:
+            msg.attach(MIMEText(html, "html", "utf-8"))
+
+        # EMAIL_FROM may carry a display name ("VOAS AI <info@convosol.com>").
+        # That's fine in the header, but the SMTP envelope needs the bare
+        # address or providers reject the message.
+        envelope_from = parseaddr(settings.email_from)[1] or settings.email_from
+
+        with smtplib.SMTP(settings.smtp_host, settings.smtp_port, timeout=15) as server:
+            server.starttls()
+            server.login(settings.smtp_user, settings.smtp_password)
+            server.sendmail(envelope_from, [to], msg.as_string())
+
+        log.info("email_sent", to=to, subject=subject, **context)
+    except Exception as exc:
+        log.error("email_send_failed", to=to, subject=subject, error=str(exc), **context)
 
 
 def _dispatch(
@@ -49,23 +95,11 @@ def _dispatch(
         )
         return
 
-    try:
-        msg = MIMEMultipart("alternative")
-        msg["Subject"] = subject
-        msg["From"] = settings.email_from
-        msg["To"] = to
-        msg.attach(MIMEText(body, "plain", "utf-8"))
-        if html:
-            msg.attach(MIMEText(html, "html", "utf-8"))
-
-        with smtplib.SMTP(settings.smtp_host, settings.smtp_port, timeout=15) as server:
-            server.starttls()
-            server.login(settings.smtp_user, settings.smtp_password)
-            server.sendmail(settings.email_from, [to], msg.as_string())
-
-        log.info("email_sent", to=to, subject=subject, **context)
-    except Exception as exc:
-        log.error("email_send_failed", to=to, subject=subject, error=str(exc), **context)
+    # Hand off to the pool and return immediately — the caller is usually inside
+    # a request and must not wait on a mail server.
+    _executor.submit(
+        _send_now, to=to, subject=subject, body=body, html=html, context=context
+    )
 
 
 def send_welcome(*, to: str, full_name: str | None, workspace_name: str) -> None:

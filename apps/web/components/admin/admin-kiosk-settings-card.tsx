@@ -14,19 +14,46 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { topupKioskCreditsAction } from '@/app/actions/admin-action';
+import { Switch } from '@/components/ui/switch';
+import {
+  topupKioskCreditsAction,
+  updateAdminKioskSettingsAction,
+} from '@/app/actions/admin-action';
 import type { AdminKioskSettings } from '@/lib/api/admin';
 
 interface AdminKioskSettingsCardProps {
   workspaceId: string;
   settings: AdminKioskSettings;
   plan?: string;
+  vertical?: string;
 }
 
-export function AdminKioskSettingsCard({ workspaceId, settings }: AdminKioskSettingsCardProps) {
+export function AdminKioskSettingsCard({
+  workspaceId,
+  settings,
+  vertical,
+}: AdminKioskSettingsCardProps) {
   const [topupAmount, setTopupAmount] = useState(10);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [toppingUp, setToppingUp] = useState(false);
+  const [manualOn, setManualOn] = useState(settings.manual_ordering_enabled);
+  const [savingManual, setSavingManual] = useState(false);
+  const isSalon = vertical === 'salon';
+
+  async function toggleManual(next: boolean) {
+    setManualOn(next);
+    setSavingManual(true);
+    const res = await updateAdminKioskSettingsAction(workspaceId, {
+      manual_ordering_enabled: next,
+    });
+    setSavingManual(false);
+    if (res?.error) {
+      setManualOn(!next); // revert on failure
+      toast.error(res.error);
+    } else {
+      toast.success(next ? 'Manual ordering enabled' : 'Manual ordering disabled');
+    }
+  }
 
   const balance = settings.kiosk_credits_balance;
 
@@ -75,6 +102,25 @@ export function AdminKioskSettingsCard({ workspaceId, settings }: AdminKioskSett
             <Button onClick={() => setConfirmOpen(true)} disabled={toppingUp || topupAmount < 1}>
               Add credits
             </Button>
+          </div>
+        </div>
+
+        <div className="space-y-2 border-t pt-5">
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <Label htmlFor="manual-ordering">Tap-to-order (manual mode)</Label>
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                {isSalon
+                  ? 'Restaurant kiosks only — not available for salon workspaces.'
+                  : 'Adds a button on the kiosk letting customers order by tapping the menu, alongside voice. Manual orders are free (no credit used).'}
+              </p>
+            </div>
+            <Switch
+              id="manual-ordering"
+              checked={manualOn}
+              onChange={(e) => toggleManual(e.target.checked)}
+              disabled={isSalon || savingManual}
+            />
           </div>
         </div>
       </CardContent>

@@ -23,7 +23,7 @@ export default async function KioskPage({ params }: KioskPageProps) {
     );
   }
 
-  const { location_name, workspace_name, theme, session_lock_enabled, vertical } = res.data;
+  const { location_name, workspace_name, theme, session_lock_enabled, vertical, manual_ordering_enabled } = res.data;
 
   return (
     <KioskClient
@@ -33,6 +33,7 @@ export default async function KioskPage({ params }: KioskPageProps) {
       theme={theme}
       sessionLockEnabled={session_lock_enabled}
       vertical={vertical}
+      manualOrderingEnabled={manual_ordering_enabled}
     />
   );
 }

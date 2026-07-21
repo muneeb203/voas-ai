@@ -6,7 +6,7 @@ from typing import Annotated, Literal
 import httpx
 from fastapi import APIRouter, Path, status
 from fastapi.responses import Response, StreamingResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from app.config import get_settings
 from app.core.exceptions import (
@@ -161,11 +161,23 @@ class KioskSettings(BaseModel):
     kiosk_credits_balance: int = 0
     kiosk_credits_used_this_month: int = 0
     kiosk_month_start: str | None = None
+    restaurant_tone: str | None = None
+    restaurant_handover: str | None = None
+    salon_tone: str | None = None
+    salon_handover: str | None = None
+    manual_ordering_enabled: bool = False
 
 
 class KioskSettingsUpdate(BaseModel):
     theme: str | None = None
     session_lock_enabled: bool | None = None
+    # Owner-editable voice. Empty string clears the field, so these can't use
+    # None-as-absent alone — the router checks for `is not None`.
+    restaurant_tone: str | None = Field(default=None, max_length=1000)
+    restaurant_handover: str | None = Field(default=None, max_length=1000)
+    salon_tone: str | None = Field(default=None, max_length=1000)
+    salon_handover: str | None = Field(default=None, max_length=1000)
+    manual_ordering_enabled: bool | None = None
 
 
 class KioskInfo(BaseModel):
@@ -174,6 +186,66 @@ class KioskInfo(BaseModel):
     theme: str
     session_lock_enabled: bool
     vertical: str = "restaurant"
+    # Drives the "Order by tapping" button on the kiosk. Restaurant only.
+    manual_ordering_enabled: bool = False
+
+
+class KioskMenuOption(BaseModel):
+    id: str
+    name: str
+    price_delta_cents: int
+    is_default: bool
+
+
+class KioskMenuGroup(BaseModel):
+    id: str
+    name: str
+    min_select: int
+    max_select: int
+    required: bool
+    options: list[KioskMenuOption]
+
+
+class KioskMenuItem(BaseModel):
+    id: str
+    name: str
+    description: str | None
+    price_cents: int
+    image_url: str | None
+    modifier_groups: list[KioskMenuGroup]
+
+
+class KioskMenuCategory(BaseModel):
+    id: str
+    name: str
+    items: list[KioskMenuItem]
+
+
+class KioskMenu(BaseModel):
+    categories: list[KioskMenuCategory]
+    currency_symbol: str = "$"
+
+
+class ManualOrderOption(BaseModel):
+    option_id: str
+
+
+class ManualOrderLine(BaseModel):
+    item_id: str
+    quantity: int = Field(default=1, ge=1, le=99)
+    option_ids: list[str] = Field(default_factory=list)
+
+
+class ManualOrderBody(BaseModel):
+    items: list[ManualOrderLine] = Field(..., min_length=1, max_length=50)
+
+
+class ManualOrderResult(BaseModel):
+    success: bool
+    order_id: str | None = None
+    order_number: str | None = None
+    total: str | None = None
+    message: str | None = None
 
 
 class KioskSttToken(BaseModel):
@@ -231,7 +303,9 @@ def _get_ws_kiosk_settings(db, workspace_id: str) -> KioskSettings:
         db.table("workspace_kiosk_settings")
         .select(
             "theme, session_lock_enabled, kiosk_enabled, max_kiosk_urls, "
-            "kiosk_monthly_limit, kiosk_credits_balance, kiosk_credits_used_this_month, kiosk_month_start"
+            "kiosk_monthly_limit, kiosk_credits_balance, kiosk_credits_used_this_month, "
+            "kiosk_month_start, restaurant_tone, restaurant_handover, salon_tone, salon_handover, "
+            "manual_ordering_enabled"
         )
         .eq("workspace_id", workspace_id)
         .limit(1)
@@ -269,13 +343,44 @@ def _is_lock_held(row: dict, session_id: str) -> bool:
     return (datetime.now(UTC) - heartbeat_at) < timedelta(seconds=SESSION_LOCK_TTL_SECONDS)
 
 
+def _owner_voice_block(db, workspace_id: str, vertical: str) -> str:
+    """The owner's tone + order-handover text, as a prompt section.
+
+    Appended AFTER the locked operational rules so it can shape how the kiosk
+    sounds and what it tells customers about collecting their order, but can
+    never remove the rule that an order only exists once place_order is called.
+    """
+    cfg = _get_ws_kiosk_settings(db, workspace_id)
+    tone = (cfg.salon_tone if vertical == "salon" else cfg.restaurant_tone) or ""
+    handover = (cfg.salon_handover if vertical == "salon" else cfg.restaurant_handover) or ""
+    tone, handover = tone.strip(), handover.strip()
+    if not tone and not handover:
+        return ""
+
+    parts = ["\n\n--- HOW THIS BUSINESS WANTS YOU TO SOUND ---"]
+    if tone:
+        parts.append(f"Tone: {tone}")
+    if handover:
+        parts.append(
+            "After the order is placed, tell the customer this is what happens next: "
+            f"{handover}"
+        )
+    parts.append(
+        "Follow this for style and for what you tell the customer — but never at the "
+        "expense of the rules above. Still one short sentence, and still only a real "
+        "tool call places an order."
+    )
+    return "\n".join(parts)
+
+
 def _build_kiosk_system_prompt(db, workspace_id: str) -> str:
     # Self-contained kiosk prompt. We deliberately do NOT reuse the voice
     # system prompt: it requires collecting name/phone and confirming
     # delivery, which a walk-up kiosk never has — that contradiction made the
     # model acknowledge orders verbally instead of calling place_order.
     menu_md = _menu_context_for_workspace(workspace_id)
-    return f"{KIOSK_SYSTEM_PROMPT}{menu_md}".strip()
+    voice = _owner_voice_block(db, workspace_id, "restaurant")
+    return f"{KIOSK_SYSTEM_PROMPT}{menu_md}{voice}".strip()
 
 
 def _get_kiosk_system_prompt(db, workspace_id: str) -> str:
@@ -290,10 +395,12 @@ def _get_kiosk_system_prompt(db, workspace_id: str) -> str:
     return prompt
 
 
-def _build_salon_kiosk_system_prompt(workspace_id: str) -> str:
+def _build_salon_kiosk_system_prompt(db, workspace_id: str) -> str:
     # Not cached: availability changes with every booking, and create_appointment
     # re-checks the slot at commit anyway.
-    return f"{SALON_KIOSK_SYSTEM_PROMPT}{booking_service.availability_prompt_context(workspace_id)}".strip()
+    availability = booking_service.availability_prompt_context(workspace_id)
+    voice = _owner_voice_block(db, workspace_id, "salon")
+    return f"{SALON_KIOSK_SYSTEM_PROMPT}{availability}{voice}".strip()
 
 
 def _appt_display(appt, kind: str, workspace_id: str, location_id: str | None) -> dict:
@@ -596,6 +703,11 @@ async def update_kiosk_settings(
         changes["theme"] = body.theme
     if body.session_lock_enabled is not None:
         changes["session_lock_enabled"] = body.session_lock_enabled
+    for field in ("restaurant_tone", "restaurant_handover", "salon_tone", "salon_handover"):
+        value = getattr(body, field)
+        if value is not None:
+            # "" is a real value here — it's how an owner clears the field.
+            changes[field] = value.strip() or None
 
     if existing.data:
         res = (
@@ -611,6 +723,11 @@ async def update_kiosk_settings(
         changes.setdefault("kiosk_enabled", False)
         changes.setdefault("max_kiosk_urls", 1)
         res = db.table("workspace_kiosk_settings").insert(changes).execute()
+
+    # The restaurant prompt is cached for SYSTEM_PROMPT_TTL_SECONDS. Without this
+    # an owner would edit the tone, walk to the kiosk, and hear the old wording
+    # for up to two minutes — and reasonably conclude it didn't save.
+    _system_prompt_cache.pop(ctx.workspace_id, None)
 
     return ok(KioskSettings(**res.data[0]))
 
@@ -647,6 +764,11 @@ async def get_kiosk_info(token: Annotated[str, Path()]) -> DataResponse[KioskInf
             theme=kiosk_cfg.theme,
             session_lock_enabled=kiosk_cfg.session_lock_enabled,
             vertical=ws_row.get("vertical") or "restaurant",
+            # Tap-to-order is restaurant-only; a salon kiosk never shows the button.
+            manual_ordering_enabled=(
+                kiosk_cfg.manual_ordering_enabled
+                and (ws_row.get("vertical") or "restaurant") != "salon"
+            ),
         )
     )
 
@@ -807,7 +929,7 @@ async def kiosk_chat(
 
     vertical = ctx.get("vertical", "restaurant")
     if vertical == "salon":
-        system_prompt = _build_salon_kiosk_system_prompt(workspace_id)
+        system_prompt = _build_salon_kiosk_system_prompt(db, workspace_id)
         tools = [BOOK_APPOINTMENT_TOOL, CHECK_IN_TOOL]
     else:
         system_prompt = _get_kiosk_system_prompt(db, workspace_id)
@@ -952,6 +1074,172 @@ async def kiosk_chat(
         "Sorry, could you repeat that?",
     )
     return ok(KioskChatResponse(response=text, order_confirmed=False, debug=debug_info))
+
+
+# ── Manual (tap-to-order) mode ────────────────────────────────────────────────
+
+
+def _require_manual_ordering(db, workspace_id: str, vertical: str) -> None:
+    """Manual mode is admin-gated and restaurant-only. Enforced server-side so
+    a crafted request can't order through a kiosk that hasn't been enabled."""
+    if vertical == "salon":
+        raise NotFoundError("Manual ordering is not available on this kiosk")
+    cfg = _get_ws_kiosk_settings(db, workspace_id)
+    if not cfg.manual_ordering_enabled:
+        raise NotFoundError("Manual ordering is not enabled for this kiosk")
+
+
+@public_router.get(
+    "/kiosk/{token}/menu",
+    response_model=DataResponse[KioskMenu],
+)
+async def get_kiosk_menu(token: Annotated[str, Path()]) -> DataResponse[KioskMenu]:
+    """Menu for tap-to-order. Public (kiosk has no login) but token-scoped and
+    gated on manual ordering being enabled."""
+    db = get_supabase_admin()
+    ctx = _get_kiosk_chat_context(db, token)
+    workspace_id = ctx["workspace_id"]
+    _require_manual_ordering(db, workspace_id, ctx.get("vertical", "restaurant"))
+
+    from app.services import menu_service
+
+    categories = menu_service.list_categories(workspace_id)
+    items = menu_service.list_items(workspace_id)
+
+    by_category: dict[str, list[KioskMenuItem]] = {}
+    for it in items:
+        if not it.is_active:
+            continue
+        groups = [
+            KioskMenuGroup(
+                id=g.id,
+                name=g.name,
+                min_select=g.min_select,
+                max_select=g.max_select,
+                required=g.required,
+                options=[
+                    KioskMenuOption(
+                        id=o.id,
+                        name=o.name,
+                        price_delta_cents=o.price_delta_cents,
+                        is_default=o.is_default,
+                    )
+                    for o in g.options
+                ],
+            )
+            for g in it.modifier_groups
+        ]
+        by_category.setdefault(it.category_id, []).append(
+            KioskMenuItem(
+                id=it.id,
+                name=it.name,
+                description=it.description,
+                price_cents=it.price_cents,
+                image_url=it.image_url,
+                modifier_groups=groups,
+            )
+        )
+
+    out = [
+        KioskMenuCategory(id=c.id, name=c.name, items=by_category.get(c.id, []))
+        for c in categories
+        if c.is_active and by_category.get(c.id)
+    ]
+    return ok(KioskMenu(categories=out))
+
+
+@public_router.post(
+    "/kiosk/{token}/manual-order",
+    response_model=DataResponse[ManualOrderResult],
+)
+async def place_manual_order(
+    token: Annotated[str, Path()], body: ManualOrderBody
+) -> DataResponse[ManualOrderResult]:
+    """Place an order from tap-to-order. No AI involved, so no kiosk credit is
+    consumed and the credit balance is not checked — a business that has run out
+    can still take manual orders.
+
+    Prices come from the database, never from the client: the request carries
+    only ids, so a tampered payload can't change what anything costs.
+    """
+    db = get_supabase_admin()
+    ctx = _get_kiosk_chat_context(db, token)
+    workspace_id = ctx["workspace_id"]
+    location_id = ctx["location_id"]
+    _require_manual_ordering(db, workspace_id, ctx.get("vertical", "restaurant"))
+
+    item_ids = [line.item_id for line in body.items]
+    items_res = (
+        db.table("menu_items")
+        .select("id, name, is_active")
+        .eq("workspace_id", workspace_id)
+        .in_("id", item_ids)
+        .execute()
+    )
+    items_by_id = {r["id"]: r for r in (items_res.data or []) if r.get("is_active")}
+
+    option_ids = [oid for line in body.items for oid in line.option_ids]
+    options_by_id: dict[str, dict] = {}
+    if option_ids:
+        # Only option NAMES are needed — downstream pricing re-resolves each
+        # name against this workspace's own item, so a foreign or tampered id
+        # can never change what anything costs (it just won't match, delta 0).
+        opts_res = (
+            db.table("menu_modifier_options")
+            .select("id, name")
+            .in_("id", option_ids)
+            .execute()
+        )
+        options_by_id = {r["id"]: r for r in (opts_res.data or [])}
+
+    tool_items: list[dict] = []
+    for line in body.items:
+        item = items_by_id.get(line.item_id)
+        if not item:
+            continue
+        names = [options_by_id[o]["name"] for o in line.option_ids if o in options_by_id]
+        tool_items.append(
+            {"name": item["name"], "quantity": line.quantity, "modifiers": names}
+        )
+
+    if not tool_items:
+        raise AppError("None of those items are available right now.")
+
+    # Same path the voice agent uses — one pricing, tax and order-row
+    # implementation rather than a second one that can drift.
+    result = voice_order_service.place_order_from_tool_call(
+        workspace_id=workspace_id,
+        location_id=location_id,
+        conversation_id=None,
+        customer_id=None,
+        customer_phone=None,
+        arguments={
+            "items": tool_items,
+            "fulfillment": "pickup",
+            "special_instructions": "Placed at kiosk (manual)",
+        },
+        assign_token=True,
+    )
+    if not result.get("success"):
+        raise AppError(result.get("message") or "Could not place the order.")
+
+    token = result.get("order_token")
+    log.info(
+        "kiosk_manual_order",
+        workspace_id=workspace_id,
+        order_id=result.get("order_id"),
+        order_token=token,
+        lines=len(tool_items),
+    )
+    return ok(
+        ManualOrderResult(
+            success=True,
+            order_id=str(result.get("order_id")) if result.get("order_id") else None,
+            # The short token IS the number the customer shows staff.
+            order_number=str(token) if token else None,
+            total=result.get("total_dollars") and f"${result['total_dollars']:.2f}",
+        )
+    )
 
 
 @public_router.post("/kiosk/{token}/speak")
