@@ -937,12 +937,15 @@ export function KioskClient({
         style={cfg.wrapperStyle}
       >
         <header className="relative z-10 flex flex-col items-center pt-8">
-          <p className="text-2xl font-black tracking-tight text-white">{workspaceName}</p>
-          <p className="mt-1 text-xs text-white/50">{locationName}</p>
+          <p className={`text-2xl font-black tracking-tight ${cfg.textPrimary}`}>
+            {workspaceName}
+          </p>
+          <p className={`mt-1 text-xs ${cfg.textSecondary}`}>{locationName}</p>
         </header>
         <KioskManualOrder
           token={token}
           accentColor={cfg.accentColor}
+          isLight={isLight}
           onExit={() => setManualMode(false)}
         />
       </div>
@@ -1080,7 +1083,11 @@ export function KioskClient({
               {canManualOrder && (
                 <button
                   onClick={() => setManualMode(true)}
-                  className="mt-6 inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/5 px-6 py-3 text-base font-semibold text-white transition-colors hover:bg-white/10"
+                  className={`mt-6 inline-flex items-center gap-2 rounded-full border px-6 py-3 text-base font-semibold transition-colors ${
+                    isLight
+                      ? 'border-[#0A2540]/20 bg-[#0A2540]/5 text-[#0A2540] hover:bg-[#0A2540]/10'
+                      : 'border-white/20 bg-white/5 text-white hover:bg-white/10'
+                  }`}
                 >
                   <ShoppingCart className="h-5 w-5" />
                   Order by tapping instead

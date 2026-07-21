@@ -31,10 +31,40 @@ function lineKey(itemId: string, optionIds: string[]) {
 interface KioskManualOrderProps {
   token: string;
   accentColor: string;
+  isLight: boolean;
   onExit: () => void;
 }
 
-export function KioskManualOrder({ token, accentColor, onExit }: KioskManualOrderProps) {
+// One palette so the panel reads correctly on the light theme (dark text on the
+// off-white kiosk background) as well as the dark themes (white text).
+function palette(isLight: boolean) {
+  return isLight
+    ? {
+        textMain: 'text-[#0A2540]',
+        textMuted: 'text-slate-500',
+        textFaint: 'text-slate-400',
+        border: 'border-[#0A2540]/10',
+        tileBg: 'border-[#0A2540]/10 bg-[#0A2540]/[0.03] hover:bg-[#0A2540]/[0.07]',
+        cartBg: 'border-[#0A2540]/10 bg-[#0A2540]/[0.03]',
+        lineBg: 'bg-[#0A2540]/[0.05]',
+        chip: 'bg-[#0A2540]/10 text-[#0A2540]',
+        backBtn: 'bg-[#0A2540]/10 text-[#0A2540] hover:bg-[#0A2540]/20',
+      }
+    : {
+        textMain: 'text-white',
+        textMuted: 'text-white/50',
+        textFaint: 'text-white/40',
+        border: 'border-white/10',
+        tileBg: 'border-white/10 bg-white/5 hover:bg-white/10',
+        cartBg: 'border-white/10 bg-black/20',
+        lineBg: 'bg-white/5',
+        chip: 'bg-white/10 text-white',
+        backBtn: 'bg-white/10 text-white/80 hover:bg-white/20',
+      };
+}
+
+export function KioskManualOrder({ token, accentColor, isLight, onExit }: KioskManualOrderProps) {
+  const c = palette(isLight);
   const [menu, setMenu] = useState<KioskMenu | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [cart, setCart] = useState<CartLine[]>([]);
@@ -129,11 +159,11 @@ export function KioskManualOrder({ token, accentColor, onExit }: KioskManualOrde
         >
           <Check className="h-12 w-12" style={{ color: accentColor }} />
         </div>
-        <h1 className="text-4xl font-black text-white">Order placed!</h1>
+        <h1 className={`text-4xl font-black ${c.textMain}`}>Order placed!</h1>
         {confirmed.number && (
-          <p className="mt-3 text-2xl font-bold text-white/90">Order {confirmed.number}</p>
+          <p className={`mt-3 text-2xl font-bold ${c.textMain}`}>Order {confirmed.number}</p>
         )}
-        {confirmed.total && <p className="mt-1 text-lg text-white/60">{confirmed.total}</p>}
+        {confirmed.total && <p className={`mt-1 text-lg ${c.textMuted}`}>{confirmed.total}</p>}
         <button
           type="button"
           onClick={onExit}
@@ -149,11 +179,11 @@ export function KioskManualOrder({ token, accentColor, onExit }: KioskManualOrde
   return (
     <div className="relative z-10 flex flex-1 flex-col overflow-hidden px-4 pb-4">
       <div className="mb-3 flex items-center justify-between">
-        <h1 className="text-2xl font-black text-white">Tap to order</h1>
+        <h1 className={`text-2xl font-black ${c.textMain}`}>Tap to order</h1>
         <button
           type="button"
           onClick={onExit}
-          className="flex items-center gap-1.5 rounded-full bg-white/10 px-4 py-2 text-sm font-medium text-white/80 hover:bg-white/20"
+          className={`flex items-center gap-1.5 rounded-full px-4 py-2 text-sm font-medium ${c.backBtn}`}
         >
           <X className="h-4 w-4" /> Back to voice
         </button>
@@ -161,11 +191,11 @@ export function KioskManualOrder({ token, accentColor, onExit }: KioskManualOrde
 
       {loadError ? (
         <div className="flex flex-1 items-center justify-center">
-          <p className="text-center text-white/70">{loadError}</p>
+          <p className={`text-center ${c.textMuted}`}>{loadError}</p>
         </div>
       ) : !menu ? (
         <div className="flex flex-1 items-center justify-center">
-          <Loader2 className="h-8 w-8 animate-spin text-white/50" />
+          <Loader2 className={`h-8 w-8 animate-spin ${c.textMuted}`} />
         </div>
       ) : (
         <div className="flex flex-1 gap-4 overflow-hidden">
@@ -173,7 +203,7 @@ export function KioskManualOrder({ token, accentColor, onExit }: KioskManualOrde
           <div className="flex-1 overflow-y-auto pr-1">
             {menu.categories.map((cat) => (
               <div key={cat.id} className="mb-5">
-                <p className="mb-2 text-sm font-semibold uppercase tracking-wide text-white/50">
+                <p className={`mb-2 text-sm font-semibold uppercase tracking-wide ${c.textMuted}`}>
                   {cat.name}
                 </p>
                 <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
@@ -182,10 +212,10 @@ export function KioskManualOrder({ token, accentColor, onExit }: KioskManualOrde
                       key={item.id}
                       type="button"
                       onClick={() => onItemTap(item)}
-                      className="rounded-xl border border-white/10 bg-white/5 p-3 text-left transition-colors hover:bg-white/10"
+                      className={`rounded-xl border p-3 text-left transition-colors ${c.tileBg}`}
                     >
-                      <p className="text-sm font-semibold text-white">{item.name}</p>
-                      <p className="mt-1 text-xs text-white/50">
+                      <p className={`text-sm font-semibold ${c.textMain}`}>{item.name}</p>
+                      <p className={`mt-1 text-xs ${c.textMuted}`}>
                         {money(item.price_cents, symbol)}
                         {item.modifier_groups.length > 0 && ' · options'}
                       </p>
@@ -197,45 +227,45 @@ export function KioskManualOrder({ token, accentColor, onExit }: KioskManualOrde
           </div>
 
           {/* Cart */}
-          <div className="flex w-64 flex-shrink-0 flex-col rounded-xl border border-white/10 bg-black/20">
-            <div className="flex items-center gap-2 border-b border-white/10 p-3 text-white/80">
+          <div className={`flex w-64 flex-shrink-0 flex-col rounded-xl border ${c.cartBg}`}>
+            <div className={`flex items-center gap-2 border-b p-3 ${c.border} ${c.textMain}`}>
               <ShoppingCart className="h-4 w-4" />
               <span className="text-sm font-semibold">Your order ({cartCount})</span>
             </div>
             <div className="flex-1 overflow-y-auto p-2">
               {cart.length === 0 ? (
-                <p className="px-2 py-6 text-center text-xs text-white/40">
+                <p className={`px-2 py-6 text-center text-xs ${c.textFaint}`}>
                   Tap items to add them here.
                 </p>
               ) : (
                 cart.map((l) => (
-                  <div key={l.key} className="mb-2 rounded-lg bg-white/5 p-2">
+                  <div key={l.key} className={`mb-2 rounded-lg p-2 ${c.lineBg}`}>
                     <div className="flex items-start justify-between gap-2">
                       <div className="min-w-0">
-                        <p className="truncate text-sm font-medium text-white">{l.item.name}</p>
+                        <p className={`truncate text-sm font-medium ${c.textMain}`}>{l.item.name}</p>
                         {l.optionNames.length > 0 && (
-                          <p className="truncate text-[11px] text-white/50">
+                          <p className={`truncate text-[11px] ${c.textMuted}`}>
                             {l.optionNames.join(', ')}
                           </p>
                         )}
-                        <p className="text-xs text-white/60">{money(l.unitCents, symbol)}</p>
+                        <p className={`text-xs ${c.textMuted}`}>{money(l.unitCents, symbol)}</p>
                       </div>
                     </div>
                     <div className="mt-1.5 flex items-center gap-2">
                       <button
                         type="button"
                         onClick={() => changeQty(l.key, -1)}
-                        className="flex h-6 w-6 items-center justify-center rounded-full bg-white/10 text-white"
+                        className={`flex h-6 w-6 items-center justify-center rounded-full ${c.chip}`}
                       >
                         <Minus className="h-3 w-3" />
                       </button>
-                      <span className="w-5 text-center text-sm font-semibold text-white">
+                      <span className={`w-5 text-center text-sm font-semibold ${c.textMain}`}>
                         {l.qty}
                       </span>
                       <button
                         type="button"
                         onClick={() => changeQty(l.key, 1)}
-                        className="flex h-6 w-6 items-center justify-center rounded-full bg-white/10 text-white"
+                        className={`flex h-6 w-6 items-center justify-center rounded-full ${c.chip}`}
                       >
                         <Plus className="h-3 w-3" />
                       </button>
@@ -244,12 +274,12 @@ export function KioskManualOrder({ token, accentColor, onExit }: KioskManualOrde
                 ))
               )}
             </div>
-            <div className="border-t border-white/10 p-3">
-              <div className="mb-2 flex justify-between text-sm text-white/70">
+            <div className={`border-t p-3 ${c.border}`}>
+              <div className={`mb-2 flex justify-between text-sm ${c.textMuted}`}>
                 <span>Subtotal</span>
-                <span className="font-semibold text-white">{money(cartTotal, symbol)}</span>
+                <span className={`font-semibold ${c.textMain}`}>{money(cartTotal, symbol)}</span>
               </div>
-              <p className="mb-2 text-[10px] text-white/40">Tax added at checkout.</p>
+              <p className={`mb-2 text-[10px] ${c.textFaint}`}>Tax added at checkout.</p>
               <button
                 type="button"
                 onClick={submit}
