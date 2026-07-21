@@ -83,9 +83,6 @@ export function KioskSettingsCard({ initialSettings, vertical }: KioskSettingsCa
     tone !== (initialSettings[toneKey] ?? '') ||
     handover !== (initialSettings[handoverKey] ?? '');
 
-  const balance = initialSettings.kiosk_credits_balance;
-  const outOfCredits = balance <= 0;
-
   async function handleSave() {
     setSaving(true);
     const res = await updateKioskSettingsAction({
@@ -107,29 +104,7 @@ export function KioskSettingsCard({ initialSettings, vertical }: KioskSettingsCa
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
-        {/* Kiosk credits */}
-        <div className="rounded-lg border p-4">
-          <div className="flex items-center justify-between">
-            <p className="text-sm font-medium">Kiosk credits</p>
-            <span
-              className={`text-sm font-semibold tabular-nums ${
-                outOfCredits ? 'text-destructive' : ''
-              }`}
-            >
-              {balance.toLocaleString()} remaining
-            </span>
-          </div>
-          {outOfCredits ? (
-            <p className="mt-2 text-xs font-medium text-destructive">
-              Out of credits — the kiosk is inactive until more are added. Contact support to add
-              credits.
-            </p>
-          ) : (
-            <p className="mt-2 text-xs text-muted-foreground">
-              Each completed order uses 1 credit. Contact support to add more when you run low.
-            </p>
-          )}
-        </div>
+        {/* Kiosk credits now live in the KioskCreditsCard bar above. */}
 
         {/* Theme picker */}
         <div>

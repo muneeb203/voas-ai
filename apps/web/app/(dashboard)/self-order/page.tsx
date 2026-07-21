@@ -2,14 +2,13 @@ import type { Metadata } from 'next';
 import { requireDashboardSession } from '@/lib/auth/workspace';
 import { listLocations } from '@/lib/api/locations';
 import { listKioskTokens, getKioskSettings } from '@/lib/api/kiosk';
-import { getBillingUsage } from '@/lib/api/billing';
 import { PAY_AS_YOU_GO } from '@/lib/constants';
 import { isApiError } from '@/lib/types';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { PageHeader } from '@/components/dashboard/page-header';
 import { SelfOrderLocationCard } from '@/components/dashboard/self-order-location-card';
 import { KioskSettingsCard } from '@/components/dashboard/kiosk-settings-card';
-import { VoiceMinutesCard } from '@/components/dashboard/voice-minutes-card';
+import { KioskCreditsCard } from '@/components/dashboard/kiosk-credits-card';
 
 export const metadata: Metadata = { title: 'Self Order' };
 
@@ -18,16 +17,14 @@ export default async function SelfOrderPage() {
   const isOwner = session.active.role === 'owner';
   const workspaceId = session.active.workspace_id;
 
-  const [locationsRes, tokensRes, billingRes, settingsRes] = await Promise.all([
+  const [locationsRes, tokensRes, settingsRes] = await Promise.all([
     listLocations(workspaceId),
     listKioskTokens(workspaceId),
-    getBillingUsage(workspaceId),
     getKioskSettings(workspaceId),
   ]);
 
   const locations = !isApiError(locationsRes) ? locationsRes.data : [];
   const tokens = !isApiError(tokensRes) ? tokensRes.data : [];
-  const billing = !isApiError(billingRes) ? billingRes.data : null;
   const kioskSettings = !isApiError(settingsRes)
     ? settingsRes.data
     : { theme: 'gradient' as const, session_lock_enabled: false, kiosk_enabled: false, max_kiosk_urls: 1, kiosk_monthly_limit: 500, kiosk_credits_balance: 0, kiosk_credits_used_this_month: 0, kiosk_month_start: null, restaurant_tone: null, restaurant_handover: null, salon_tone: null, salon_handover: null };
@@ -48,11 +45,9 @@ export default async function SelfOrderPage() {
         description="Give every location a kiosk URL — customers walk up, speak their order, and the AI handles the rest."
       />
 
-      {billing && (
-        <div className="max-w-md">
-          <VoiceMinutesCard usage={billing} />
-        </div>
-      )}
+      <div className="max-w-md">
+        <KioskCreditsCard settings={kioskSettings} />
+      </div>
 
       <Card>
         <CardHeader>
