@@ -15,6 +15,7 @@ export const metadata: Metadata = { title: 'Order' };
 
 export default async function OrderDetailPage({ params }: { params: { id: string } }) {
   const session = await requireDashboardSession(`/orders/${params.id}`);
+  const currency = session.active.workspace.currency;
 
   const res = await getOrder(session.active.workspace_id, params.id);
   if (isApiError(res)) {
@@ -34,7 +35,7 @@ export default async function OrderDetailPage({ params }: { params: { id: string
 
       <PageHeader
         eyebrow={`#${order.id.slice(0, 8)}`}
-        title={`${formatCents(order.total_cents)} order`}
+        title={`${formatCents(order.total_cents, currency)} order`}
         description={
           <span className="flex items-center gap-2">
             <PaymentStatusBadge status={order.payment_status} />
@@ -84,7 +85,7 @@ export default async function OrderDetailPage({ params }: { params: { id: string
                             {m.price_delta_cents !== 0 && (
                               <span className="ml-1">
                                 ({m.price_delta_cents > 0 ? '+' : ''}
-                                {formatCents(m.price_delta_cents)})
+                                {formatCents(m.price_delta_cents, currency)})
                               </span>
                             )}
                           </li>
@@ -96,18 +97,18 @@ export default async function OrderDetailPage({ params }: { params: { id: string
                     )}
                   </div>
                   <p className="font-medium tabular-nums">
-                    {formatCents(item.unit_price_cents * item.quantity)}
+                    {formatCents(item.unit_price_cents * item.quantity, currency)}
                   </p>
                 </div>
               ))}
             </div>
 
             <div className="mt-6 space-y-1 border-t border-border pt-4 text-sm">
-              <Totals label="Subtotal">{formatCents(order.subtotal_cents)}</Totals>
-              {order.tax_cents > 0 && <Totals label="Tax">{formatCents(order.tax_cents)}</Totals>}
-              {order.tip_cents > 0 && <Totals label="Tip">{formatCents(order.tip_cents)}</Totals>}
+              <Totals label="Subtotal">{formatCents(order.subtotal_cents, currency)}</Totals>
+              {order.tax_cents > 0 && <Totals label="Tax">{formatCents(order.tax_cents, currency)}</Totals>}
+              {order.tip_cents > 0 && <Totals label="Tip">{formatCents(order.tip_cents, currency)}</Totals>}
               <Totals label="Total" bold>
-                {formatCents(order.total_cents)}
+                {formatCents(order.total_cents, currency)}
               </Totals>
             </div>
           </CardContent>

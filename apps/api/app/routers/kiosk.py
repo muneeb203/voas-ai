@@ -224,6 +224,7 @@ class KioskMenuCategory(BaseModel):
 class KioskMenu(BaseModel):
     categories: list[KioskMenuCategory]
     currency_symbol: str = "$"
+    currency_decimals: int = 2
 
 
 class ManualOrderOption(BaseModel):
@@ -1143,7 +1144,18 @@ async def get_kiosk_menu(token: Annotated[str, Path()]) -> DataResponse[KioskMen
         for c in categories
         if c.is_active and by_category.get(c.id)
     ]
-    return ok(KioskMenu(categories=out))
+
+    from app.core import currency as currency_mod
+
+    ws = db.table("workspaces").select("currency").eq("id", workspace_id).limit(1).execute()
+    code = (ws.data[0].get("currency") if ws.data else None) or currency_mod.DEFAULT_CURRENCY
+    return ok(
+        KioskMenu(
+            categories=out,
+            currency_symbol=currency_mod.symbol_for(code),
+            currency_decimals=currency_mod.decimals_for(code),
+        )
+    )
 
 
 @public_router.post(

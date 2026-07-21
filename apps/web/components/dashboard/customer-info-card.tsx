@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useTransition } from 'react';
+import { useMoney } from '@/components/dashboard/currency-provider';
 import { format } from 'date-fns';
 import { Check, Pencil, X } from 'lucide-react';
 import { toast } from 'sonner';
@@ -10,19 +11,13 @@ import { Input } from '@/components/ui/input';
 import { updateCustomerAction } from '@/app/actions/customer-action';
 import type { Customer } from '@/lib/types';
 
-function formatCurrency(cents: number): string {
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: 'USD',
-  }).format(cents / 100);
-}
-
 interface CustomerInfoCardProps {
   customer: Customer;
   canEdit: boolean;
 }
 
 export function CustomerInfoCard({ customer, canEdit }: CustomerInfoCardProps) {
+  const formatCurrency = useMoney();
   const [name, setName] = useState(customer.name ?? '');
   const [email, setEmail] = useState(customer.email ?? '');
   const [tags, setTags] = useState<string[]>(customer.tags ?? []);

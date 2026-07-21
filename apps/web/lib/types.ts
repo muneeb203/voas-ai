@@ -10,6 +10,7 @@ export interface Workspace {
   vertical: Vertical;
   status: 'active' | 'suspended' | 'deleted';
   usage_enforcement_disabled?: boolean;
+  currency?: string;
   created_at: string;
   updated_at: string;
 }

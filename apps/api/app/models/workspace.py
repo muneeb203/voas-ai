@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 WorkspaceVertical = Literal["restaurant", "dental", "salon", "auto", "other"]
 WorkspacePlan = Literal["trial", "essentials", "professional", "business", "enterprise"]
@@ -17,6 +17,7 @@ class Workspace(BaseModel):
     vertical: WorkspaceVertical
     status: WorkspaceStatus
     usage_enforcement_disabled: bool = False
+    currency: str = "USD"
     created_at: datetime
     updated_at: datetime
 
@@ -37,6 +38,19 @@ class WorkspaceCreate(BaseModel):
 class WorkspaceUpdate(BaseModel):
     name: str | None = Field(default=None, min_length=2, max_length=120)
     vertical: WorkspaceVertical | None = None
+    currency: str | None = None
+
+    @field_validator("currency")
+    @classmethod
+    def _valid_currency(cls, v: str | None) -> str | None:
+        if v is None:
+            return v
+        from app.core.currency import is_valid
+
+        v = v.upper()
+        if not is_valid(v):
+            raise ValueError(f"Unsupported currency: {v}")
+        return v
 
 
 class WorkspaceMembership(BaseModel):

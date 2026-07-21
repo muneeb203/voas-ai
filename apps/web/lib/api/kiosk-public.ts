@@ -145,6 +145,7 @@ export interface KioskMenuCategory {
 export interface KioskMenu {
   categories: KioskMenuCategory[];
   currency_symbol: string;
+  currency_decimals: number;
 }
 
 export interface ManualOrderLine {

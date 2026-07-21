@@ -64,6 +64,7 @@ export default async function SettingsPage({
               <WorkspaceForm
                 defaultName={ws.name}
                 defaultVertical={ws.vertical}
+                defaultCurrency={ws.currency}
                 slug={ws.slug}
                 disabled={!isOwner}
               />

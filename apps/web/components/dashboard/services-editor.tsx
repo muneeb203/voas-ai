@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useTransition } from 'react';
+import { useMoney } from '@/components/dashboard/currency-provider';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { Plus, Pencil, Trash2, Clock, RefreshCw } from 'lucide-react';
@@ -61,6 +62,7 @@ function toForm(s: SalonService): FormState {
 }
 
 export function ServicesEditor({ initialServices, canEdit }: Props) {
+  const money = useMoney();
   const router = useRouter();
   const [refreshing, startRefresh] = useTransition();
   const [open, setOpen] = useState(false);
@@ -149,7 +151,7 @@ export function ServicesEditor({ initialServices, canEdit }: Props) {
                   )}
                   <div className="mt-2 flex items-center gap-3 text-sm">
                     <span className="font-semibold tabular-nums">
-                      ${(s.price_cents / 100).toFixed(2)}
+                      {money(s.price_cents)}
                     </span>
                     <span className="flex items-center gap-1 text-muted-foreground">
                       <Clock className="h-3.5 w-3.5" />
