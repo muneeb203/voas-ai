@@ -299,14 +299,12 @@ class KioskSpeakBody(BaseModel):
 
 
 def _get_ws_kiosk_settings(db, workspace_id: str) -> KioskSettings:
+    # select("*") not an explicit column list: naming a column that a not-yet-run
+    # migration would add makes this read 500 and takes the kiosk down. The model
+    # ignores extra columns and defaults anything missing.
     res = (
         db.table("workspace_kiosk_settings")
-        .select(
-            "theme, session_lock_enabled, kiosk_enabled, max_kiosk_urls, "
-            "kiosk_monthly_limit, kiosk_credits_balance, kiosk_credits_used_this_month, "
-            "kiosk_month_start, restaurant_tone, restaurant_handover, salon_tone, salon_handover, "
-            "manual_ordering_enabled"
-        )
+        .select("*")
         .eq("workspace_id", workspace_id)
         .limit(1)
         .execute()

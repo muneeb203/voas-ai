@@ -436,11 +436,11 @@ class KioskTopupBody(BaseModel):
     amount: int = Field(..., ge=1, le=100_000)
 
 
-_KIOSK_SELECT = (
-    "kiosk_enabled, max_kiosk_urls, theme, session_lock_enabled, "
-    "kiosk_monthly_limit, kiosk_credits_balance, kiosk_credits_used_this_month, "
-    "kiosk_month_start, manual_ordering_enabled"
-)
+# Select all columns rather than naming them: a named column that a not-yet-run
+# migration would add (e.g. manual_ordering_enabled) makes every read here 500,
+# which is how credit top-ups broke when the code deployed ahead of the schema.
+# The response model ignores extras and defaults anything absent.
+_KIOSK_SELECT = "*"
 
 
 # ---------- Kiosk performance metrics -----------------------------------------
