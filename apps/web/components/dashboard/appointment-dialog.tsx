@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useMoney } from '@/components/dashboard/currency-provider';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { format, parseISO } from 'date-fns';
@@ -57,6 +58,7 @@ export function AppointmentDialog({
   fixedServiceId,
   fixedServiceName,
 }: Props) {
+  const money = useMoney();
   const router = useRouter();
   const [serviceId, setServiceId] = useState(fixedServiceId ?? services[0]?.id ?? '');
   const [date, setDate] = useState(todayStr());
@@ -143,7 +145,7 @@ export function AppointmentDialog({
               >
                 {services.map((s) => (
                   <option key={s.id} value={s.id}>
-                    {s.name} · {s.duration_minutes} min · ${(s.price_cents / 100).toFixed(0)}
+                    {s.name} · {s.duration_minutes} min · {money(s.price_cents)}
                   </option>
                 ))}
               </select>

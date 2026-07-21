@@ -18,6 +18,7 @@ export interface WorkspaceCreatePayload {
 export interface WorkspaceUpdatePayload {
   name?: string;
   vertical?: string;
+  currency?: string;
 }
 
 export function getMe() {

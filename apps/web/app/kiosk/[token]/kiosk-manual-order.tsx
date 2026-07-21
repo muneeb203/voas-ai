@@ -20,8 +20,13 @@ interface CartLine {
   qty: number;
 }
 
-function money(cents: number, symbol = '$') {
-  return `${symbol}${(cents / 100).toFixed(2)}`;
+function money(cents: number, symbol = '$', decimals = 2) {
+  const sep = symbol.length > 1 ? ' ' : '';
+  const amount = (cents / 100).toLocaleString(undefined, {
+    minimumFractionDigits: decimals,
+    maximumFractionDigits: decimals,
+  });
+  return `${symbol}${sep}${amount}`;
 }
 
 function lineKey(itemId: string, optionIds: string[]) {
@@ -32,6 +37,8 @@ interface KioskManualOrderProps {
   token: string;
   accentColor: string;
   isLight: boolean;
+  // In 'manual only' mode there's no voice to return to, so the exit button hides.
+  canExit: boolean;
   onExit: () => void;
 }
 
@@ -63,7 +70,7 @@ function palette(isLight: boolean) {
       };
 }
 
-export function KioskManualOrder({ token, accentColor, isLight, onExit }: KioskManualOrderProps) {
+export function KioskManualOrder({ token, accentColor, isLight, canExit, onExit }: KioskManualOrderProps) {
   const c = palette(isLight);
   const [menu, setMenu] = useState<KioskMenu | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -93,6 +100,7 @@ export function KioskManualOrder({ token, accentColor, isLight, onExit }: KioskM
   }, [token]);
 
   const symbol = menu?.currency_symbol ?? '$';
+  const decimals = menu?.currency_decimals ?? 2;
   const cartCount = cart.reduce((n, l) => n + l.qty, 0);
   const cartTotal = cart.reduce((n, l) => n + l.unitCents * l.qty, 0);
 
@@ -172,7 +180,17 @@ export function KioskManualOrder({ token, accentColor, isLight, onExit }: KioskM
         {confirmed.total && <p className={`mt-1 text-lg ${c.textMuted}`}>{confirmed.total}</p>}
         <button
           type="button"
-          onClick={onExit}
+          onClick={() => {
+            // 'both' mode: hand back to the voice home screen. 'manual only':
+            // there's no voice, so reset to a fresh menu for the next customer.
+            if (canExit) {
+              onExit();
+            } else {
+              setConfirmed(null);
+              setCartOpen(false);
+              setActiveCat(menu?.categories[0]?.id ?? null);
+            }
+          }}
           className="mt-10 rounded-full px-8 py-3 text-lg font-semibold text-white"
           style={{ background: accentColor }}
         >
@@ -186,13 +204,15 @@ export function KioskManualOrder({ token, accentColor, isLight, onExit }: KioskM
     <div className="relative z-10 flex flex-1 flex-col overflow-hidden px-4 pb-4">
       <div className="mb-3 flex items-center justify-between">
         <h1 className={`text-2xl font-black ${c.textMain}`}>Tap to order</h1>
-        <button
-          type="button"
-          onClick={onExit}
-          className={`flex items-center gap-1.5 rounded-full px-4 py-2 text-sm font-medium ${c.backBtn}`}
-        >
-          <X className="h-4 w-4" /> Back to voice
-        </button>
+        {canExit && (
+          <button
+            type="button"
+            onClick={onExit}
+            className={`flex items-center gap-1.5 rounded-full px-4 py-2 text-sm font-medium ${c.backBtn}`}
+          >
+            <X className="h-4 w-4" /> Back to voice
+          </button>
+        )}
       </div>
 
       {loadError ? (
@@ -242,7 +262,7 @@ export function KioskManualOrder({ token, accentColor, isLight, onExit }: KioskM
                   >
                     <p className={`text-base font-semibold ${c.textMain}`}>{item.name}</p>
                     <p className={`mt-1 text-sm ${c.textMuted}`}>
-                      {money(item.price_cents, symbol)}
+                      {money(item.price_cents, symbol, decimals)}
                       {item.modifier_groups.length > 0 && ' · options'}
                     </p>
                   </button>
@@ -263,7 +283,7 @@ export function KioskManualOrder({ token, accentColor, isLight, onExit }: KioskM
           <ShoppingCart className="h-5 w-5" />
           View order ({cartCount})
           <span className="opacity-80">·</span>
-          {money(cartTotal, symbol)}
+          {money(cartTotal, symbol, decimals)}
         </button>
       )}
 
@@ -312,7 +332,7 @@ export function KioskManualOrder({ token, accentColor, isLight, onExit }: KioskM
                       </button>
                     </div>
                     <span className={`text-sm ${c.textMuted}`}>
-                      {money(l.unitCents * l.qty, symbol)}
+                      {money(l.unitCents * l.qty, symbol, decimals)}
                     </span>
                   </div>
                 </div>
@@ -321,7 +341,7 @@ export function KioskManualOrder({ token, accentColor, isLight, onExit }: KioskM
             <div className={`border-t p-4 ${c.border}`}>
               <div className={`mb-1 flex justify-between text-sm ${c.textMuted}`}>
                 <span>Subtotal</span>
-                <span className={`font-semibold ${c.textMain}`}>{money(cartTotal, symbol)}</span>
+                <span className={`font-semibold ${c.textMain}`}>{money(cartTotal, symbol, decimals)}</span>
               </div>
               <p className={`mb-3 text-[10px] ${c.textFaint}`}>Tax added at checkout.</p>
               <button
@@ -343,6 +363,7 @@ export function KioskManualOrder({ token, accentColor, isLight, onExit }: KioskM
           item={configuring}
           accentColor={accentColor}
           symbol={symbol}
+          decimals={decimals}
           onCancel={() => setConfiguring(null)}
           onConfirm={(optionIds) => {
             addToCart(configuring, optionIds);
@@ -360,12 +381,14 @@ function ModifierPicker({
   item,
   accentColor,
   symbol,
+  decimals,
   onCancel,
   onConfirm,
 }: {
   item: KioskMenuItem;
   accentColor: string;
   symbol: string;
+  decimals: number;
   onCancel: () => void;
   onConfirm: (optionIds: string[]) => void;
 }) {
@@ -432,7 +455,7 @@ function ModifierPicker({
                   >
                     <span>{o.name}</span>
                     <span className="text-xs opacity-80">
-                      {o.price_delta_cents > 0 ? `+${money(o.price_delta_cents, symbol)}` : ''}
+                      {o.price_delta_cents > 0 ? `+${money(o.price_delta_cents, symbol, decimals)}` : ''}
                     </span>
                   </button>
                 );

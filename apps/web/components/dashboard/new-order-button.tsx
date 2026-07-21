@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useMoney } from '@/components/dashboard/currency-provider';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { Plus, Minus } from 'lucide-react';
@@ -23,6 +24,7 @@ export interface MenuItemLite {
 }
 
 export function NewOrderButton({ menuItems }: { menuItems: MenuItemLite[] }) {
+  const money = useMoney();
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [qty, setQty] = useState<Record<string, number>>({});
@@ -82,7 +84,7 @@ export function NewOrderButton({ menuItems }: { menuItems: MenuItemLite[] }) {
                   <div className="min-w-0">
                     <p className="truncate text-sm font-medium">{m.name}</p>
                     <p className="text-xs text-muted-foreground">
-                      ${(m.price_cents / 100).toFixed(2)}
+                      {money(m.price_cents)}
                     </p>
                   </div>
                   <div className="flex items-center gap-2">
@@ -123,7 +125,7 @@ export function NewOrderButton({ menuItems }: { menuItems: MenuItemLite[] }) {
           </div>
           <DialogFooter>
             <div className="mr-auto self-center text-sm text-muted-foreground">
-              {count} item{count !== 1 ? 's' : ''} · ${(total / 100).toFixed(2)} est.
+              {count} item{count !== 1 ? 's' : ''} · {money(total)} est.
             </div>
             <Button variant="outline" onClick={close} disabled={saving}>
               Cancel

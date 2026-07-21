@@ -56,7 +56,7 @@ interface KioskClientProps {
   theme: 'warm' | 'light' | 'gradient';
   sessionLockEnabled: boolean;
   vertical?: string;
-  manualOrderingEnabled?: boolean;
+  orderMode?: 'voice' | 'manual' | 'both';
 }
 
 type KioskState =
@@ -153,13 +153,16 @@ export function KioskClient({
   theme,
   sessionLockEnabled,
   vertical = 'restaurant',
-  manualOrderingEnabled = false,
+  orderMode = 'voice',
 }: KioskClientProps) {
   const cfg = (THEME_CFG[theme] ?? THEME_CFG['gradient']) as ThemeCfg;
   const isSalon = vertical === 'salon';
   // Tap-to-order is admin-gated and restaurant-only.
-  const canManualOrder = manualOrderingEnabled && !isSalon;
-  const [manualMode, setManualMode] = useState(false);
+  // Salon never gets manual; server already collapses that to 'voice', but guard
+  // here too. 'both' shows the switch button; 'manual' opens straight to tapping.
+  const effectiveMode = isSalon ? 'voice' : orderMode;
+  const showManualSwitch = effectiveMode === 'both';
+  const [manualMode, setManualMode] = useState(effectiveMode === 'manual');
 
   const [kioskState, setKioskState] = useState<KioskState>('idle');
   const [orderItems, setOrderItems] = useState<OrderItem[]>([]);
@@ -930,7 +933,7 @@ export function KioskClient({
   // Manual (tap-to-order) mode: its own screen, reusing the theme wrapper and
   // header. Kept separate from the voice state machine so neither can break the
   // other. Only reachable when admin has enabled it (restaurant kiosks only).
-  if (manualMode && canManualOrder) {
+  if (manualMode && effectiveMode !== 'voice') {
     return (
       <div
         className={`relative flex min-h-screen flex-col overflow-hidden ${cfg.wrapperClass}`}
@@ -946,6 +949,7 @@ export function KioskClient({
           token={token}
           accentColor={cfg.accentColor}
           isLight={isLight}
+          canExit={showManualSwitch}
           onExit={() => setManualMode(false)}
         />
       </div>
@@ -1080,7 +1084,7 @@ export function KioskClient({
                   ? 'Book or check in — your AI assistant is ready'
                   : 'Speak your order — your AI assistant is ready'}
               </p>
-              {canManualOrder && (
+              {showManualSwitch && (
                 <button
                   onClick={() => setManualMode(true)}
                   className={`mt-6 inline-flex items-center gap-2 rounded-full border px-6 py-3 text-base font-semibold transition-colors ${

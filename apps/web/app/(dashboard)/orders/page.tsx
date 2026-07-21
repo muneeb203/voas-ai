@@ -42,6 +42,7 @@ export default async function OrdersPage({
   searchParams: { status?: string };
 }) {
   const session = await requireDashboardSession('/orders');
+  const currency = session.active.workspace.currency;
 
   const status =
     (STATUSES.find((s) => s.id === searchParams.status)?.id as 'all' | OrderStatus) ?? 'all';
@@ -138,7 +139,7 @@ export default async function OrdersPage({
                     <TableCell className="text-sm text-muted-foreground">
                       {o.items_json.length} item{o.items_json.length === 1 ? '' : 's'}
                     </TableCell>
-                    <TableCell className="font-medium">{formatCents(o.total_cents)}</TableCell>
+                    <TableCell className="font-medium">{formatCents(o.total_cents, currency)}</TableCell>
                     <TableCell>
                       <OrderStatusBadge status={o.status} />
                     </TableCell>

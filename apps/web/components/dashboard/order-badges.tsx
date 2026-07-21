@@ -1,5 +1,6 @@
 import { Badge } from '@/components/ui/badge';
 import type { OrderStatus, PaymentStatus } from '@/lib/types';
+import { formatMoney } from '@/lib/currency';
 
 export function OrderStatusBadge({ status }: { status: OrderStatus }) {
   switch (status) {
@@ -35,6 +36,8 @@ export function PaymentStatusBadge({ status }: { status: PaymentStatus }) {
   }
 }
 
-export function formatCents(cents: number): string {
-  return `$${(cents / 100).toFixed(2)}`;
+// Currency-aware. Pass the workspace currency; omit only where it's genuinely
+// unknown (falls back to USD).
+export function formatCents(cents: number, currency?: string): string {
+  return formatMoney(cents, currency);
 }

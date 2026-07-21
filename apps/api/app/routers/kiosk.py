@@ -166,6 +166,7 @@ class KioskSettings(BaseModel):
     salon_tone: str | None = None
     salon_handover: str | None = None
     manual_ordering_enabled: bool = False
+    kiosk_order_mode: str = "both"  # voice | manual | both
 
 
 class KioskSettingsUpdate(BaseModel):
@@ -186,8 +187,10 @@ class KioskInfo(BaseModel):
     theme: str
     session_lock_enabled: bool
     vertical: str = "restaurant"
-    # Drives the "Order by tapping" button on the kiosk. Restaurant only.
-    manual_ordering_enabled: bool = False
+    # The effective mode the kiosk should render: 'voice' (voice only, no
+    # button), 'manual' (tap only, straight to menu), or 'both' (voice + switch).
+    # Already collapses disabled/salon down to 'voice', so the client just obeys.
+    order_mode: str = "voice"
 
 
 class KioskMenuOption(BaseModel):
@@ -224,6 +227,7 @@ class KioskMenuCategory(BaseModel):
 class KioskMenu(BaseModel):
     categories: list[KioskMenuCategory]
     currency_symbol: str = "$"
+    currency_decimals: int = 2
 
 
 class ManualOrderOption(BaseModel):
@@ -762,10 +766,8 @@ async def get_kiosk_info(token: Annotated[str, Path()]) -> DataResponse[KioskInf
             theme=kiosk_cfg.theme,
             session_lock_enabled=kiosk_cfg.session_lock_enabled,
             vertical=ws_row.get("vertical") or "restaurant",
-            # Tap-to-order is restaurant-only; a salon kiosk never shows the button.
-            manual_ordering_enabled=(
-                kiosk_cfg.manual_ordering_enabled
-                and (ws_row.get("vertical") or "restaurant") != "salon"
+            order_mode=_effective_order_mode(
+                kiosk_cfg, ws_row.get("vertical") or "restaurant"
             ),
         )
     )
@@ -1077,14 +1079,22 @@ async def kiosk_chat(
 # ── Manual (tap-to-order) mode ────────────────────────────────────────────────
 
 
+def _effective_order_mode(cfg: KioskSettings, vertical: str) -> str:
+    """What the kiosk should actually do, collapsing the gates:
+    disabled or salon -> 'voice'; otherwise the admin's chosen mode."""
+    if vertical == "salon" or not cfg.manual_ordering_enabled:
+        return "voice"
+    mode = cfg.kiosk_order_mode
+    return mode if mode in ("voice", "manual", "both") else "both"
+
+
 def _require_manual_ordering(db, workspace_id: str, vertical: str) -> None:
-    """Manual mode is admin-gated and restaurant-only. Enforced server-side so
-    a crafted request can't order through a kiosk that hasn't been enabled."""
-    if vertical == "salon":
-        raise NotFoundError("Manual ordering is not available on this kiosk")
+    """Manual endpoints are only reachable when the effective mode allows tap
+    ordering. Enforced server-side so a crafted request can't order through a
+    kiosk configured voice-only, disabled, or on a salon."""
     cfg = _get_ws_kiosk_settings(db, workspace_id)
-    if not cfg.manual_ordering_enabled:
-        raise NotFoundError("Manual ordering is not enabled for this kiosk")
+    if _effective_order_mode(cfg, vertical) not in ("manual", "both"):
+        raise NotFoundError("Manual ordering is not available on this kiosk")
 
 
 @public_router.get(
@@ -1143,7 +1153,18 @@ async def get_kiosk_menu(token: Annotated[str, Path()]) -> DataResponse[KioskMen
         for c in categories
         if c.is_active and by_category.get(c.id)
     ]
-    return ok(KioskMenu(categories=out))
+
+    from app.core import currency as currency_mod
+
+    ws = db.table("workspaces").select("currency").eq("id", workspace_id).limit(1).execute()
+    code = (ws.data[0].get("currency") if ws.data else None) or currency_mod.DEFAULT_CURRENCY
+    return ok(
+        KioskMenu(
+            categories=out,
+            currency_symbol=currency_mod.symbol_for(code),
+            currency_decimals=currency_mod.decimals_for(code),
+        )
+    )
 
 
 @public_router.post(

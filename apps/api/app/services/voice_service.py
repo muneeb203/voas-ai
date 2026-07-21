@@ -135,7 +135,11 @@ def _menu_context_for_workspace(workspace_id: str) -> str:
 
     Lightweight: category → items with prices. Modifiers omitted at this
     layer (Sprint 4 POS sync handles deeper menu reasoning)."""
+    from app.core import currency as currency_mod
+
     db = get_supabase_admin()
+    ws = db.table("workspaces").select("currency").eq("id", workspace_id).limit(1).execute()
+    code = (ws.data[0].get("currency") if ws.data else None)
     cats = (
         db.table("menu_categories")
         .select("id, name")
@@ -161,7 +165,7 @@ def _menu_context_for_workspace(workspace_id: str) -> str:
     for cat in cats.data:
         lines.append(f"\n## {cat['name']}")
         for item in by_cat.get(cat["id"], []):
-            price = f"${item['price_cents'] / 100:.2f}"
+            price = currency_mod.format_cents(item["price_cents"], code)
             lines.append(f"- {item['name']} — {price}")
     return "\n".join(lines)
 
@@ -171,14 +175,19 @@ def _services_context_for_workspace(workspace_id: str) -> str:
 
     The voice agent needs each service_id so it can call check_availability and
     book_appointment. Open times themselves come from the live tool, not here."""
+    from app.core import currency as currency_mod
     from app.services import salon_service
+
+    db = get_supabase_admin()
+    ws = db.table("workspaces").select("currency").eq("id", workspace_id).limit(1).execute()
+    code = (ws.data[0].get("currency") if ws.data else None)
 
     services = salon_service.list_services(workspace_id, active_only=True)
     if not services:
         return ""
     lines = ["", "--- SERVICES (use service_id when calling tools) ---"]
     for svc in services:
-        price = f"${svc.price_cents / 100:.0f}"
+        price = currency_mod.format_cents(svc.price_cents, code)
         lines.append(
             f"- {svc.name} ({svc.duration_minutes} min, {price}) [service_id: {svc.id}]"
         )

@@ -26,6 +26,7 @@ def _build_confirmation(
     total_cents: int,
     fulfillment: str,
     order_id: str,
+    currency: str | None,
 ) -> str:
     greeting = f"Hi {name}! " if name else "Hi! "
     item_lines: list[str] = []
@@ -36,7 +37,9 @@ def _build_confirmation(
     if len(items) > 5:
         item_lines.append(f"  • ...and {len(items) - 5} more")
     items_text = "\n".join(item_lines)
-    total = f"${total_cents / 100:.2f}"
+    from app.core.currency import format_cents
+
+    total = format_cents(total_cents, currency)
     fulfillment_text = _FULFILLMENT_TEXT.get(fulfillment, fulfillment)
     ref = order_id[:8].upper()
 
@@ -98,7 +101,13 @@ def send_order_confirmation(
             log.info("order_confirmation_disabled", workspace_id=workspace_id)
             return
 
-        message = _build_confirmation(customer_name, items_json, total_cents, fulfillment, order_id)
+        db = get_supabase_admin()
+        ws = db.table("workspaces").select("currency").eq("id", workspace_id).limit(1).execute()
+        currency = (ws.data[0].get("currency") if ws.data else None)
+
+        message = _build_confirmation(
+            customer_name, items_json, total_cents, fulfillment, order_id, currency
+        )
 
         # 1. Prefer WhatsApp via the location's own Twilio config.
         config = _location_whatsapp_config(workspace_id, location_id)

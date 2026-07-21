@@ -4,7 +4,9 @@ import { Sidebar } from '@/components/dashboard/sidebar';
 import { Topbar } from '@/components/dashboard/topbar';
 import { HelpBot } from '@/components/dashboard/help-bot';
 import { ProductTour } from '@/components/dashboard/product-tour';
+import { CurrencyProvider } from '@/components/dashboard/currency-provider';
 import { ImpersonationBanner } from '@/components/admin/impersonation-banner';
+import { DEFAULT_CURRENCY } from '@/lib/currency';
 import { requireDashboardSession } from '@/lib/auth/workspace';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 
@@ -24,6 +26,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
 
   return (
     <NextIntlClientProvider messages={messages} locale={locale}>
+      <CurrencyProvider currency={session.active.workspace.currency ?? DEFAULT_CURRENCY}>
       <div className="flex min-h-screen flex-col bg-secondary/20">
         {session.impersonation && (
           <ImpersonationBanner workspaceName={session.impersonation.workspace_name} />
@@ -51,6 +54,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
         tourCompleted={tourCompleted}
         vertical={session.active.workspace.vertical}
       />
+      </CurrencyProvider>
     </NextIntlClientProvider>
   );
 }

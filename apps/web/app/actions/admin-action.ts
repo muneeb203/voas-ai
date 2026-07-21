@@ -163,6 +163,7 @@ export async function updateAdminKioskSettingsAction(
     max_kiosk_urls?: number;
     kiosk_monthly_limit?: number;
     manual_ordering_enabled?: boolean;
+    kiosk_order_mode?: 'voice' | 'manual' | 'both';
   },
 ) {
   await requireAdminSession(`/admin/workspaces/${workspaceId}`);

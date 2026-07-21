@@ -37,6 +37,7 @@ export function AdminKioskSettingsCard({
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [toppingUp, setToppingUp] = useState(false);
   const [manualOn, setManualOn] = useState(settings.manual_ordering_enabled);
+  const [mode, setMode] = useState<'voice' | 'manual' | 'both'>(settings.kiosk_order_mode);
   const [savingManual, setSavingManual] = useState(false);
   const isSalon = vertical === 'salon';
 
@@ -54,6 +55,26 @@ export function AdminKioskSettingsCard({
       toast.success(next ? 'Manual ordering enabled' : 'Manual ordering disabled');
     }
   }
+
+  async function changeMode(next: 'voice' | 'manual' | 'both') {
+    const prev = mode;
+    setMode(next);
+    setSavingManual(true);
+    const res = await updateAdminKioskSettingsAction(workspaceId, { kiosk_order_mode: next });
+    setSavingManual(false);
+    if (res?.error) {
+      setMode(prev);
+      toast.error(res.error);
+    } else {
+      toast.success('Kiosk mode updated');
+    }
+  }
+
+  const MODE_LABELS: Record<'voice' | 'manual' | 'both', string> = {
+    voice: 'Voice only',
+    manual: 'Manual only',
+    both: 'Both (voice + switch)',
+  };
 
   const balance = settings.kiosk_credits_balance;
 
@@ -122,6 +143,34 @@ export function AdminKioskSettingsCard({
               disabled={isSalon || savingManual}
             />
           </div>
+
+          {manualOn && !isSalon && (
+            <div className="mt-3 space-y-1.5 rounded-lg border bg-muted/40 p-3">
+              <Label htmlFor="kiosk-mode">Kiosk mode</Label>
+              <p className="text-xs text-muted-foreground">
+                What the customer sees. <strong>Voice only</strong>: no tap button.{' '}
+                <strong>Manual only</strong>: opens straight to the tap menu, no voice.{' '}
+                <strong>Both</strong>: voice with a switch button.
+              </p>
+              <div className="flex gap-1.5 pt-1">
+                {(['voice', 'manual', 'both'] as const).map((m) => (
+                  <button
+                    key={m}
+                    type="button"
+                    onClick={() => changeMode(m)}
+                    disabled={savingManual}
+                    className={`flex-1 rounded-md border px-3 py-2 text-xs font-medium transition-colors disabled:opacity-50 ${
+                      mode === m
+                        ? 'border-brand bg-brand text-white'
+                        : 'border-border hover:bg-secondary'
+                    }`}
+                  >
+                    {MODE_LABELS[m]}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       </CardContent>
 
