@@ -1,4 +1,5 @@
 from datetime import UTC, datetime, timedelta
+from typing import Literal
 
 from fastapi import APIRouter, BackgroundTasks, Query, status
 from pydantic import BaseModel, Field
@@ -422,6 +423,7 @@ class AdminKioskSettings(BaseModel):
     kiosk_credits_used_this_month: int = 0
     kiosk_month_start: str | None = None
     manual_ordering_enabled: bool = False
+    kiosk_order_mode: str = "both"
 
 
 class AdminKioskSettingsUpdate(BaseModel):
@@ -430,6 +432,7 @@ class AdminKioskSettingsUpdate(BaseModel):
     kiosk_monthly_limit: int | None = Field(default=None, ge=0)
     # Admin-gated while tap-to-order rolls out. Restaurant kiosks only.
     manual_ordering_enabled: bool | None = None
+    kiosk_order_mode: Literal["voice", "manual", "both"] | None = None
 
 
 class KioskTopupBody(BaseModel):
@@ -569,6 +572,8 @@ async def update_admin_kiosk_settings(
         changes["max_kiosk_urls"] = body.max_kiosk_urls
     if body.manual_ordering_enabled is not None:
         changes["manual_ordering_enabled"] = body.manual_ordering_enabled
+    if body.kiosk_order_mode is not None:
+        changes["kiosk_order_mode"] = body.kiosk_order_mode
     if body.kiosk_monthly_limit is not None:
         changes["kiosk_monthly_limit"] = body.kiosk_monthly_limit
         # First time monthly limit is set: seed balance and start the billing cycle

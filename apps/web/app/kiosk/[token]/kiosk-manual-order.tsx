@@ -37,6 +37,8 @@ interface KioskManualOrderProps {
   token: string;
   accentColor: string;
   isLight: boolean;
+  // In 'manual only' mode there's no voice to return to, so the exit button hides.
+  canExit: boolean;
   onExit: () => void;
 }
 
@@ -68,7 +70,7 @@ function palette(isLight: boolean) {
       };
 }
 
-export function KioskManualOrder({ token, accentColor, isLight, onExit }: KioskManualOrderProps) {
+export function KioskManualOrder({ token, accentColor, isLight, canExit, onExit }: KioskManualOrderProps) {
   const c = palette(isLight);
   const [menu, setMenu] = useState<KioskMenu | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -178,7 +180,17 @@ export function KioskManualOrder({ token, accentColor, isLight, onExit }: KioskM
         {confirmed.total && <p className={`mt-1 text-lg ${c.textMuted}`}>{confirmed.total}</p>}
         <button
           type="button"
-          onClick={onExit}
+          onClick={() => {
+            // 'both' mode: hand back to the voice home screen. 'manual only':
+            // there's no voice, so reset to a fresh menu for the next customer.
+            if (canExit) {
+              onExit();
+            } else {
+              setConfirmed(null);
+              setCartOpen(false);
+              setActiveCat(menu?.categories[0]?.id ?? null);
+            }
+          }}
           className="mt-10 rounded-full px-8 py-3 text-lg font-semibold text-white"
           style={{ background: accentColor }}
         >
@@ -192,13 +204,15 @@ export function KioskManualOrder({ token, accentColor, isLight, onExit }: KioskM
     <div className="relative z-10 flex flex-1 flex-col overflow-hidden px-4 pb-4">
       <div className="mb-3 flex items-center justify-between">
         <h1 className={`text-2xl font-black ${c.textMain}`}>Tap to order</h1>
-        <button
-          type="button"
-          onClick={onExit}
-          className={`flex items-center gap-1.5 rounded-full px-4 py-2 text-sm font-medium ${c.backBtn}`}
-        >
-          <X className="h-4 w-4" /> Back to voice
-        </button>
+        {canExit && (
+          <button
+            type="button"
+            onClick={onExit}
+            className={`flex items-center gap-1.5 rounded-full px-4 py-2 text-sm font-medium ${c.backBtn}`}
+          >
+            <X className="h-4 w-4" /> Back to voice
+          </button>
+        )}
       </div>
 
       {loadError ? (
