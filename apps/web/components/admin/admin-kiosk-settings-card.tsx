@@ -38,8 +38,25 @@ export function AdminKioskSettingsCard({
   const [toppingUp, setToppingUp] = useState(false);
   const [manualOn, setManualOn] = useState(settings.manual_ordering_enabled);
   const [mode, setMode] = useState<'voice' | 'manual' | 'both'>(settings.kiosk_order_mode);
+  const [phoneOn, setPhoneOn] = useState(settings.phone_ordering_enabled);
   const [savingManual, setSavingManual] = useState(false);
+  const [savingPhone, setSavingPhone] = useState(false);
   const isSalon = vertical === 'salon';
+
+  async function togglePhone(next: boolean) {
+    setPhoneOn(next);
+    setSavingPhone(true);
+    const res = await updateAdminKioskSettingsAction(workspaceId, {
+      phone_ordering_enabled: next,
+    });
+    setSavingPhone(false);
+    if (res?.error) {
+      setPhoneOn(!next);
+      toast.error(res.error);
+    } else {
+      toast.success(next ? 'Phone (QR) ordering enabled' : 'Phone ordering disabled');
+    }
+  }
 
   async function toggleManual(next: boolean) {
     setManualOn(next);
@@ -171,6 +188,25 @@ export function AdminKioskSettingsCard({
               </div>
             </div>
           )}
+        </div>
+
+        <div className="space-y-2 border-t pt-5">
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <Label htmlFor="phone-ordering">QR / phone ordering</Label>
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                {isSalon
+                  ? 'Restaurant workspaces only.'
+                  : 'Lets customers scan a QR and order from their own phone (many at once), picking up by order number. Separate from the in-store kiosk. Free — no credit used.'}
+              </p>
+            </div>
+            <Switch
+              id="phone-ordering"
+              checked={phoneOn}
+              onChange={(e) => togglePhone(e.target.checked)}
+              disabled={isSalon || savingPhone}
+            />
+          </div>
         </div>
       </CardContent>
 

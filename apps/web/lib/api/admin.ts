@@ -438,6 +438,7 @@ export interface AdminKioskSettings {
   kiosk_month_start: string | null;
   manual_ordering_enabled: boolean;
   kiosk_order_mode: 'voice' | 'manual' | 'both';
+  phone_ordering_enabled: boolean;
 }
 
 export function getAdminKioskSettings(workspaceId: string) {
@@ -449,7 +450,7 @@ export function getAdminKioskSettings(workspaceId: string) {
 
 export function updateAdminKioskSettings(
   workspaceId: string,
-  body: { kiosk_enabled?: boolean; max_kiosk_urls?: number; kiosk_monthly_limit?: number; manual_ordering_enabled?: boolean; kiosk_order_mode?: 'voice' | 'manual' | 'both' },
+  body: { kiosk_enabled?: boolean; max_kiosk_urls?: number; kiosk_monthly_limit?: number; manual_ordering_enabled?: boolean; kiosk_order_mode?: 'voice' | 'manual' | 'both'; phone_ordering_enabled?: boolean },
 ) {
   return apiCall<AdminKioskSettings>(`/v1/admin/workspaces/${workspaceId}/kiosk-settings`, {
     method: 'PATCH',

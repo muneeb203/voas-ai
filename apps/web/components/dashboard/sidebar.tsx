@@ -11,7 +11,6 @@ import {
   Plug,
   BarChart3,
   MapPin,
-  MonitorSmartphone,
   Users,
   Settings,
   LifeBuoy,
@@ -61,7 +60,6 @@ function buildSections(vertical: string): NavSection[] {
     ...(isSalon
       ? [{ href: '/staff', labelKey: 'staff', label: 'Staff', icon: UserCog }]
       : []),
-    { href: '/self-order', labelKey: 'selfOrder', icon: MonitorSmartphone },
     { href: '/team', labelKey: 'team', icon: Users },
     { href: '/settings', labelKey: 'settings', icon: Settings },
     { href: '/support', labelKey: 'support', icon: LifeBuoy },

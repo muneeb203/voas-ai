@@ -5,6 +5,8 @@ import { Loader2, Minus, Plus, ShoppingCart, X, Check } from 'lucide-react';
 import {
   getKioskMenu,
   placeManualOrder,
+  getPhoneMenu,
+  placePhoneOrder,
   type KioskMenu,
   type KioskMenuItem,
   type KioskMenuOption,
@@ -40,6 +42,9 @@ interface KioskManualOrderProps {
   // In 'manual only' mode there's no voice to return to, so the exit button hides.
   canExit: boolean;
   onExit: () => void;
+  // 'kiosk' (in-store screen) or 'phone' (customer's own phone via QR) — selects
+  // which token-scoped endpoints to call.
+  channel?: 'kiosk' | 'phone';
 }
 
 // One palette so the panel reads correctly on the light theme (dark text on the
@@ -70,8 +75,17 @@ function palette(isLight: boolean) {
       };
 }
 
-export function KioskManualOrder({ token, accentColor, isLight, canExit, onExit }: KioskManualOrderProps) {
+export function KioskManualOrder({
+  token,
+  accentColor,
+  isLight,
+  canExit,
+  onExit,
+  channel = 'kiosk',
+}: KioskManualOrderProps) {
   const c = palette(isLight);
+  const fetchMenu = channel === 'phone' ? getPhoneMenu : getKioskMenu;
+  const placeOrder = channel === 'phone' ? placePhoneOrder : placeManualOrder;
   const [menu, setMenu] = useState<KioskMenu | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [cart, setCart] = useState<CartLine[]>([]);
@@ -86,7 +100,7 @@ export function KioskManualOrder({ token, accentColor, isLight, canExit, onExit 
 
   useEffect(() => {
     let active = true;
-    getKioskMenu(token).then((res) => {
+    fetchMenu(token).then((res) => {
       if (!active) return;
       if ('error' in res) setLoadError(res.error.message);
       else {
@@ -97,6 +111,9 @@ export function KioskManualOrder({ token, accentColor, isLight, canExit, onExit 
     return () => {
       active = false;
     };
+    // fetchMenu is derived from the fixed `channel` prop — stable for the
+    // component's life, so only the token needs to trigger a re-fetch.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token]);
 
   const symbol = menu?.currency_symbol ?? '$';
@@ -153,7 +170,7 @@ export function KioskManualOrder({ token, accentColor, isLight, canExit, onExit 
       quantity: l.qty,
       option_ids: l.optionIds,
     }));
-    const res = await placeManualOrder(token, items);
+    const res = await placeOrder(token, items);
     setPlacing(false);
     if ('error' in res) {
       setLoadError(res.error.message);
@@ -224,9 +241,9 @@ export function KioskManualOrder({ token, accentColor, isLight, canExit, onExit 
           <Loader2 className={`h-8 w-8 animate-spin ${c.textMuted}`} />
         </div>
       ) : (
-        <div className="flex flex-1 gap-4 overflow-hidden">
+        <div className="flex flex-1 flex-col gap-3 overflow-hidden md:flex-row md:gap-4">
           {/* Category rail — always visible, one tap to switch */}
-          <nav className="w-44 flex-shrink-0 space-y-1 overflow-y-auto pr-1">
+          <nav className="flex gap-1.5 overflow-x-auto pb-1 md:w-44 md:flex-shrink-0 md:flex-col md:space-y-1 md:gap-0 md:overflow-x-visible md:overflow-y-auto md:pb-0 md:pr-1">
             {menu.categories.map((cat) => {
               const on = cat.id === activeCat;
               return (
@@ -234,7 +251,7 @@ export function KioskManualOrder({ token, accentColor, isLight, canExit, onExit 
                   key={cat.id}
                   type="button"
                   onClick={() => setActiveCat(cat.id)}
-                  className={`w-full rounded-lg px-3 py-3 text-left text-sm font-semibold transition-colors ${
+                  className={`flex-shrink-0 whitespace-nowrap rounded-lg px-3 py-2.5 text-left text-sm font-semibold transition-colors md:w-full ${
                     on ? 'text-white' : `${c.tileBg} border ${c.textMain}`
                   }`}
                   style={on ? { background: accentColor } : undefined}
@@ -250,7 +267,7 @@ export function KioskManualOrder({ token, accentColor, isLight, canExit, onExit 
 
           {/* Items for the selected category */}
           <div className="flex-1 overflow-y-auto pr-1">
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
               {menu.categories
                 .find((cat) => cat.id === activeCat)
                 ?.items.map((item) => (
