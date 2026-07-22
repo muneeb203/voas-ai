@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
-import { Phone, MessageSquare, Sparkles, AlertCircle, QrCode } from 'lucide-react';
+import { Phone, MessageSquare, Sparkles, AlertCircle, QrCode, MonitorSmartphone } from 'lucide-react';
 import { requireDashboardSession } from '@/lib/auth/workspace';
 import { getVoiceCapabilities, getVoiceSettings } from '@/lib/api/voice';
 import { getWhatsAppCapabilities, getWhatsAppSettings, getLocationWhatsAppConfig } from '@/lib/api/whatsapp';
@@ -61,10 +61,33 @@ export default async function IntegrationsPage() {
           hasLiveLocation={hasLiveWhatsAppLocation}
           openaiConfigured={waCaps?.openai_configured ?? false}
         />
+        <InStoreCard />
         <QrOrderingCard />
         <MoreIntegrationsCard />
       </div>
     </div>
+  );
+}
+
+function InStoreCard() {
+  return (
+    <Card>
+      <CardContent className="space-y-3 p-5">
+        <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-accent/10">
+          <MonitorSmartphone className="h-5 w-5 text-accent" />
+        </div>
+        <div>
+          <h3 className="text-base font-semibold">In-Store Ordering</h3>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Turn any tablet at the counter into a self-service kiosk — voice or tap. Generate a
+            kiosk URL per location and set the theme and tone.
+          </p>
+        </div>
+        <Button asChild variant="outline" className="w-full">
+          <Link href="/self-order">Set up in-store ordering</Link>
+        </Button>
+      </CardContent>
+    </Card>
   );
 }
 
