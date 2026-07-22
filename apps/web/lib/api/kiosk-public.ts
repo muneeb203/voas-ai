@@ -175,3 +175,24 @@ export function placeManualOrder(
     body: JSON.stringify({ items }),
   });
 }
+
+
+export function getPhoneMenu(token: string): Promise<ApiResponse<KioskMenu>> {
+  return publicFetch(`/v1/order/${token}/menu`, { cache: 'no-store' });
+}
+
+export function getPhoneOrderInfo(
+  token: string,
+): Promise<ApiResponse<{ workspace_name: string; location_name: string }>> {
+  return publicFetch(`/v1/order/${token}/info`, { cache: 'no-store' });
+}
+
+export function placePhoneOrder(
+  token: string,
+  items: ManualOrderLine[],
+): Promise<ApiResponse<ManualOrderResult>> {
+  return publicFetch(`/v1/order/${token}/place`, {
+    method: 'POST',
+    body: JSON.stringify({ items }),
+  });
+}

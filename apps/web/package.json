@@ -34,6 +34,7 @@
     "next": "^14.2.0",
     "next-intl": "^4.13.0",
     "posthog-js": "^1.160.0",
+    "qrcode.react": "^4.2.0",
     "react": "^18.3.0",
     "react-dom": "^18.3.0",
     "react-hook-form": "^7.52.0",

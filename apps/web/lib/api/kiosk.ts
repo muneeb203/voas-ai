@@ -25,6 +25,7 @@ export interface KioskSettings {
   restaurant_handover: string | null;
   salon_tone: string | null;
   salon_handover: string | null;
+  phone_ordering_enabled?: boolean;
 }
 
 export interface KioskInfo {

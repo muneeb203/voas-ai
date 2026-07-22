@@ -167,6 +167,7 @@ class KioskSettings(BaseModel):
     salon_handover: str | None = None
     manual_ordering_enabled: bool = False
     kiosk_order_mode: str = "both"  # voice | manual | both
+    phone_ordering_enabled: bool = False
 
 
 class KioskSettingsUpdate(BaseModel):
@@ -1097,18 +1098,19 @@ def _require_manual_ordering(db, workspace_id: str, vertical: str) -> None:
         raise NotFoundError("Manual ordering is not available on this kiosk")
 
 
-@public_router.get(
-    "/kiosk/{token}/menu",
-    response_model=DataResponse[KioskMenu],
-)
-async def get_kiosk_menu(token: Annotated[str, Path()]) -> DataResponse[KioskMenu]:
-    """Menu for tap-to-order. Public (kiosk has no login) but token-scoped and
-    gated on manual ordering being enabled."""
-    db = get_supabase_admin()
-    ctx = _get_kiosk_chat_context(db, token)
-    workspace_id = ctx["workspace_id"]
-    _require_manual_ordering(db, workspace_id, ctx.get("vertical", "restaurant"))
+def _require_phone_ordering(db, workspace_id: str, vertical: str) -> None:
+    """Phone (QR) ordering is its own admin-gated, restaurant-only switch —
+    separate from the physical kiosk's mode. Guarded server-side."""
+    if vertical == "salon":
+        raise NotFoundError("Phone ordering is not available")
+    cfg = _get_ws_kiosk_settings(db, workspace_id)
+    if not cfg.phone_ordering_enabled:
+        raise NotFoundError("Phone ordering is not enabled")
 
+
+def _build_tap_menu(db, workspace_id: str) -> KioskMenu:
+    """The tap-to-order menu payload, shared by the kiosk and phone routes."""
+    from app.core import currency as currency_mod
     from app.services import menu_service
 
     categories = menu_service.list_categories(workspace_id)
@@ -1153,40 +1155,20 @@ async def get_kiosk_menu(token: Annotated[str, Path()]) -> DataResponse[KioskMen
         for c in categories
         if c.is_active and by_category.get(c.id)
     ]
-
-    from app.core import currency as currency_mod
-
     ws = db.table("workspaces").select("currency").eq("id", workspace_id).limit(1).execute()
     code = (ws.data[0].get("currency") if ws.data else None) or currency_mod.DEFAULT_CURRENCY
-    return ok(
-        KioskMenu(
-            categories=out,
-            currency_symbol=currency_mod.symbol_for(code),
-            currency_decimals=currency_mod.decimals_for(code),
-        )
+    return KioskMenu(
+        categories=out,
+        currency_symbol=currency_mod.symbol_for(code),
+        currency_decimals=currency_mod.decimals_for(code),
     )
 
 
-@public_router.post(
-    "/kiosk/{token}/manual-order",
-    response_model=DataResponse[ManualOrderResult],
-)
-async def place_manual_order(
-    token: Annotated[str, Path()], body: ManualOrderBody
-) -> DataResponse[ManualOrderResult]:
-    """Place an order from tap-to-order. No AI involved, so no kiosk credit is
-    consumed and the credit balance is not checked — a business that has run out
-    can still take manual orders.
-
-    Prices come from the database, never from the client: the request carries
-    only ids, so a tampered payload can't change what anything costs.
-    """
-    db = get_supabase_admin()
-    ctx = _get_kiosk_chat_context(db, token)
-    workspace_id = ctx["workspace_id"]
-    location_id = ctx["location_id"]
-    _require_manual_ordering(db, workspace_id, ctx.get("vertical", "restaurant"))
-
+def _place_tap_order(
+    db, workspace_id: str, location_id: str | None, body: ManualOrderBody, source: str
+) -> ManualOrderResult:
+    """Place a tap order (kiosk or phone). Prices come from the DB — the request
+    carries only ids — and it reuses the same order path the voice agent uses."""
     item_ids = [line.item_id for line in body.items]
     items_res = (
         db.table("menu_items")
@@ -1200,9 +1182,6 @@ async def place_manual_order(
     option_ids = [oid for line in body.items for oid in line.option_ids]
     options_by_id: dict[str, dict] = {}
     if option_ids:
-        # Only option NAMES are needed — downstream pricing re-resolves each
-        # name against this workspace's own item, so a foreign or tampered id
-        # can never change what anything costs (it just won't match, delta 0).
         opts_res = (
             db.table("menu_modifier_options")
             .select("id, name")
@@ -1217,15 +1196,11 @@ async def place_manual_order(
         if not item:
             continue
         names = [options_by_id[o]["name"] for o in line.option_ids if o in options_by_id]
-        tool_items.append(
-            {"name": item["name"], "quantity": line.quantity, "modifiers": names}
-        )
+        tool_items.append({"name": item["name"], "quantity": line.quantity, "modifiers": names})
 
     if not tool_items:
         raise AppError("None of those items are available right now.")
 
-    # Same path the voice agent uses — one pricing, tax and order-row
-    # implementation rather than a second one that can drift.
     result = voice_order_service.place_order_from_tool_call(
         workspace_id=workspace_id,
         location_id=location_id,
@@ -1235,30 +1210,103 @@ async def place_manual_order(
         arguments={
             "items": tool_items,
             "fulfillment": "pickup",
-            "special_instructions": "Placed at kiosk (manual)",
+            "special_instructions": f"Placed via {source}",
         },
         assign_token=True,
     )
     if not result.get("success"):
         raise AppError(result.get("message") or "Could not place the order.")
 
-    token = result.get("order_token")
+    order_token = result.get("order_token")
     log.info(
-        "kiosk_manual_order",
+        "tap_order_placed",
         workspace_id=workspace_id,
+        source=source,
         order_id=result.get("order_id"),
-        order_token=token,
+        order_token=order_token,
         lines=len(tool_items),
     )
+    return ManualOrderResult(
+        success=True,
+        order_id=str(result.get("order_id")) if result.get("order_id") else None,
+        order_number=str(order_token) if order_token else None,
+        total=result.get("total_dollars") and f"${result['total_dollars']:.2f}",
+    )
+
+
+@public_router.get(
+    "/kiosk/{token}/menu",
+    response_model=DataResponse[KioskMenu],
+)
+async def get_kiosk_menu(token: Annotated[str, Path()]) -> DataResponse[KioskMenu]:
+    """Menu for kiosk tap-to-order. Token-scoped, gated on manual mode."""
+    db = get_supabase_admin()
+    ctx = _get_kiosk_chat_context(db, token)
+    workspace_id = ctx["workspace_id"]
+    _require_manual_ordering(db, workspace_id, ctx.get("vertical", "restaurant"))
+    return ok(_build_tap_menu(db, workspace_id))
+
+
+@public_router.post(
+    "/kiosk/{token}/manual-order",
+    response_model=DataResponse[ManualOrderResult],
+)
+async def place_manual_order(
+    token: Annotated[str, Path()], body: ManualOrderBody
+) -> DataResponse[ManualOrderResult]:
+    """Place a kiosk tap order. No AI, so no credit is consumed or checked.
+    Prices come from the DB — the request carries only ids."""
+    db = get_supabase_admin()
+    ctx = _get_kiosk_chat_context(db, token)
+    workspace_id = ctx["workspace_id"]
+    _require_manual_ordering(db, workspace_id, ctx.get("vertical", "restaurant"))
+    return ok(_place_tap_order(db, workspace_id, ctx["location_id"], body, "kiosk (manual)"))
+
+
+# ── Phone (QR) ordering — many concurrent devices, no session lock ────────────
+
+
+@public_router.get("/order/{token}/menu", response_model=DataResponse[KioskMenu])
+async def get_phone_menu(token: Annotated[str, Path()]) -> DataResponse[KioskMenu]:
+    db = get_supabase_admin()
+    ctx = _get_kiosk_chat_context(db, token)
+    workspace_id = ctx["workspace_id"]
+    _require_phone_ordering(db, workspace_id, ctx.get("vertical", "restaurant"))
+    return ok(_build_tap_menu(db, workspace_id))
+
+
+@public_router.get("/order/{token}/info", response_model=DataResponse[KioskInfo])
+async def get_phone_info(token: Annotated[str, Path()]) -> DataResponse[KioskInfo]:
+    """Minimal header info for the phone ordering page (business + location name)."""
+    db = get_supabase_admin()
+    ctx = _get_kiosk_chat_context(db, token)
+    workspace_id = ctx["workspace_id"]
+    _require_phone_ordering(db, workspace_id, ctx.get("vertical", "restaurant"))
+
+    loc = db.table("locations").select("name").eq("id", ctx["location_id"]).limit(1).execute()
+    ws = db.table("workspaces").select("name").eq("id", workspace_id).limit(1).execute()
     return ok(
-        ManualOrderResult(
-            success=True,
-            order_id=str(result.get("order_id")) if result.get("order_id") else None,
-            # The short token IS the number the customer shows staff.
-            order_number=str(token) if token else None,
-            total=result.get("total_dollars") and f"${result['total_dollars']:.2f}",
+        KioskInfo(
+            location_name=loc.data[0]["name"] if loc.data else "",
+            workspace_name=ws.data[0]["name"] if ws.data else "",
+            theme="light",
+            session_lock_enabled=False,
+            order_mode="manual",
         )
     )
+
+
+@public_router.post("/order/{token}/place", response_model=DataResponse[ManualOrderResult])
+async def place_phone_order(
+    token: Annotated[str, Path()], body: ManualOrderBody
+) -> DataResponse[ManualOrderResult]:
+    """Place a phone (QR) tap order. Not session-locked — many customers order
+    at once. Free (no credit). Pickup by the returned order number."""
+    db = get_supabase_admin()
+    ctx = _get_kiosk_chat_context(db, token)
+    workspace_id = ctx["workspace_id"]
+    _require_phone_ordering(db, workspace_id, ctx.get("vertical", "restaurant"))
+    return ok(_place_tap_order(db, workspace_id, ctx["location_id"], body, "phone (QR)"))
 
 
 @public_router.post("/kiosk/{token}/speak")

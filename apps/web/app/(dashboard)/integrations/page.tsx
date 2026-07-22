@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
-import { Phone, MessageSquare, Sparkles, AlertCircle } from 'lucide-react';
+import { Phone, MessageSquare, Sparkles, AlertCircle, QrCode } from 'lucide-react';
 import { requireDashboardSession } from '@/lib/auth/workspace';
 import { getVoiceCapabilities, getVoiceSettings } from '@/lib/api/voice';
 import { getWhatsAppCapabilities, getWhatsAppSettings, getLocationWhatsAppConfig } from '@/lib/api/whatsapp';
@@ -61,9 +61,37 @@ export default async function IntegrationsPage() {
           hasLiveLocation={hasLiveWhatsAppLocation}
           openaiConfigured={waCaps?.openai_configured ?? false}
         />
+        <QrOrderingCard />
         <MoreIntegrationsCard />
       </div>
     </div>
+  );
+}
+
+function QrOrderingCard() {
+  return (
+    <Card>
+      <CardContent className="space-y-3 p-5">
+        <div className="flex items-start justify-between">
+          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-accent/10">
+            <QrCode className="h-5 w-5 text-accent" />
+          </div>
+          <Badge variant="accent" className="px-1.5 py-0 text-[10px] uppercase tracking-wide">
+            Beta
+          </Badge>
+        </div>
+        <div>
+          <h3 className="text-base font-semibold">QR Ordering</h3>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Print a QR code per location. Customers scan and order from their own phone; they pick
+            up by order number.
+          </p>
+        </div>
+        <Button asChild variant="outline" className="w-full">
+          <Link href="/integrations/qr">Get QR codes</Link>
+        </Button>
+      </CardContent>
+    </Card>
   );
 }
 

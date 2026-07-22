@@ -164,6 +164,7 @@ export async function updateAdminKioskSettingsAction(
     kiosk_monthly_limit?: number;
     manual_ordering_enabled?: boolean;
     kiosk_order_mode?: 'voice' | 'manual' | 'both';
+    phone_ordering_enabled?: boolean;
   },
 ) {
   await requireAdminSession(`/admin/workspaces/${workspaceId}`);
