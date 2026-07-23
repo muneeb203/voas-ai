@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
-import { Phone, MessageSquare, Sparkles, AlertCircle, QrCode, MonitorSmartphone } from 'lucide-react';
+import { Phone, MessageSquare, AlertCircle, QrCode, MonitorSmartphone } from 'lucide-react';
 import { requireDashboardSession } from '@/lib/auth/workspace';
 import { getVoiceCapabilities, getVoiceSettings } from '@/lib/api/voice';
 import { getWhatsAppCapabilities, getWhatsAppSettings, getLocationWhatsAppConfig } from '@/lib/api/whatsapp';
@@ -72,7 +72,6 @@ export default async function IntegrationsPage() {
           hasLiveLocation={hasLiveWhatsAppLocation}
           openaiConfigured={waCaps?.openai_configured ?? false}
         />
-        <MoreIntegrationsCard />
       </div>
     </div>
   );
@@ -246,21 +245,3 @@ function WhatsAppCard({
   );
 }
 
-function MoreIntegrationsCard() {
-  return (
-    <Card className="border-dashed">
-      <CardContent className="flex h-full flex-col justify-center space-y-3 p-5">
-        <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-accent/10">
-          <Sparkles className="h-5 w-5 text-accent" />
-        </div>
-        <div>
-          <h3 className="text-base font-semibold">More integrations on the way</h3>
-          <p className="mt-1 text-sm text-muted-foreground">
-            POS, payments, and calendar bookings are next — so your orders, payments, and
-            appointments flow end-to-end.
-          </p>
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
