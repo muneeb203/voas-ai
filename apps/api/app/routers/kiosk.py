@@ -168,6 +168,8 @@ class KioskSettings(BaseModel):
     manual_ordering_enabled: bool = False
     kiosk_order_mode: str = "both"  # voice | manual | both
     phone_ordering_enabled: bool = False
+    phone_order_lock_enabled: bool = False
+    phone_order_lock_minutes: int = 30
 
 
 class KioskSettingsUpdate(BaseModel):
@@ -180,6 +182,8 @@ class KioskSettingsUpdate(BaseModel):
     salon_tone: str | None = Field(default=None, max_length=1000)
     salon_handover: str | None = Field(default=None, max_length=1000)
     manual_ordering_enabled: bool | None = None
+    phone_order_lock_enabled: bool | None = None
+    phone_order_lock_minutes: int | None = Field(default=None, ge=1, le=1440)
 
 
 class KioskInfo(BaseModel):
@@ -192,6 +196,13 @@ class KioskInfo(BaseModel):
     # button), 'manual' (tap only, straight to menu), or 'both' (voice + switch).
     # Already collapses disabled/salon down to 'voice', so the client just obeys.
     order_mode: str = "voice"
+
+
+class PhoneOrderInfo(BaseModel):
+    location_name: str
+    workspace_name: str
+    order_lock_enabled: bool = False
+    order_lock_minutes: int = 30
 
 
 class KioskMenuOption(BaseModel):
@@ -711,6 +722,10 @@ async def update_kiosk_settings(
         if value is not None:
             # "" is a real value here — it's how an owner clears the field.
             changes[field] = value.strip() or None
+    if body.phone_order_lock_enabled is not None:
+        changes["phone_order_lock_enabled"] = body.phone_order_lock_enabled
+    if body.phone_order_lock_minutes is not None:
+        changes["phone_order_lock_minutes"] = body.phone_order_lock_minutes
 
     if existing.data:
         res = (
@@ -1275,23 +1290,23 @@ async def get_phone_menu(token: Annotated[str, Path()]) -> DataResponse[KioskMen
     return ok(_build_tap_menu(db, workspace_id))
 
 
-@public_router.get("/order/{token}/info", response_model=DataResponse[KioskInfo])
-async def get_phone_info(token: Annotated[str, Path()]) -> DataResponse[KioskInfo]:
-    """Minimal header info for the phone ordering page (business + location name)."""
+@public_router.get("/order/{token}/info", response_model=DataResponse[PhoneOrderInfo])
+async def get_phone_info(token: Annotated[str, Path()]) -> DataResponse[PhoneOrderInfo]:
+    """Header info + the device-lock policy for the phone ordering page."""
     db = get_supabase_admin()
     ctx = _get_kiosk_chat_context(db, token)
     workspace_id = ctx["workspace_id"]
     _require_phone_ordering(db, workspace_id, ctx.get("vertical", "restaurant"))
 
+    cfg = _get_ws_kiosk_settings(db, workspace_id)
     loc = db.table("locations").select("name").eq("id", ctx["location_id"]).limit(1).execute()
     ws = db.table("workspaces").select("name").eq("id", workspace_id).limit(1).execute()
     return ok(
-        KioskInfo(
+        PhoneOrderInfo(
             location_name=loc.data[0]["name"] if loc.data else "",
             workspace_name=ws.data[0]["name"] if ws.data else "",
-            theme="light",
-            session_lock_enabled=False,
-            order_mode="manual",
+            order_lock_enabled=cfg.phone_order_lock_enabled,
+            order_lock_minutes=cfg.phone_order_lock_minutes,
         )
     )
 
