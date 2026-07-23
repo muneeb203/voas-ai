@@ -181,9 +181,14 @@ export function getPhoneMenu(token: string): Promise<ApiResponse<KioskMenu>> {
   return publicFetch(`/v1/order/${token}/menu`, { cache: 'no-store' });
 }
 
-export function getPhoneOrderInfo(
-  token: string,
-): Promise<ApiResponse<{ workspace_name: string; location_name: string }>> {
+export interface PhoneOrderInfo {
+  workspace_name: string;
+  location_name: string;
+  order_lock_enabled: boolean;
+  order_lock_minutes: number;
+}
+
+export function getPhoneOrderInfo(token: string): Promise<ApiResponse<PhoneOrderInfo>> {
   return publicFetch(`/v1/order/${token}/info`, { cache: 'no-store' });
 }
 

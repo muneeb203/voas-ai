@@ -26,6 +26,8 @@ export interface KioskSettings {
   salon_tone: string | null;
   salon_handover: string | null;
   phone_ordering_enabled?: boolean;
+  phone_order_lock_enabled?: boolean;
+  phone_order_lock_minutes?: number;
 }
 
 export interface KioskInfo {

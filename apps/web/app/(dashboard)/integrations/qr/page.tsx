@@ -11,6 +11,7 @@ export const metadata: Metadata = { title: 'QR Ordering' };
 export default async function QrOrderingPage() {
   const session = await requireDashboardSession('/integrations/qr');
   const workspaceId = session.active.workspace_id;
+  const isOwner = session.active.role === 'owner';
 
   const [locationsRes, tokensRes, settingsRes] = await Promise.all([
     listLocations(workspaceId),
@@ -40,7 +41,13 @@ export default async function QrOrderingPage() {
         title="QR Ordering"
         description="Print a QR code for each location. Customers scan it and order from their own phone — no app, no waiting. Orders pick up by number."
       />
-      <PhoneOrderQrPanel enabled={enabled} locations={locationQrs} />
+      <PhoneOrderQrPanel
+        enabled={enabled}
+        locations={locationQrs}
+        lockEnabled={Boolean(settings?.phone_order_lock_enabled)}
+        lockMinutes={settings?.phone_order_lock_minutes ?? 30}
+        isOwner={isOwner}
+      />
     </div>
   );
 }

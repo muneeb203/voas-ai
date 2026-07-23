@@ -45,6 +45,10 @@ interface KioskManualOrderProps {
   // 'kiosk' (in-store screen) or 'phone' (customer's own phone via QR) — selects
   // which token-scoped endpoints to call.
   channel?: 'kiosk' | 'phone';
+  // Called after a successful order with the pickup number.
+  onOrderPlaced?: (orderNumber: string | null) => void;
+  // When true, the confirmation screen is terminal — no "start another order".
+  lockAfterOrder?: boolean;
 }
 
 // One palette so the panel reads correctly on the light theme (dark text on the
@@ -82,6 +86,8 @@ export function KioskManualOrder({
   canExit,
   onExit,
   channel = 'kiosk',
+  onOrderPlaced,
+  lockAfterOrder = false,
 }: KioskManualOrderProps) {
   const c = palette(isLight);
   const fetchMenu = channel === 'phone' ? getPhoneMenu : getKioskMenu;
@@ -178,6 +184,7 @@ export function KioskManualOrder({
     }
     setConfirmed({ number: res.data.order_number, total: res.data.total });
     setCart([]);
+    onOrderPlaced?.(res.data.order_number);
   }
 
   // ── Confirmation ──
@@ -195,24 +202,28 @@ export function KioskManualOrder({
           <p className={`mt-3 text-2xl font-bold ${c.textMain}`}>Order {confirmed.number}</p>
         )}
         {confirmed.total && <p className={`mt-1 text-lg ${c.textMuted}`}>{confirmed.total}</p>}
-        <button
-          type="button"
-          onClick={() => {
-            // 'both' mode: hand back to the voice home screen. 'manual only':
-            // there's no voice, so reset to a fresh menu for the next customer.
-            if (canExit) {
-              onExit();
-            } else {
-              setConfirmed(null);
-              setCartOpen(false);
-              setActiveCat(menu?.categories[0]?.id ?? null);
-            }
-          }}
-          className="mt-10 rounded-full px-8 py-3 text-lg font-semibold text-white"
-          style={{ background: accentColor }}
-        >
-          Done
-        </button>
+        {lockAfterOrder ? (
+          <p className={`mt-8 text-sm ${c.textMuted}`}>Your order is being prepared. Thank you!</p>
+        ) : (
+          <button
+            type="button"
+            onClick={() => {
+              // 'both' mode: hand back to the voice home screen. Otherwise reset
+              // to a fresh menu for the next order.
+              if (canExit) {
+                onExit();
+              } else {
+                setConfirmed(null);
+                setCartOpen(false);
+                setActiveCat(menu?.categories[0]?.id ?? null);
+              }
+            }}
+            className="mt-10 rounded-full px-8 py-3 text-lg font-semibold text-white"
+            style={{ background: accentColor }}
+          >
+            {canExit ? 'Done' : 'Start a new order'}
+          </button>
+        )}
       </div>
     );
   }
