@@ -5,6 +5,7 @@ import { requireDashboardSession } from '@/lib/auth/workspace';
 import { getVoiceCapabilities, getVoiceSettings } from '@/lib/api/voice';
 import { getWhatsAppCapabilities, getWhatsAppSettings, getLocationWhatsAppConfig } from '@/lib/api/whatsapp';
 import { listLocations } from '@/lib/api/locations';
+import { listKioskTokens, getKioskSettings } from '@/lib/api/kiosk';
 import { isApiError } from '@/lib/types';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -18,19 +19,28 @@ export default async function IntegrationsPage() {
 
   const workspaceId = session.active.workspace_id;
 
-  const [settingsRes, capsRes, waSettingsRes, waCapsRes, locationsRes] = await Promise.all([
-    getVoiceSettings(workspaceId),
-    getVoiceCapabilities(),
-    getWhatsAppSettings(workspaceId),
-    getWhatsAppCapabilities(),
-    listLocations(workspaceId),
-  ]);
+  const [settingsRes, capsRes, waSettingsRes, waCapsRes, locationsRes, kioskTokensRes, kioskSettingsRes] =
+    await Promise.all([
+      getVoiceSettings(workspaceId),
+      getVoiceCapabilities(),
+      getWhatsAppSettings(workspaceId),
+      getWhatsAppCapabilities(),
+      listLocations(workspaceId),
+      listKioskTokens(workspaceId),
+      getKioskSettings(workspaceId),
+    ]);
 
   const settings = !isApiError(settingsRes) ? settingsRes.data : null;
   const caps = !isApiError(capsRes) ? capsRes.data : null;
   const waSettings = !isApiError(waSettingsRes) ? waSettingsRes.data : null;
   const waCaps = !isApiError(waCapsRes) ? waCapsRes.data : null;
   const locations = !isApiError(locationsRes) ? locationsRes.data : [];
+  const kioskTokens = !isApiError(kioskTokensRes) ? kioskTokensRes.data : [];
+  const kioskSettings = !isApiError(kioskSettingsRes) ? kioskSettingsRes.data : null;
+  // In-Store is "set up" once at least one location has a live kiosk URL.
+  const hasKioskUrl = kioskTokens.some((t) => t.is_active);
+  // QR is "set up" once an admin has switched phone ordering on.
+  const phoneOrderingOn = Boolean(kioskSettings?.phone_ordering_enabled);
 
   const waConfigResults = await Promise.all(
     locations.map((loc) => getLocationWhatsAppConfig(workspaceId, loc.id)),
@@ -54,27 +64,39 @@ export default async function IntegrationsPage() {
           enabled={settings?.enabled ?? false}
           vapiConfigured={caps?.vapi_configured ?? false}
         />
-
+        <InStoreCard setUp={hasKioskUrl} />
+        <QrOrderingCard setUp={phoneOrderingOn} />
         <WhatsAppCard
           enabled={waSettings?.enabled ?? false}
           hasLocationConfig={waLocationConfigs.length > 0}
           hasLiveLocation={hasLiveWhatsAppLocation}
           openaiConfigured={waCaps?.openai_configured ?? false}
         />
-        <InStoreCard />
-        <QrOrderingCard />
         <MoreIntegrationsCard />
       </div>
     </div>
   );
 }
 
-function InStoreCard() {
+// Consistent CTA across every integration card: a solid (blue/brand) "Set up
+// now" when the feature isn't configured, a plain outline "Manage" once it is.
+function SetupButton({ setUp, href }: { setUp: boolean; href: string }) {
+  return (
+    <Button asChild variant={setUp ? 'outline' : 'default'} className="w-full">
+      <Link href={href}>{setUp ? 'Manage' : 'Set up now'}</Link>
+    </Button>
+  );
+}
+
+function InStoreCard({ setUp }: { setUp: boolean }) {
   return (
     <Card>
       <CardContent className="space-y-3 p-5">
-        <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-accent/10">
-          <MonitorSmartphone className="h-5 w-5 text-accent" />
+        <div className="flex items-start justify-between">
+          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-accent/10">
+            <MonitorSmartphone className="h-5 w-5 text-accent" />
+          </div>
+          {!setUp && <Badge variant="secondary">Not set up</Badge>}
         </div>
         <div>
           <h3 className="text-base font-semibold">In-Store Ordering</h3>
@@ -83,15 +105,13 @@ function InStoreCard() {
             kiosk URL per location and set the theme and tone.
           </p>
         </div>
-        <Button asChild variant="outline" className="w-full">
-          <Link href="/self-order">Set up in-store ordering</Link>
-        </Button>
+        <SetupButton setUp={setUp} href="/self-order" />
       </CardContent>
     </Card>
   );
 }
 
-function QrOrderingCard() {
+function QrOrderingCard({ setUp }: { setUp: boolean }) {
   return (
     <Card>
       <CardContent className="space-y-3 p-5">
@@ -99,9 +119,12 @@ function QrOrderingCard() {
           <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-accent/10">
             <QrCode className="h-5 w-5 text-accent" />
           </div>
-          <Badge variant="accent" className="px-1.5 py-0 text-[10px] uppercase tracking-wide">
-            Beta
-          </Badge>
+          <div className="flex items-center gap-1.5">
+            {!setUp && <Badge variant="secondary">Not set up</Badge>}
+            <Badge variant="accent" className="px-1.5 py-0 text-[10px] uppercase tracking-wide">
+              Beta
+            </Badge>
+          </div>
         </div>
         <div>
           <h3 className="text-base font-semibold">QR Ordering</h3>
@@ -110,9 +133,7 @@ function QrOrderingCard() {
             up by order number.
           </p>
         </div>
-        <Button asChild variant="outline" className="w-full">
-          <Link href="/integrations/qr">Get QR codes</Link>
-        </Button>
+        <SetupButton setUp={setUp} href="/integrations/qr" />
       </CardContent>
     </Card>
   );
@@ -162,11 +183,7 @@ function VoiceCard({
           </div>
         )}
 
-        <Button asChild variant={assistantId ? 'outline' : 'default'} className="w-full">
-          <Link href="/integrations/voice">
-            {assistantId ? 'Edit voice settings' : 'Configure voice'}
-          </Link>
-        </Button>
+        <SetupButton setUp={Boolean(assistantId)} href="/integrations/voice" />
       </CardContent>
     </Card>
   );
@@ -223,11 +240,7 @@ function WhatsAppCard({
           </div>
         )}
 
-        <Button asChild variant={hasLocationConfig ? 'outline' : 'default'} className="w-full">
-          <Link href="/integrations/whatsapp">
-            {hasLocationConfig ? 'Edit WhatsApp settings' : 'Configure WhatsApp'}
-          </Link>
-        </Button>
+        <SetupButton setUp={hasLocationConfig} href="/integrations/whatsapp" />
       </CardContent>
     </Card>
   );
