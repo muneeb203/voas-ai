@@ -57,8 +57,11 @@ export function revokeKioskToken(workspaceId: string, tokenId: string) {
 }
 
 export function getKioskSettings(workspaceId: string) {
+  // Config that an admin/owner changes and expects to see immediately — don't
+  // serve a stale cached copy (the 30s cache made toggles look like they hadn't
+  // saved).
   return apiCall<KioskSettings>(`/v1/workspaces/${workspaceId}/kiosk-settings`, {
-    next: { revalidate: 30 },
+    cache: 'no-store',
   });
 }
 
