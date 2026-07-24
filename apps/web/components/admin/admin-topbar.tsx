@@ -6,6 +6,12 @@ import {
   Avatar,
   AvatarFallback,
 } from '@/components/ui/avatar';
+import { NotificationBell } from '@/components/dashboard/notification-bell';
+import {
+  fetchAdminNotificationsAction,
+  markAdminNotificationReadAction,
+  markAllAdminNotificationsReadAction,
+} from '@/app/actions/notifications-action';
 
 function initials(name: string | null, email: string | null): string {
   const src = (name ?? email ?? '?').trim();
@@ -34,6 +40,11 @@ export function AdminTopbar({ userName, userEmail }: AdminTopbarProps) {
       </div>
 
       <div className="flex items-center gap-3">
+        <NotificationBell
+          fetchAction={fetchAdminNotificationsAction}
+          markReadAction={markAdminNotificationReadAction}
+          markAllReadAction={markAllAdminNotificationsReadAction}
+        />
         <div className="hidden text-right sm:block">
           <p className="text-xs font-medium text-white">{userName ?? userEmail}</p>
           {userName && userEmail && (
