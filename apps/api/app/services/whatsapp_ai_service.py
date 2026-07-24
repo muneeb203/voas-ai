@@ -337,6 +337,15 @@ def get_ai_reply(
             )
             order_placed = bool(result.get("success"))
             order_id = result.get("order_id")
+            if order_placed and order_id:
+                from app.services import notification_service
+
+                notification_service.notify_workspace_order(
+                    workspace_id=workspace_id,
+                    order_id=str(order_id),
+                    title="New WhatsApp order",
+                    body=None,
+                )
             if not order_placed and result.get("message"):
                 # Surface the failure reason to the customer rather than a
                 # silent drop (e.g. "couldn't capture any items").

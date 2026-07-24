@@ -288,6 +288,16 @@ def create_appointment(
         from app.services import appointment_reminder_service
 
         appointment_reminder_service.send_confirmation(appt)
+
+    from app.services import notification_service
+
+    when = starts_at.astimezone(tz).strftime("%b %d, %I:%M %p").replace(" 0", " ")
+    notification_service.notify_appointment_booked(
+        workspace_id=workspace_id,
+        appointment_id=appt.id,
+        title="New appointment booked",
+        body=f"{service.name} · {data.customer_name or 'Walk-in'} · {when}",
+    )
     return appt
 
 

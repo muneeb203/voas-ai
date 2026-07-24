@@ -8,7 +8,7 @@ from app.models.ticket import (
     TicketStatus,
     TicketWithMessages,
 )
-from app.services import audit_service, email_service, ticket_service
+from app.services import audit_service, email_service, notification_service, ticket_service
 
 AdminMessageBody = dict[str, str | bool]
 
@@ -126,6 +126,11 @@ def reply(
             email_service.send_ticket_admin_replied(
                 to=creator_email, ticket_id=ticket_id, subject=ticket["subject"]
             )
+        notification_service.notify_ticket_reply(
+            workspace_id=ticket["workspace_id"],
+            ticket_id=ticket_id,
+            subject=ticket["subject"],
+        )
 
     return ticket_service._hydrate_message(msg_res.data[0])
 
@@ -152,6 +157,12 @@ def update_status(ticket_id: str, admin_id: str, status: TicketStatus) -> Ticket
         resource_id=ticket_id,
         metadata={"from": ticket["status"], "to": status},
     )
+    if status == "resolved":
+        notification_service.notify_ticket_resolved(
+            workspace_id=ticket["workspace_id"],
+            ticket_id=ticket_id,
+            subject=ticket["subject"],
+        )
     return ticket_service._hydrate_ticket(updated.data[0], 0, None)
 
 

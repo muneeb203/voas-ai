@@ -20,7 +20,12 @@ from app.core.logging import get_logger
 from app.core.supabase import get_supabase_admin
 from app.deps import OwnerContextDep, WorkspaceContextDep
 from app.models.salon import BookAppointmentInput
-from app.services import booking_service, salon_service, voice_order_service
+from app.services import (
+    booking_service,
+    notification_service,
+    salon_service,
+    voice_order_service,
+)
 from app.services.voice_service import _menu_context_for_workspace
 from app.utils.responses import DataResponse, ok
 
@@ -29,7 +34,20 @@ public_router = APIRouter(tags=["kiosk"])
 
 log = get_logger(__name__)
 
+_LOW_KIOSK_CREDITS = 10  # notify the owner at this balance, and again at 0
 SESSION_LOCK_TTL_SECONDS = 60
+
+
+def _consume_kiosk_credit(db, workspace_id: str) -> None:
+    """Decrement one kiosk credit and warn the owner if it just crossed the low
+    or empty mark. Best-effort — never breaks the order."""
+    try:
+        res = db.rpc("decrement_kiosk_credit", {"p_workspace_id": workspace_id}).execute()
+        balance = (res.data or {}).get("balance") if isinstance(res.data, dict) else None
+        if balance in (_LOW_KIOSK_CREDITS, 0):
+            notification_service.notify_kiosk_low(workspace_id=workspace_id, balance=balance)
+    except Exception as exc:
+        log.error("kiosk_credit_consume_failed", workspace_id=workspace_id, error=str(exc))
 SYSTEM_PROMPT_TTL_SECONDS = 120
 KIOSK_CTX_TTL_SECONDS = 60
 
@@ -472,7 +490,7 @@ def _handle_salon_kiosk_chat(db, workspace_id, ctx, token, content_blocks, debug
                         debug=debug_info,
                     )
                 )
-            db.rpc("decrement_kiosk_credit", {"p_workspace_id": workspace_id}).execute()
+            _consume_kiosk_credit(db, workspace_id)
             return ok(
                 KioskChatResponse(
                     response="You're booked!",
@@ -1058,9 +1076,16 @@ async def kiosk_chat(
                 )
 
             # Order placed — consume one kiosk credit.
-            db.rpc("decrement_kiosk_credit", {"p_workspace_id": workspace_id}).execute()
+            _consume_kiosk_credit(db, workspace_id)
 
             order_id = str(placed.get("order_id") or "")
+            if order_id:
+                notification_service.notify_workspace_order(
+                    workspace_id=workspace_id,
+                    order_id=order_id,
+                    title="New kiosk order",
+                    body=None,
+                )
             order_number = order_input.get("order_number") or (
                 f"#{order_id[:6].upper()}" if order_id else f"#{1000 + (abs(hash(token)) % 9000)}"
             )
@@ -1241,6 +1266,15 @@ def _place_tap_order(
         order_token=order_token,
         lines=len(tool_items),
     )
+    order_id = str(result.get("order_id") or "")
+    if order_id:
+        total = result.get("total_dollars")
+        notification_service.notify_workspace_order(
+            workspace_id=workspace_id,
+            order_id=order_id,
+            title="New order received",
+            body=f"{len(tool_items)} item(s)" + (f" · ${total:.2f}" if total else ""),
+        )
     return ManualOrderResult(
         success=True,
         order_id=str(result.get("order_id")) if result.get("order_id") else None,

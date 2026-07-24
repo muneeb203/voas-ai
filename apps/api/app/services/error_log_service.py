@@ -43,6 +43,17 @@ def record(
         ).execute()
     except Exception as exc:  # never let logging break the caller
         log.error("error_log_write_failed", source=source, error=str(exc))
+        return
+
+    # Ping the admin team so breakage is caught early. Best-effort.
+    try:
+        from app.services import notification_service
+
+        notification_service.notify_admin_error(
+            workspace_id=workspace_id, source=source, message=message or ""
+        )
+    except Exception as exc:
+        log.error("admin_error_notify_failed", source=source, error=str(exc))
 
 
 def list_for_workspace(workspace_id: str, limit: int = 100) -> list[AdminErrorLogEntry]:
