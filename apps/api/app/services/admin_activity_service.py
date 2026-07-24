@@ -99,7 +99,7 @@ def list_activity(workspace_id: str, limit: int = 50) -> list[AdminActivityItem]
     try:
         orders = (
             db.table("orders")
-            .select("id, status, total_cents, customer_name, created_at, channel")
+            .select("id, status, total_cents, customer_name, created_at")
             .eq("workspace_id", workspace_id)
             .order("created_at", desc=True)
             .limit(limit)
