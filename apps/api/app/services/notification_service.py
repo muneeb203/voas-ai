@@ -107,34 +107,17 @@ def notify_workspace_order(
     title: str,
     body: str | None = None,
 ) -> None:
-    """Fan-out an order alert to every member of the workspace."""
-    db = get_supabase_admin()
-    members_res = (
-        db.table("workspace_members").select("user_id").eq("workspace_id", workspace_id).execute()
-    )
-    user_ids = list({str(r["user_id"]) for r in members_res.data or [] if r.get("user_id")})
-    if not user_ids:
-        return
-
-    rows = [
-        {
-            "user_id": uid,
-            "workspace_id": workspace_id,
-            "type": "order_placed",
-            "title": title,
-            "body": body,
-            "link": f"/orders/{order_id}",
-            "resource_type": "order",
-            "resource_id": order_id,
-        }
-        for uid in user_ids
-    ]
-    _insert_batch(rows)
-    log.info(
-        "order_notifications_sent",
+    """Fan-out an order alert to every member of the workspace. Never raises —
+    order-placement callers don't all wrap it."""
+    _notify(
+        _member_ids(workspace_id),
+        ntype="order_placed",
+        title=title,
+        body=body,
+        link=f"/orders/{order_id}",
         workspace_id=workspace_id,
-        order_id=order_id,
-        recipients=len(rows),
+        resource_type="order",
+        resource_id=order_id,
     )
 
 
@@ -172,6 +155,185 @@ def notify_all_users_product_update(
         recipients=len(rows),
     )
     return len(rows)
+
+
+def _member_ids(workspace_id: str, roles: list[str] | None = None) -> list[str]:
+    # Never raises: callers don't all wrap the notify, so a lookup failure must
+    # not break the action that triggered it.
+    try:
+        db = get_supabase_admin()
+        q = db.table("workspace_members").select("user_id").eq("workspace_id", workspace_id)
+        if roles:
+            q = q.in_("role", roles)
+        res = q.execute()
+        return list({str(r["user_id"]) for r in res.data or [] if r.get("user_id")})
+    except Exception as exc:
+        log.error("member_ids_lookup_failed", workspace_id=workspace_id, error=str(exc))
+        return []
+
+
+def _active_admin_ids() -> list[str]:
+    try:
+        db = get_supabase_admin()
+        res = db.table("admin_users").select("user_id").eq("is_active", True).execute()
+        return list({str(r["user_id"]) for r in res.data or [] if r.get("user_id")})
+    except Exception as exc:
+        log.error("admin_ids_lookup_failed", error=str(exc))
+        return []
+
+
+def _notify(
+    user_ids: list[str],
+    *,
+    ntype: str,
+    title: str,
+    body: str | None,
+    link: str | None,
+    workspace_id: str | None,
+    resource_type: str | None = None,
+    resource_id: str | None = None,
+) -> None:
+    """Insert one notification per user. Never raises — a notification failing
+    must not break the action that triggered it."""
+    if not user_ids:
+        return
+    try:
+        rows = [
+            {
+                "user_id": uid,
+                "workspace_id": workspace_id,
+                "type": ntype,
+                "title": title,
+                "body": body,
+                "link": link,
+                "resource_type": resource_type,
+                "resource_id": resource_id,
+            }
+            for uid in user_ids
+        ]
+        _insert_batch(rows)
+        log.info("notifications_sent", ntype=ntype, recipients=len(rows))
+    except Exception as exc:
+        log.error("notification_send_failed", ntype=ntype, error=str(exc))
+
+
+# --- Business-user events ---------------------------------------------------
+
+
+def notify_ticket_reply(*, workspace_id: str, ticket_id: str, subject: str) -> None:
+    _notify(
+        _member_ids(workspace_id, ["owner", "manager"]),
+        ntype="ticket_reply",
+        title="VOAS replied to your ticket",
+        body=subject,
+        link=f"/support/{ticket_id}",
+        workspace_id=workspace_id,
+        resource_type="ticket",
+        resource_id=ticket_id,
+    )
+
+
+def notify_ticket_resolved(*, workspace_id: str, ticket_id: str, subject: str) -> None:
+    _notify(
+        _member_ids(workspace_id, ["owner", "manager"]),
+        ntype="ticket_resolved",
+        title="Your ticket was resolved",
+        body=subject,
+        link=f"/support/{ticket_id}",
+        workspace_id=workspace_id,
+        resource_type="ticket",
+        resource_id=ticket_id,
+    )
+
+
+def notify_kiosk_low(*, workspace_id: str, balance: int) -> None:
+    out = balance <= 0
+    _notify(
+        _member_ids(workspace_id, ["owner", "manager"]),
+        ntype="kiosk_low",
+        title="Kiosk out of service" if out else "Kiosk credits running low",
+        body=(
+            "Your kiosk is out of credits and no longer taking orders."
+            if out
+            else f"{balance} kiosk credit{'s' if balance != 1 else ''} left."
+        ),
+        link="/self-order",
+        workspace_id=workspace_id,
+        resource_type="workspace",
+        resource_id=workspace_id,
+    )
+
+
+def notify_appointment_booked(
+    *, workspace_id: str, appointment_id: str, title: str, body: str | None = None
+) -> None:
+    _notify(
+        _member_ids(workspace_id, ["owner", "manager"]),
+        ntype="appointment_booked",
+        title=title,
+        body=body,
+        link="/appointments",
+        workspace_id=workspace_id,
+        resource_type="appointment",
+        resource_id=appointment_id,
+    )
+
+
+# --- Admin-team events ------------------------------------------------------
+
+
+def notify_admin_signup(*, workspace_id: str, workspace_name: str) -> None:
+    _notify(
+        _active_admin_ids(),
+        ntype="admin_signup",
+        title="New workspace signed up",
+        body=workspace_name,
+        link=f"/admin/workspaces/{workspace_id}",
+        workspace_id=None,
+        resource_type="workspace",
+        resource_id=workspace_id,
+    )
+
+
+def notify_admin_error(*, workspace_id: str | None, source: str, message: str) -> None:
+    _notify(
+        _active_admin_ids(),
+        ntype="admin_error",
+        title=f"New error: {source}",
+        body=message[:200],
+        link=f"/admin/workspaces/{workspace_id}?tab=log" if workspace_id else "/admin/logs",
+        workspace_id=None,
+        resource_type="error",
+        resource_id=workspace_id,
+    )
+
+
+def notify_admin_ticket(
+    *, workspace_id: str, ticket_id: str, subject: str, kind: str
+) -> None:
+    _notify(
+        _active_admin_ids(),
+        ntype="admin_ticket",
+        title="New support ticket" if kind == "created" else "Customer replied on a ticket",
+        body=subject,
+        link=f"/admin/support/{ticket_id}",
+        workspace_id=None,
+        resource_type="ticket",
+        resource_id=ticket_id,
+    )
+
+
+def notify_admin_limit(*, workspace_id: str, workspace_name: str, kind: str) -> None:
+    _notify(
+        _active_admin_ids(),
+        ntype="admin_limit",
+        title="Workspace hit a limit",
+        body=f"{workspace_name} — {kind}",
+        link=f"/admin/workspaces/{workspace_id}",
+        workspace_id=None,
+        resource_type="workspace",
+        resource_id=workspace_id,
+    )
 
 
 def notify_workspace_usage_limit(
