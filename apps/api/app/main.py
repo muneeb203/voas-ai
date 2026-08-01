@@ -33,6 +33,7 @@ from app.routers import (
     menu,
     notifications,
     orders,
+    push,
     salon,
     tickets,
     voice,
@@ -141,6 +142,7 @@ def create_app() -> FastAPI:
     app.include_router(billing.router, prefix="/v1")
     app.include_router(help.router, prefix="/v1")
     app.include_router(notifications.router, prefix="/v1")
+    app.include_router(push.router, prefix="/v1")
     app.include_router(voice.router, prefix="/v1")
     app.include_router(whatsapp.router, prefix="/v1")
     app.include_router(kiosk.router, prefix="/v1")

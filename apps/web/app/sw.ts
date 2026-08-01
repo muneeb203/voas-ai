@@ -21,3 +21,41 @@ const serwist = new Serwist({
 });
 
 serwist.addEventListeners();
+
+// --- Web Push: show a notification when the backend pushes to this device ----
+self.addEventListener('push', (event) => {
+  let data: { title?: string; body?: string; url?: string } = {};
+  try {
+    data = event.data ? (event.data.json() as typeof data) : {};
+  } catch {
+    /* malformed payload — fall back to defaults */
+  }
+  const title = data.title || 'VOAS AI';
+  event.waitUntil(
+    self.registration.showNotification(title, {
+      body: data.body || '',
+      icon: '/icon-192.png',
+      badge: '/icon-192.png',
+      data: { url: data.url || '/dashboard' },
+    }),
+  );
+});
+
+// Focus an existing window (or open one) and navigate to the notification's link.
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  const url =
+    (event.notification.data && (event.notification.data as { url?: string }).url) || '/dashboard';
+  event.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
+      for (const client of clientList) {
+        if ('focus' in client) {
+          void client.focus();
+          void (client as WindowClient).navigate(url);
+          return;
+        }
+      }
+      return self.clients.openWindow(url).then(() => undefined);
+    }),
+  );
+});

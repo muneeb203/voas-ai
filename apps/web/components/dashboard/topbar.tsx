@@ -4,6 +4,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { useTranslations } from 'next-intl';
 import { NotificationBell } from './notification-bell';
+import { EnableNotifications } from './enable-notifications';
 import { Menu, X, ChevronDown, LogOut, Settings as SettingsIcon } from 'lucide-react';
 import { Sidebar } from './sidebar';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
@@ -72,7 +73,7 @@ export function Topbar({
           {/* Language switcher — always visible at top right */}
           <LanguageSwitcher />
 
-          <NotificationBell />
+          <NotificationBell footer={<EnableNotifications />} />
 
           <DropdownMenu>
             <DropdownMenuTrigger asChild>

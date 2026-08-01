@@ -91,6 +91,21 @@ class Settings(BaseSettings):
     def google_calendar_configured(self) -> bool:
         return bool(self.google_client_id and self.google_client_secret)
 
+    # --- Web Push (PWA "mobile app" notifications). No-op without the VAPID
+    # keypair. Generate once with:
+    #   python -c "from py_vapid import Vapid01; v=Vapid01(); v.generate_keys(); \
+    #     import base64; \
+    #     print('PRIVATE', base64.urlsafe_b64encode(v.private_key.private_numbers().private_value.to_bytes(32,'big')).decode().rstrip('=')); \
+    #     print('PUBLIC', v.public_key_urlsafe_base64())"
+    # The public key also goes to the frontend as NEXT_PUBLIC_VAPID_PUBLIC_KEY. ---
+    vapid_public_key: str | None = None
+    vapid_private_key: str | None = None
+    vapid_subject: str = "mailto:info@convosol.com"
+
+    @property
+    def push_configured(self) -> bool:
+        return bool(self.vapid_public_key and self.vapid_private_key)
+
     # --- Dashboard help bot (Gemini). No-op without GEMINI_API_KEY. ---
     gemini_api_key: str | None = None
     gemini_model: str = "gemini-3.1-flash-lite"

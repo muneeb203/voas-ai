@@ -25,6 +25,7 @@ dependencies = [
     "sentry-sdk[fastapi]>=2.13.0,<3.0.0",
     "python-multipart>=0.0.9,<1.0.0",
     "tzdata>=2024.1",
+    "pywebpush>=2.0.0,<3.0.0",
 ]
 
 [project.optional-dependencies]

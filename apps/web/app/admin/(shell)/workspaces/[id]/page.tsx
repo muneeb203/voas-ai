@@ -5,7 +5,7 @@ import { notFound } from 'next/navigation';
 import { formatDistanceToNow } from 'date-fns';
 import { ArrowLeft } from 'lucide-react';
 import { requireAdminSession } from '@/lib/auth/admin';
-import { getAdminWorkspace, listAdminTickets, listAdminAuditLogs, getAdminWorkspaceUsage, listAdminWorkspaceGrants, getAdminKioskSettings, getAdminKioskMetrics, listAdminWorkspaceActivity, getAdminWorkspaceUsageHistory, listAdminWorkspaceErrors, getAdminWorkspaceKnowledgeBase } from '@/lib/api/admin';
+import { getAdminWorkspace, listAdminTickets, listAdminAuditLogs, getAdminWorkspaceUsage, listAdminWorkspaceGrants, getAdminKioskSettings, getAdminKioskMetrics, listAdminWorkspaceActivity, getAdminWorkspaceUsageHistory, listAdminWorkspaceErrors, getAdminWorkspaceKnowledgeBase, getAdminPushSettings } from '@/lib/api/admin';
 import { isApiError, type Workspace, type Member, type Location } from '@/lib/types';
 import { cn } from '@/lib/utils';
 import { Card, CardContent } from '@/components/ui/card';
@@ -13,6 +13,7 @@ import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { AdminWorkspaceBillingPanel } from '@/components/admin/admin-workspace-billing-panel';
 import { AdminKioskSettingsCard } from '@/components/admin/admin-kiosk-settings-card';
+import { AdminPushSettingsCard } from '@/components/admin/admin-push-settings-card';
 import { AdminKioskMetricsCard } from '@/components/admin/admin-kiosk-metrics-card';
 import { AdminVoiceModelCard } from '@/components/admin/admin-voice-model-card';
 import { AdminKnowledgeBasePanel } from '@/components/admin/admin-knowledge-base-panel';
@@ -184,6 +185,7 @@ async function WorkspaceTabs({
     usageHistoryRes,
     errorsRes,
     kbRes,
+    pushRes,
   ] = await Promise.all([
     listAdminTickets({ workspaceId: id }),
     listAdminAuditLogs({ workspace_id: id }),
@@ -195,6 +197,7 @@ async function WorkspaceTabs({
     getAdminWorkspaceUsageHistory(id),
     listAdminWorkspaceErrors(id),
     getAdminWorkspaceKnowledgeBase(id),
+    getAdminPushSettings(id),
   ]);
 
   const tickets = !isApiError(ticketsRes) ? ticketsRes.data : [];
@@ -248,6 +251,9 @@ async function WorkspaceTabs({
   const kioskSettings = !isApiError(kioskRes)
     ? kioskRes.data
     : { kiosk_enabled: false, max_kiosk_urls: 1, theme: 'gradient' as const, session_lock_enabled: false, kiosk_monthly_limit: 500, kiosk_credits_balance: 0, kiosk_credits_used_this_month: 0, kiosk_month_start: null, manual_ordering_enabled: false, kiosk_order_mode: 'both' as const, phone_ordering_enabled: false };
+  const pushSettings = !isApiError(pushRes)
+    ? pushRes.data
+    : { push_enabled: true, recipients: 'owners_managers' as const, notify_order: true, notify_appointment: true, notify_ticket: true, notify_kiosk_low: true, notify_announcement: true };
   const emptyWindow = {
     total_turns: 0,
     deepgram_turns: 0,
@@ -402,6 +408,7 @@ async function WorkspaceTabs({
         <div className="space-y-6">
           <AdminKioskMetricsCard metrics={kioskMetrics} />
           <AdminKioskSettingsCard workspaceId={workspace.id} settings={kioskSettings} plan={workspace.plan} vertical={workspace.vertical} />
+          <AdminPushSettingsCard workspaceId={workspace.id} settings={pushSettings} />
         </div>
       </TabsContent>
 

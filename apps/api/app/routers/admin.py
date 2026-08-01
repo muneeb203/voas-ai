@@ -667,3 +667,98 @@ async def topup_kiosk_credits(
     }).execute()
 
     return ok(AdminKioskSettings(**res.data[0]))
+
+
+# ---------- Push notification settings (admin-controlled) ---------------------
+
+
+class AdminPushSettings(BaseModel):
+    push_enabled: bool = True
+    recipients: str = "owners_managers"
+    notify_order: bool = True
+    notify_appointment: bool = True
+    notify_ticket: bool = True
+    notify_kiosk_low: bool = True
+    notify_announcement: bool = True
+
+
+class AdminPushSettingsUpdate(BaseModel):
+    push_enabled: bool | None = None
+    recipients: Literal["owners_managers", "all"] | None = None
+    notify_order: bool | None = None
+    notify_appointment: bool | None = None
+    notify_ticket: bool | None = None
+    notify_kiosk_low: bool | None = None
+    notify_announcement: bool | None = None
+
+
+@router.get(
+    "/workspaces/{workspace_id}/push-settings",
+    response_model=DataResponse[AdminPushSettings],
+)
+async def get_admin_push_settings(
+    workspace_id: str, _: AdminContextDep
+) -> DataResponse[AdminPushSettings]:
+    db = get_supabase_admin()
+    res = (
+        db.table("workspace_push_settings")
+        .select("*")
+        .eq("workspace_id", workspace_id)
+        .limit(1)
+        .execute()
+    )
+    if res.data:
+        return ok(AdminPushSettings(**res.data[0]))
+    return ok(AdminPushSettings())
+
+
+@router.patch(
+    "/workspaces/{workspace_id}/push-settings",
+    response_model=DataResponse[AdminPushSettings],
+)
+async def update_admin_push_settings(
+    workspace_id: str,
+    body: AdminPushSettingsUpdate,
+    ctx: AdminContextDep,
+) -> DataResponse[AdminPushSettings]:
+    db = get_supabase_admin()
+    changes = body.model_dump(exclude_none=True)
+
+    existing = (
+        db.table("workspace_push_settings")
+        .select("id")
+        .eq("workspace_id", workspace_id)
+        .limit(1)
+        .execute()
+    )
+    if existing.data:
+        if changes:
+            db.table("workspace_push_settings").update(changes).eq(
+                "workspace_id", workspace_id
+            ).execute()
+    else:
+        db.table("workspace_push_settings").insert(
+            {"workspace_id": workspace_id, **changes}
+        ).execute()
+
+    if changes:
+        db.table("audit_logs").insert({
+            "actor_type": "admin",
+            "actor_id": ctx.admin_id,
+            "workspace_id": workspace_id,
+            "action": "push.settings.update",
+            "resource_type": "workspace_push_settings",
+            "metadata": changes,
+        }).execute()
+
+    # Re-read so the response is always the authoritative row (UPDATE doesn't
+    # reliably return representation in supabase-py).
+    final = (
+        db.table("workspace_push_settings")
+        .select("*")
+        .eq("workspace_id", workspace_id)
+        .limit(1)
+        .execute()
+    )
+    row = final.data[0] if final.data else {}
+    return ok(AdminPushSettings(**row))
