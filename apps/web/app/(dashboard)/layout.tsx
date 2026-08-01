@@ -3,6 +3,7 @@ import { getMessages, getLocale } from 'next-intl/server';
 import { Sidebar } from '@/components/dashboard/sidebar';
 import { Topbar } from '@/components/dashboard/topbar';
 import { HelpBot } from '@/components/dashboard/help-bot';
+import { InstallPrompt } from '@/components/shared/install-prompt';
 import { ProductTour } from '@/components/dashboard/product-tour';
 import { CurrencyProvider } from '@/components/dashboard/currency-provider';
 import { ImpersonationBanner } from '@/components/admin/impersonation-banner';
@@ -49,6 +50,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
           </div>
         </div>
       </div>
+      <InstallPrompt />
       <ProductTour
         userId={session.user.id}
         tourCompleted={tourCompleted}
