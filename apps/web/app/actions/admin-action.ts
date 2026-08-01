@@ -175,6 +175,26 @@ export async function updateAdminKioskSettingsAction(
   return { error: null };
 }
 
+export async function updateAdminPushSettingsAction(
+  workspaceId: string,
+  body: {
+    push_enabled?: boolean;
+    recipients?: 'owners_managers' | 'all';
+    notify_order?: boolean;
+    notify_appointment?: boolean;
+    notify_ticket?: boolean;
+    notify_kiosk_low?: boolean;
+    notify_announcement?: boolean;
+  },
+) {
+  await requireAdminSession(`/admin/workspaces/${workspaceId}`);
+  const { updateAdminPushSettings } = await import('@/lib/api/admin');
+  const res = await updateAdminPushSettings(workspaceId, body);
+  if (isApiError(res)) return { error: res.error.message };
+  revalidatePath(`/admin/workspaces/${workspaceId}`);
+  return { error: null };
+}
+
 export async function setWorkspaceVoiceModelAction(workspaceId: string, model: string) {
   await requireAdminSession(`/admin/workspaces/${workspaceId}`);
   const { setWorkspaceVoiceModel } = await import('@/lib/api/admin');

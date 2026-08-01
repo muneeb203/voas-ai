@@ -472,6 +472,37 @@ export function topupKioskCredits(workspaceId: string, amount: number) {
   });
 }
 
+// --- Push notification settings (admin-controlled) ---
+
+export interface AdminPushSettings {
+  push_enabled: boolean;
+  recipients: 'owners_managers' | 'all';
+  notify_order: boolean;
+  notify_appointment: boolean;
+  notify_ticket: boolean;
+  notify_kiosk_low: boolean;
+  notify_announcement: boolean;
+}
+
+export type AdminPushSettingsUpdate = Partial<AdminPushSettings>;
+
+export function getAdminPushSettings(workspaceId: string) {
+  return apiCall<AdminPushSettings>(
+    `/v1/admin/workspaces/${workspaceId}/push-settings`,
+    { cache: 'no-store' },
+  );
+}
+
+export function updateAdminPushSettings(
+  workspaceId: string,
+  body: AdminPushSettingsUpdate,
+) {
+  return apiCall<AdminPushSettings>(`/v1/admin/workspaces/${workspaceId}/push-settings`, {
+    method: 'PATCH',
+    body,
+  });
+}
+
 export interface KioskMetricsWindow {
   total_turns: number;
   deepgram_turns: number;

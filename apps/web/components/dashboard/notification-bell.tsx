@@ -54,12 +54,16 @@ interface NotificationBellProps {
   fetchAction?: typeof fetchNotificationsAction;
   markReadAction?: typeof markNotificationReadAction;
   markAllReadAction?: typeof markAllNotificationsReadAction;
+  /** Optional control rendered at the bottom of the dropdown (e.g. the
+   * "Enable device notifications" toggle on the dashboard). */
+  footer?: React.ReactNode;
 }
 
 export function NotificationBell({
   fetchAction = fetchNotificationsAction,
   markReadAction = markNotificationReadAction,
   markAllReadAction = markAllNotificationsReadAction,
+  footer,
 }: NotificationBellProps = {}) {
   const [open, setOpen] = useState(false);
   const [items, setItems] = useState<Notification[]>([]);
@@ -271,6 +275,13 @@ export function NotificationBell({
               );
             })}
           </div>
+        )}
+
+        {footer && (
+          <>
+            <DropdownMenuSeparator />
+            {footer}
+          </>
         )}
       </DropdownMenuContent>
     </DropdownMenu>

@@ -8,6 +8,7 @@ from typing import Any
 from app.core.logging import get_logger
 from app.core.supabase import get_supabase_admin
 from app.models.notification import Notification, NotificationList
+from app.services.push_service import send_push_to_users
 
 log = get_logger(__name__)
 
@@ -118,6 +119,7 @@ def notify_workspace_order(
         workspace_id=workspace_id,
         resource_type="order",
         resource_id=order_id,
+        push_event="order",
     )
 
 
@@ -130,8 +132,9 @@ def notify_all_users_product_update(
 ) -> int:
     """Fan-out a VOAS admin announcement to every dashboard user."""
     db = get_supabase_admin()
-    members_res = db.table("workspace_members").select("user_id").execute()
-    user_ids = list({str(r["user_id"]) for r in members_res.data or [] if r.get("user_id")})
+    members_res = db.table("workspace_members").select("user_id, workspace_id").execute()
+    rows_raw = members_res.data or []
+    user_ids = list({str(r["user_id"]) for r in rows_raw if r.get("user_id")})
     if not user_ids:
         return 0
 
@@ -154,6 +157,23 @@ def notify_all_users_product_update(
         announcement_id=announcement_id,
         recipients=len(rows),
     )
+
+    # OS-level push, per workspace so each workspace's admin toggle is honored.
+    by_workspace: dict[str, set[str]] = {}
+    for r in rows_raw:
+        wid, uid = r.get("workspace_id"), r.get("user_id")
+        if wid and uid:
+            by_workspace.setdefault(str(wid), set()).add(str(uid))
+    for wid, uids in by_workspace.items():
+        send_push_to_users(
+            user_ids=list(uids),
+            workspace_id=wid,
+            event_key="announcement",
+            title=title,
+            body=body,
+            link=link,
+        )
+
     return len(rows)
 
 
@@ -192,9 +212,12 @@ def _notify(
     workspace_id: str | None,
     resource_type: str | None = None,
     resource_id: str | None = None,
+    push_event: str | None = None,
 ) -> None:
-    """Insert one notification per user. Never raises — a notification failing
-    must not break the action that triggered it."""
+    """Insert one notification per user (the in-app bell). When ``push_event`` is
+    set, also fan out an OS-level web push, gated by the workspace's admin push
+    settings. Never raises — a notification failing must not break the action
+    that triggered it."""
     if not user_ids:
         return
     try:
@@ -216,6 +239,17 @@ def _notify(
     except Exception as exc:
         log.error("notification_send_failed", ntype=ntype, error=str(exc))
 
+    # OS-level push is a separate, best-effort channel (itself exception-safe).
+    if push_event:
+        send_push_to_users(
+            user_ids=user_ids,
+            workspace_id=workspace_id,
+            event_key=push_event,
+            title=title,
+            body=body,
+            link=link,
+        )
+
 
 # --- Business-user events ---------------------------------------------------
 
@@ -230,6 +264,7 @@ def notify_ticket_reply(*, workspace_id: str, ticket_id: str, subject: str) -> N
         workspace_id=workspace_id,
         resource_type="ticket",
         resource_id=ticket_id,
+        push_event="ticket",
     )
 
 
@@ -243,6 +278,7 @@ def notify_ticket_resolved(*, workspace_id: str, ticket_id: str, subject: str) -
         workspace_id=workspace_id,
         resource_type="ticket",
         resource_id=ticket_id,
+        push_event="ticket",
     )
 
 
@@ -261,6 +297,7 @@ def notify_kiosk_low(*, workspace_id: str, balance: int) -> None:
         workspace_id=workspace_id,
         resource_type="workspace",
         resource_id=workspace_id,
+        push_event="kiosk_low",
     )
 
 
@@ -276,6 +313,7 @@ def notify_appointment_booked(
         workspace_id=workspace_id,
         resource_type="appointment",
         resource_id=appointment_id,
+        push_event="appointment",
     )
 
 
