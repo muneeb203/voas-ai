@@ -21,15 +21,24 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import {
-  createServiceAction,
-  updateServiceAction,
-  deleteServiceAction,
+  createServiceAction as createSalonServiceAction,
+  updateServiceAction as updateSalonServiceAction,
+  deleteServiceAction as deleteSalonServiceAction,
 } from '@/app/actions/salon-action';
+import {
+  createServiceAction as createDentalServiceAction,
+  updateServiceAction as updateDentalServiceAction,
+  deleteServiceAction as deleteDentalServiceAction,
+} from '@/app/actions/dental-action';
 import type { SalonService } from '@/lib/api/salon';
+import type { DentalService } from '@/lib/api/dental';
+
+type Service = SalonService | DentalService;
 
 interface Props {
-  initialServices: SalonService[];
+  initialServices: Service[];
   canEdit: boolean;
+  vertical?: string;
 }
 
 interface FormState {
@@ -50,7 +59,7 @@ const EMPTY: FormState = {
   active: true,
 };
 
-function toForm(s: SalonService): FormState {
+function toForm(s: Service): FormState {
   return {
     name: s.name,
     description: s.description ?? '',
@@ -61,21 +70,26 @@ function toForm(s: SalonService): FormState {
   };
 }
 
-export function ServicesEditor({ initialServices, canEdit }: Props) {
+export function ServicesEditor({ initialServices, canEdit, vertical = 'salon' }: Props) {
   const money = useMoney();
   const router = useRouter();
   const [refreshing, startRefresh] = useTransition();
   const [open, setOpen] = useState(false);
-  const [editing, setEditing] = useState<SalonService | null>(null);
+  const [editing, setEditing] = useState<Service | null>(null);
   const [form, setForm] = useState<FormState>(EMPTY);
   const [saving, setSaving] = useState(false);
+
+  const isDental = vertical === 'dental';
+  const createAction = isDental ? createDentalServiceAction : createSalonServiceAction;
+  const updateAction = isDental ? updateDentalServiceAction : updateSalonServiceAction;
+  const deleteAction = isDental ? deleteDentalServiceAction : deleteSalonServiceAction;
 
   function openAdd() {
     setEditing(null);
     setForm(EMPTY);
     setOpen(true);
   }
-  function openEdit(s: SalonService) {
+  function openEdit(s: Service) {
     setEditing(s);
     setForm(toForm(s));
     setOpen(true);
@@ -93,8 +107,8 @@ export function ServicesEditor({ initialServices, canEdit }: Props) {
     };
     setSaving(true);
     const res = editing
-      ? await updateServiceAction(editing.id, body)
-      : await createServiceAction(body);
+      ? await updateAction(editing.id, body)
+      : await createAction(body);
     setSaving(false);
     if (res.error) return toast.error(res.error);
     toast.success(editing ? 'Service updated' : 'Service added');
@@ -102,9 +116,9 @@ export function ServicesEditor({ initialServices, canEdit }: Props) {
     router.refresh();
   }
 
-  async function handleDelete(s: SalonService) {
+  async function handleDelete(s: Service) {
     if (!confirm(`Delete "${s.name}"? This can't be undone.`)) return;
-    const res = await deleteServiceAction(s.id);
+    const res = await deleteAction(s.id);
     if (res.error) return toast.error(res.error);
     toast.success('Service deleted');
     router.refresh();

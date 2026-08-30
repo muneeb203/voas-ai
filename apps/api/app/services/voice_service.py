@@ -110,14 +110,15 @@ def get_or_create_settings(workspace_id: str) -> VoiceSettings:
     if res.data:
         return _hydrate_settings(res.data[0], workspace_id)
 
-    is_salon = _vertical(workspace_id) == "salon"
+    vertical = _vertical(workspace_id)
+    is_booking = vertical in ("salon", "dental")
     res = (
         db.table("voice_settings")
         .insert(
             {
                 "workspace_id": workspace_id,
-                "system_prompt": SALON_DEFAULT_SYSTEM_PROMPT if is_salon else DEFAULT_SYSTEM_PROMPT,
-                "greeting": SALON_DEFAULT_GREETING if is_salon else DEFAULT_GREETING,
+                "system_prompt": SALON_DEFAULT_SYSTEM_PROMPT if is_booking else DEFAULT_SYSTEM_PROMPT,
+                "greeting": SALON_DEFAULT_GREETING if is_booking else DEFAULT_GREETING,
                 "voice": "rachel",
                 "model": "gpt-4o-mini",
                 "enabled": False,
@@ -135,6 +136,8 @@ def _menu_context_for_workspace(workspace_id: str) -> str:
 
     Lightweight: category → items with prices. Modifiers omitted at this
     layer (Sprint 4 POS sync handles deeper menu reasoning)."""
+    if _vertical(workspace_id) != "restaurant":
+        return ""
     from app.core import currency as currency_mod
 
     db = get_supabase_admin()
@@ -175,6 +178,8 @@ def _services_context_for_workspace(workspace_id: str) -> str:
 
     The voice agent needs each service_id so it can call check_availability and
     book_appointment. Open times themselves come from the live tool, not here."""
+    if _vertical(workspace_id) != "salon":
+        return ""
     from app.core import currency as currency_mod
     from app.services import salon_service
 
@@ -186,6 +191,31 @@ def _services_context_for_workspace(workspace_id: str) -> str:
     if not services:
         return ""
     lines = ["", "--- SERVICES (use service_id when calling tools) ---"]
+    for svc in services:
+        price = currency_mod.format_cents(svc.price_cents, code)
+        lines.append(
+            f"- {svc.name} ({svc.duration_minutes} min, {price}) [service_id: {svc.id}]"
+        )
+    return "\n".join(lines)
+
+
+def _dental_services_context_for_workspace(workspace_id: str) -> str:
+    """Render active dental services (with ids) to feed the voice assistant.
+
+    Same as salon — the agent needs each service_id to call tools."""
+    if _vertical(workspace_id) != "dental":
+        return ""
+    from app.core import currency as currency_mod
+    from app.services import dental_service
+
+    db = get_supabase_admin()
+    ws = db.table("workspaces").select("currency").eq("id", workspace_id).limit(1).execute()
+    code = (ws.data[0].get("currency") if ws.data else None)
+
+    services = dental_service.list_services(workspace_id, active_only=True)
+    if not services:
+        return ""
+    lines = ["", "--- DENTAL PROCEDURES (use service_id when calling tools) ---"]
     for svc in services:
         price = currency_mod.format_cents(svc.price_cents, code)
         lines.append(
@@ -221,6 +251,8 @@ def _sync_assistant(workspace_id: str, settings: VoiceSettings) -> str | None:
 
     if vertical == "salon":
         context_md = _services_context_for_workspace(workspace_id)
+    elif vertical == "dental":
+        context_md = _dental_services_context_for_workspace(workspace_id)
     else:
         context_md = _menu_context_for_workspace(workspace_id)
     full_prompt = f"{settings.system_prompt}\n\n{context_md}".strip()
@@ -384,12 +416,12 @@ def apply_vertical_to_voice(workspace_id: str, vertical: str) -> None:
     if not row.data:
         return  # no settings yet → seeded correctly on first read
     cur = row.data[0]
-    is_salon = vertical == "salon"
+    is_booking = vertical in ("salon", "dental")
     updates: dict = {"sync_status": "pending", "sync_error": None}
     if _is_canned_prompt(cur.get("system_prompt", "")):
-        updates["system_prompt"] = SALON_DEFAULT_SYSTEM_PROMPT if is_salon else DEFAULT_SYSTEM_PROMPT
+        updates["system_prompt"] = SALON_DEFAULT_SYSTEM_PROMPT if is_booking else DEFAULT_SYSTEM_PROMPT
     if _is_canned_greeting(cur.get("greeting", "")):
-        updates["greeting"] = SALON_DEFAULT_GREETING if is_salon else DEFAULT_GREETING
+        updates["greeting"] = SALON_DEFAULT_GREETING if is_booking else DEFAULT_GREETING
     db.table("voice_settings").update(updates).eq("workspace_id", workspace_id).execute()
 
 

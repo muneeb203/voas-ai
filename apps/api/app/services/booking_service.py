@@ -25,6 +25,20 @@ BOOKED_STATUSES = ["pending", "confirmed"]
 _MIN_LEAD = timedelta(minutes=1)
 
 
+def _check_salon_vertical(workspace_id: str) -> None:
+	"""Verify workspace is a salon vertical. Raises AppError if not."""
+	db = get_supabase_admin()
+	ws = (
+		db.table("workspaces")
+		.select("vertical")
+		.eq("id", workspace_id)
+		.limit(1)
+		.execute()
+	)
+	if not ws.data or ws.data[0].get("vertical") != "salon":
+		raise AppError("INVALID_VERTICAL", "Booking is only available for salon workspaces.")
+
+
 def _one_month_ahead(d: date) -> date:
     """The same day one calendar month later, clamped to the month's length."""
     year = d.year + (1 if d.month == 12 else 0)
@@ -144,6 +158,7 @@ def get_availability(
     location_id: str | None = None,
     max_slots: int = 30,
 ) -> AvailabilityResult:
+    _check_salon_vertical(workspace_id)
     db = get_supabase_admin()
     service = salon_service._get_service(workspace_id, service_id)
     duration = timedelta(minutes=service.duration_minutes)
@@ -224,6 +239,7 @@ def _slot_bookable(
 def create_appointment(
     workspace_id: str, data: BookAppointmentInput, send_confirmation: bool = True
 ) -> SalonAppointment:
+    _check_salon_vertical(workspace_id)
     db = get_supabase_admin()
     service = salon_service._get_service(workspace_id, service_id=data.service_id)
     if not service.is_active:
@@ -309,6 +325,7 @@ def availability_prompt_context(workspace_id: str) -> str:
     """Compact services + upcoming-free-slots text for injecting into an AI
     prompt (WhatsApp or kiosk). The model offers only these real, open times;
     create_appointment re-checks at commit so stale slots can't double-book."""
+    _check_salon_vertical(workspace_id)
     from app.services import salon_service
 
     services = salon_service.list_services(workspace_id, active_only=True)
@@ -353,6 +370,7 @@ def reschedule_appointment(
 ) -> SalonAppointment:
     """Move an appointment to a new time (and optionally a new staff member),
     re-checking availability against everyone else's bookings."""
+    _check_salon_vertical(workspace_id)
     from app.services import salon_service
 
     db = get_supabase_admin()
@@ -424,6 +442,7 @@ def reschedule_appointment(
 
 
 def get_appointment(workspace_id: str, appointment_id: str) -> SalonAppointment:
+    _check_salon_vertical(workspace_id)
     db = get_supabase_admin()
     res = (
         db.table("salon_appointments")

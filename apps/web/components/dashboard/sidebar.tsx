@@ -37,19 +37,19 @@ interface NavSection {
   items: NavItem[];
 }
 
-// Nav is vertical-aware: a salon sees Appointments / Services / Staff where a
+// Nav is vertical-aware: salon/dental see Appointments / Services / Staff where a
 // restaurant sees Orders / Knowledge Base.
 function buildSections(vertical: string): NavSection[] {
-  const isSalon = vertical === 'salon';
+  const isBooking = vertical === 'salon' || vertical === 'dental';
   const overview: NavItem[] = [
     { href: '/dashboard', labelKey: 'dashboard', icon: LayoutDashboard },
     { href: '/conversations', labelKey: 'conversations', icon: MessageSquare },
-    isSalon
+    isBooking
       ? { href: '/appointments', labelKey: 'appointments', label: 'Appointments', icon: CalendarDays }
       : { href: '/orders', labelKey: 'orders', icon: ShoppingBag },
   ];
   const setup: NavItem[] = [
-    isSalon
+    isBooking
       ? { href: '/services', labelKey: 'services', label: 'Services', icon: Scissors }
       : { href: '/knowledge-base', labelKey: 'knowledgeBase', icon: BookOpen },
     { href: '/integrations', labelKey: 'integrations', icon: Plug },
@@ -57,7 +57,7 @@ function buildSections(vertical: string): NavSection[] {
   ];
   const workspace: NavItem[] = [
     { href: '/locations', labelKey: 'locations', icon: MapPin },
-    ...(isSalon
+    ...(isBooking
       ? [{ href: '/staff', labelKey: 'staff', label: 'Staff', icon: UserCog }]
       : []),
     { href: '/team', labelKey: 'team', icon: Users },
