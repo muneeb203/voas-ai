@@ -96,10 +96,11 @@ create policy "members can read own workspace dental services" on dental_service
   using (workspace_id in (select workspace_id from workspace_members where user_id = auth.uid()));
 
 create policy "owners can write own workspace dental services" on dental_services for insert
-  using (workspace_id in (select workspace_id from workspace_members where user_id = auth.uid() and role = 'owner'));
+  with check (workspace_id in (select workspace_id from workspace_members where user_id = auth.uid() and role = 'owner'));
 
 create policy "owners can update own workspace dental services" on dental_services for update
-  using (workspace_id in (select workspace_id from workspace_members where user_id = auth.uid() and role = 'owner'));
+  using (workspace_id in (select workspace_id from workspace_members where user_id = auth.uid() and role = 'owner'))
+  with check (workspace_id in (select workspace_id from workspace_members where user_id = auth.uid() and role = 'owner'));
 
 create policy "owners can delete own workspace dental services" on dental_services for delete
   using (workspace_id in (select workspace_id from workspace_members where user_id = auth.uid() and role = 'owner'));
@@ -109,10 +110,11 @@ create policy "members can read own workspace dental staff" on dental_staff for 
   using (workspace_id in (select workspace_id from workspace_members where user_id = auth.uid()));
 
 create policy "owners can write own workspace dental staff" on dental_staff for insert
-  using (workspace_id in (select workspace_id from workspace_members where user_id = auth.uid() and role = 'owner'));
+  with check (workspace_id in (select workspace_id from workspace_members where user_id = auth.uid() and role = 'owner'));
 
 create policy "owners can update own workspace dental staff" on dental_staff for update
-  using (workspace_id in (select workspace_id from workspace_members where user_id = auth.uid() and role = 'owner'));
+  using (workspace_id in (select workspace_id from workspace_members where user_id = auth.uid() and role = 'owner'))
+  with check (workspace_id in (select workspace_id from workspace_members where user_id = auth.uid() and role = 'owner'));
 
 create policy "owners can delete own workspace dental staff" on dental_staff for delete
   using (workspace_id in (select workspace_id from workspace_members where user_id = auth.uid() and role = 'owner'));
@@ -122,7 +124,7 @@ create policy "members can read own workspace dental staff services" on dental_s
   using (staff_id in (select id from dental_staff where workspace_id in (select workspace_id from workspace_members where user_id = auth.uid())));
 
 create policy "owners can write own workspace dental staff services" on dental_staff_services for insert
-  using (staff_id in (select id from dental_staff where workspace_id in (select workspace_id from workspace_members where user_id = auth.uid() and role = 'owner')));
+  with check (staff_id in (select id from dental_staff where workspace_id in (select workspace_id from workspace_members where user_id = auth.uid() and role = 'owner')));
 
 create policy "owners can delete own workspace dental staff services" on dental_staff_services for delete
   using (staff_id in (select id from dental_staff where workspace_id in (select workspace_id from workspace_members where user_id = auth.uid() and role = 'owner')));
@@ -132,10 +134,11 @@ create policy "members can read own workspace dental staff hours" on dental_staf
   using (staff_id in (select id from dental_staff where workspace_id in (select workspace_id from workspace_members where user_id = auth.uid())));
 
 create policy "owners can write own workspace dental staff hours" on dental_staff_hours for insert
-  using (staff_id in (select id from dental_staff where workspace_id in (select workspace_id from workspace_members where user_id = auth.uid() and role = 'owner')));
+  with check (staff_id in (select id from dental_staff where workspace_id in (select workspace_id from workspace_members where user_id = auth.uid() and role = 'owner')));
 
 create policy "owners can update own workspace dental staff hours" on dental_staff_hours for update
-  using (staff_id in (select id from dental_staff where workspace_id in (select workspace_id from workspace_members where user_id = auth.uid() and role = 'owner')));
+  using (staff_id in (select id from dental_staff where workspace_id in (select workspace_id from workspace_members where user_id = auth.uid() and role = 'owner')))
+  with check (staff_id in (select id from dental_staff where workspace_id in (select workspace_id from workspace_members where user_id = auth.uid() and role = 'owner')));
 
 create policy "owners can delete own workspace dental staff hours" on dental_staff_hours for delete
   using (staff_id in (select id from dental_staff where workspace_id in (select workspace_id from workspace_members where user_id = auth.uid() and role = 'owner')));
@@ -145,7 +148,8 @@ create policy "members can read own workspace dental appointments" on dental_app
   using (workspace_id in (select workspace_id from workspace_members where user_id = auth.uid()));
 
 create policy "members can write own workspace dental appointments" on dental_appointments for insert
-  using (workspace_id in (select workspace_id from workspace_members where user_id = auth.uid()));
+  with check (workspace_id in (select workspace_id from workspace_members where user_id = auth.uid()));
 
 create policy "members can update own workspace dental appointments" on dental_appointments for update
-  using (workspace_id in (select workspace_id from workspace_members where user_id = auth.uid()));
+  using (workspace_id in (select workspace_id from workspace_members where user_id = auth.uid()))
+  with check (workspace_id in (select workspace_id from workspace_members where user_id = auth.uid()));
