@@ -83,6 +83,10 @@ export function ServicesEditor({ initialServices, canEdit, vertical = 'salon' }:
   const createAction = isDental ? createDentalServiceAction : createSalonServiceAction;
   const updateAction = isDental ? updateDentalServiceAction : updateSalonServiceAction;
   const deleteAction = isDental ? deleteDentalServiceAction : deleteSalonServiceAction;
+  const serviceName = isDental ? 'procedure' : 'service';
+  const serviceExamples = isDental
+    ? ['Cleaning', 'Root Canal', 'Filling']
+    : ['Women\'s Haircut', 'Men\'s Haircut', 'Hair Coloring'];
 
   function openAdd() {
     setEditing(null);
@@ -111,7 +115,12 @@ export function ServicesEditor({ initialServices, canEdit, vertical = 'salon' }:
       : await createAction(body);
     setSaving(false);
     if (res.error) return toast.error(res.error);
-    toast.success(editing ? 'Service updated' : 'Service added');
+    const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+    toast.success(
+      editing
+        ? `${capitalize(serviceName)} updated`
+        : `${capitalize(serviceName)} added`,
+    );
     setOpen(false);
     router.refresh();
   }
@@ -137,7 +146,7 @@ export function ServicesEditor({ initialServices, canEdit, vertical = 'salon' }:
         </Button>
         {canEdit && (
           <Button onClick={openAdd}>
-            <Plus className="h-4 w-4" /> Add service
+            <Plus className="h-4 w-4" /> Add {serviceName}
           </Button>
         )}
       </div>
@@ -145,7 +154,8 @@ export function ServicesEditor({ initialServices, canEdit, vertical = 'salon' }:
       {initialServices.length === 0 ? (
         <Card>
           <CardContent className="py-12 text-center text-sm text-muted-foreground">
-            No services yet. {canEdit ? 'Add your first treatment to start taking bookings.' : ''}
+            No {isDental ? 'procedures' : 'services'} yet.{' '}
+            {canEdit ? `Add your first ${isDental ? 'procedure' : 'service'} to start taking bookings.` : ''}
           </CardContent>
         </Card>
       ) : (
@@ -193,7 +203,9 @@ export function ServicesEditor({ initialServices, canEdit, vertical = 'salon' }:
       <Dialog open={open} onOpenChange={(v) => !saving && setOpen(v)}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>{editing ? 'Edit service' : 'Add service'}</DialogTitle>
+            <DialogTitle>
+              {editing ? `Edit ${serviceName}` : `Add ${serviceName}`}
+            </DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
             <div className="space-y-2">
@@ -202,7 +214,7 @@ export function ServicesEditor({ initialServices, canEdit, vertical = 'salon' }:
                 id="svc-name"
                 value={form.name}
                 onChange={(e) => setForm({ ...form, name: e.target.value })}
-                placeholder="e.g. Women's Haircut"
+                placeholder={`e.g. ${serviceExamples[0]}`}
               />
             </div>
             <div className="space-y-2">
@@ -263,7 +275,11 @@ export function ServicesEditor({ initialServices, canEdit, vertical = 'salon' }:
               Cancel
             </Button>
             <Button onClick={handleSave} disabled={saving}>
-              {saving ? 'Saving…' : editing ? 'Save changes' : 'Add service'}
+              {saving
+                ? 'Saving…'
+                : editing
+                  ? 'Save changes'
+                  : `Add ${serviceName}`}
             </Button>
           </DialogFooter>
         </DialogContent>
