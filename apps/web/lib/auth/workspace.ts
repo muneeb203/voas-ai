@@ -49,8 +49,10 @@ const fetchSession = cache(async (): Promise<SessionFetchResult> => {
   const impersonation = isAdmin ? readImpersonation() : null;
 
   let active: WorkspaceMembership;
+  const memberships = profile?.memberships ?? [];
+
   if (impersonation) {
-    const existing = profile.memberships.find(
+    const existing = memberships.find(
       (m) => m.workspace_id === impersonation.workspace_id,
     );
     if (existing) {
@@ -75,8 +77,8 @@ const fetchSession = cache(async (): Promise<SessionFetchResult> => {
       };
     }
   } else {
-    if (!profile.memberships.length) return { kind: 'no-workspace' };
-    active = profile.memberships[0]!;
+    if (!memberships.length) return { kind: 'no-workspace' };
+    active = memberships[0]!;
   }
 
   return {
