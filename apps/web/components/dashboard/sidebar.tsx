@@ -17,7 +17,7 @@ import {
   Compass,
   CalendarDays,
   Scissors,
-  Tooth,
+  Smile,
   UserCog,
   type LucideIcon,
 } from 'lucide-react';
@@ -55,7 +55,7 @@ function buildSections(vertical: string): NavSection[] {
           href: '/services',
           labelKey: 'services',
           label: 'Services',
-          icon: vertical === 'dental' ? Tooth : Scissors,
+          icon: vertical === 'dental' ? Smile : Scissors,
         }
       : { href: '/knowledge-base', labelKey: 'knowledgeBase', icon: BookOpen },
     { href: '/integrations', labelKey: 'integrations', icon: Plug },

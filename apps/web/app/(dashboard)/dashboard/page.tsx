@@ -10,7 +10,7 @@ import {
   Scissors,
   UtensilsCrossed,
   Building2,
-  Tooth,
+  Smile,
   type LucideIcon,
 } from 'lucide-react';
 import { requireDashboardSession } from '@/lib/auth/workspace';
@@ -150,7 +150,7 @@ export default async function DashboardHome() {
   const VERTICAL_META: Record<string, { label: string; Icon: LucideIcon }> = {
     restaurant: { label: 'Restaurant', Icon: UtensilsCrossed },
     salon: { label: 'Salon', Icon: Scissors },
-    dental: { label: 'Dental', Icon: Tooth },
+    dental: { label: 'Dental', Icon: Smile },
   };
   const vertical = VERTICAL_META[session.active.workspace.vertical] ?? {
     label: 'Business',
