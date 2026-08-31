@@ -9,19 +9,19 @@ import { Volume2, VolumeX } from 'lucide-react';
 // ─────────────────────────────────────────────────────────────────────────────
 const VIDEOS = {
   en: {
-    id: '1202488321',
+    id: '1203747696',
     label: 'English',
     nativeLabel: 'English',
     flag: '🇬🇧',
   },
   ar: {
-    id: 'REPLACE_ARABIC_VIMEO_ID',
+    id: '1202520056',
     label: 'Arabic',
     nativeLabel: 'العربية',
     flag: '🇸🇦',
   },
   ur: {
-    id: 'REPLACE_URDU_VIMEO_ID',
+    id: '1202508526',
     label: 'Urdu',
     nativeLabel: 'اردو',
     flag: '🇵🇰',
