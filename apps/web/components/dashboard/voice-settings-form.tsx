@@ -564,7 +564,7 @@ export function VoiceSettingsForm({
         }}
         workspaceName={workspaceName}
         language={language}
-        vertical={vertical === 'salon' ? 'salon' : 'restaurant'}
+        vertical={vertical === 'salon' || vertical === 'dental' ? (vertical as 'salon' | 'dental') : 'restaurant'}
       />
     </form>
   );
