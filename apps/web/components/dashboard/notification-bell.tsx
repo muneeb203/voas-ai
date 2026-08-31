@@ -74,8 +74,12 @@ export function NotificationBell({
   const refresh = useCallback(async () => {
     const res = await fetchAction();
     if ('data' in res && res.data) {
-      setItems(res.data.items);
-      setUnreadCount(res.data.unread_count);
+      const filtered = res.data.items.filter(
+        (n) => n.type !== 'admin_error' && n.type !== 'admin_limit' && n.type !== 'admin_signup' && n.type !== 'admin_ticket'
+      );
+      setItems(filtered);
+      const filteredUnread = filtered.filter((n) => !n.read_at).length;
+      setUnreadCount(filteredUnread);
     }
     setLoading(false);
   }, [fetchAction]);
@@ -216,7 +220,9 @@ export function NotificationBell({
           </p>
         ) : (
           <div className="max-h-80 overflow-y-auto">
-            {items.map((n) => {
+            {items
+              .filter((n) => n.type !== 'admin_error' && n.type !== 'admin_limit' && n.type !== 'admin_signup' && n.type !== 'admin_ticket')
+              .map((n) => {
               const inner = (
                 <div
                   className={cn(
