@@ -17,6 +17,7 @@ import {
   Compass,
   CalendarDays,
   Scissors,
+  Tooth,
   UserCog,
   type LucideIcon,
 } from 'lucide-react';
@@ -50,7 +51,12 @@ function buildSections(vertical: string): NavSection[] {
   ];
   const setup: NavItem[] = [
     isBooking
-      ? { href: '/services', labelKey: 'services', label: 'Services', icon: Scissors }
+      ? {
+          href: '/services',
+          labelKey: 'services',
+          label: 'Services',
+          icon: vertical === 'dental' ? Tooth : Scissors,
+        }
       : { href: '/knowledge-base', labelKey: 'knowledgeBase', icon: BookOpen },
     { href: '/integrations', labelKey: 'integrations', icon: Plug },
     { href: '/analytics', labelKey: 'analytics', icon: BarChart3 },
