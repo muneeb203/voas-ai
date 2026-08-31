@@ -31,6 +31,7 @@ from app.models.whatsapp import (
 )
 from app.services import (
     booking_service,
+    dental_service,
     salon_service,
     voice_order_service,
     voice_service,
@@ -74,6 +75,17 @@ def _salon_context_for_workspace(workspace_id: str) -> str:
     prompt so the model can offer and book real times. The booking engine
     re-checks each slot at commit, so slightly-stale availability can't cause
     a double-booking."""
+    db = get_supabase_admin()
+    ws = (
+        db.table("workspaces")
+        .select("vertical")
+        .eq("id", workspace_id)
+        .limit(1)
+        .execute()
+    )
+    if not ws.data or ws.data[0].get("vertical") != "salon":
+        return "AVAILABLE APPOINTMENTS: salon services only."
+
     services = salon_service.list_services(workspace_id, active_only=True)
     if not services:
         return "AVAILABLE APPOINTMENTS: no services configured yet."
@@ -90,6 +102,54 @@ def _salon_context_for_workspace(workspace_id: str) -> str:
             day = (today + timedelta(days=offset)).isoformat()
             try:
                 avail = booking_service.get_availability(workspace_id, svc.id, day, max_slots=4)
+            except Exception:
+                continue
+            for slot in avail.slots:
+                when = slot.starts_at.astimezone(tz).strftime("%a %b %d, %I:%M %p")
+                slot_lines.append(
+                    f"  - {when} with {slot.staff_name} "
+                    f"[starts_at: {slot.starts_at.isoformat()} staff_id: {slot.staff_id}]"
+                )
+                if len(slot_lines) >= 5:
+                    break
+            if len(slot_lines) >= 5:
+                break
+        price = f"${svc.price_cents / 100:.0f}"
+        lines.append(f"\n{svc.name} ({svc.duration_minutes} min, {price}) [service_id: {svc.id}]")
+        lines.extend(slot_lines or ["  - no open times in the next few days"])
+    return "\n".join(lines)
+
+
+def _dental_context_for_workspace(workspace_id: str) -> str:
+    """Dental services + available appointment slots. Same pattern as salon but for
+    dental procedures (cleanings, exams, fillings, etc.)."""
+    db = get_supabase_admin()
+    ws = (
+        db.table("workspaces")
+        .select("vertical")
+        .eq("id", workspace_id)
+        .limit(1)
+        .execute()
+    )
+    if not ws.data or ws.data[0].get("vertical") != "dental":
+        return "AVAILABLE APPOINTMENTS: dental services only."
+
+    services = dental_service.list_services(workspace_id, active_only=True)
+    if not services:
+        return "AVAILABLE APPOINTMENTS: no services configured yet."
+
+    tz = dental_service._location_tz(workspace_id, None)
+    today = datetime.now(tz).date()
+    lines = [
+        "DENTAL SERVICES & AVAILABLE APPOINTMENTS "
+        "(to book, copy service_id / starts_at / staff_id exactly):"
+    ]
+    for svc in services[:6]:
+        slot_lines: list[str] = []
+        for offset in range(0, 4):
+            day = (today + timedelta(days=offset)).isoformat()
+            try:
+                avail = dental_service.get_availability(workspace_id, svc.id, day, max_slots=4)
             except Exception:
                 continue
             for slot in avail.slots:
@@ -137,6 +197,15 @@ def _build_system_prompt(workspace_id: str, base_prompt: str, vertical: str) -> 
             WHATSAPP_SALON_SYSTEM_PROMPT.strip(),
             WHATSAPP_SALON_PROMPT_SUFFIX.strip(),
             _salon_context_for_workspace(workspace_id),
+        ]
+        return "\n\n".join(p for p in parts if p)
+
+    if vertical == "dental":
+        # Self-contained dental prompt — similar to salon but for dental procedures.
+        parts = [
+            WHATSAPP_SALON_SYSTEM_PROMPT.strip(),  # Reuse booking-focused system prompt
+            WHATSAPP_SALON_PROMPT_SUFFIX.strip(),  # Reuse booking-focused suffix
+            _dental_context_for_workspace(workspace_id),
         ]
         return "\n\n".join(p for p in parts if p)
 
@@ -317,7 +386,7 @@ def get_ai_reply(
     if raw_reply is None:
         return {"reply": _FALLBACK_REPLY, "order_placed": False, "order_id": None, "usage": None}
 
-    if vertical == "salon":
+    if vertical in ("salon", "dental"):
         return _handle_salon_reply(workspace_id, conversation_id, conv, raw_reply, token_usage)
 
     order_args = _extract_order(raw_reply)

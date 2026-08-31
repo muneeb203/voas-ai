@@ -7,6 +7,20 @@ from app.models.order import Order, OrderStatus
 from app.services import audit_service
 
 
+def _check_restaurant_vertical(workspace_id: str) -> None:
+	"""Verify workspace is a restaurant vertical. Raises AppError if not."""
+	db = get_supabase_admin()
+	ws = (
+		db.table("workspaces")
+		.select("vertical")
+		.eq("id", workspace_id)
+		.limit(1)
+		.execute()
+	)
+	if not ws.data or ws.data[0].get("vertical") != "restaurant":
+		raise AppError("INVALID_VERTICAL", "Orders are only available for restaurant workspaces.")
+
+
 def create_manual_order(
     workspace_id: str,
     items: list[dict[str, Any]],
@@ -17,6 +31,7 @@ def create_manual_order(
 ) -> Order:
     """Create an order from the dashboard (staff-entered), priced against the
     menu via the same path the AI uses."""
+    _check_restaurant_vertical(workspace_id)
     from app.services import voice_order_service
 
     db = get_supabase_admin()
@@ -55,6 +70,7 @@ def list_orders(
     status: OrderStatus | None = None,
     limit: int = 100,
 ) -> list[Order]:
+    _check_restaurant_vertical(workspace_id)
     db = get_supabase_admin()
     query = (
         db.table("orders")
@@ -70,6 +86,7 @@ def list_orders(
 
 
 def get_order(workspace_id: str, order_id: str) -> Order:
+    _check_restaurant_vertical(workspace_id)
     db = get_supabase_admin()
     res = (
         db.table("orders")
@@ -93,6 +110,7 @@ def update_order_status(
     """Move an order to a new status. Workspace-scoped to prevent cross-tenant
     updates. Returns the updated row or raises NotFoundError if the order
     doesn't belong to the workspace."""
+    _check_restaurant_vertical(workspace_id)
     db = get_supabase_admin()
     previous = (
         db.table("orders")

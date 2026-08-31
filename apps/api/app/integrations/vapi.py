@@ -275,7 +275,7 @@ def _transfer_tool(number: str) -> dict[str, Any]:
 def _tools_for_vertical(vertical: str, server_url: str | None) -> list[dict[str, Any]]:
     base = (
         [CHECK_AVAILABILITY_TOOL, BOOK_APPOINTMENT_TOOL, CHECK_IN_TOOL]
-        if vertical == "salon"
+        if vertical in ("salon", "dental")
         else [PLACE_ORDER_TOOL]
     )
     if not server_url:
