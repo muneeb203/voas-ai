@@ -16,7 +16,7 @@ export type WorkspaceRole = (typeof WORKSPACE_ROLES)[number];
 export const VERTICALS = [
   { value: 'restaurant', label: 'Restaurant', available: true },
   { value: 'salon', label: 'Salon', available: true },
-  { value: 'dental', label: 'Dental', available: false },
+  { value: 'dental', label: 'Dental', available: true },
   { value: 'auto', label: 'Auto repair', available: false },
   { value: 'other', label: 'Other', available: false },
 ] as const;
