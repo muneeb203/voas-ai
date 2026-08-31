@@ -43,7 +43,9 @@ export interface DentalAppointment {
   workspace_id: string;
   location_id: string | null;
   service_id: string;
+  service_name: string;
   staff_id: string;
+  staff_name: string | null;
   customer_id: string | null;
   customer_name: string | null;
   customer_phone: string | null;
