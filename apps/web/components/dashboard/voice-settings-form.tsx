@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { Sparkles, CheckCircle2, AlertCircle, Loader2, Phone, PhoneOff } from 'lucide-react';
+import { Sparkles, CheckCircle2, AlertCircle, Loader2, Phone, PhoneOff, Globe } from 'lucide-react';
 import { toast } from 'sonner';
 import { useActionState } from '@/lib/use-action-state';
 import { Badge } from '@/components/ui/badge';
@@ -31,6 +31,7 @@ import {
   isDefaultPrompt,
 } from '@/lib/voice-language-defaults';
 import { VoicePromptGeneratorModal } from '@/components/dashboard/voice-prompt-generator-modal';
+import { WebsiteExtractorModal } from '@/components/dashboard/website-extractor-modal';
 
 const INITIAL: FormResult = { error: null };
 
@@ -42,6 +43,8 @@ interface VoiceSettingsFormProps {
   workspaceName?: string;
   /** Workspace vertical — tailors the auto-generated prompt (salon vs restaurant) */
   vertical?: string;
+  /** Workspace ID — used for website extractor API calls */
+  workspaceId?: string;
 }
 
 export function VoiceSettingsForm({
@@ -50,6 +53,7 @@ export function VoiceSettingsForm({
   disabled,
   workspaceName = '',
   vertical = 'restaurant',
+  workspaceId = '',
 }: VoiceSettingsFormProps) {
   const [state, formAction, pending] = useActionState(updateVoiceSettingsAction, INITIAL);
   const fieldErrors = state.fieldErrors;
@@ -88,6 +92,9 @@ export function VoiceSettingsForm({
   const modelLabel =
     capabilities.models.find((m) => m.id === settings.model)?.label ?? settings.model;
 
+  // Website extractor modal
+  const [extractorOpen, setExtractorOpen] = useState(false);
+
   // Voice selection: "custom" is a sentinel that reveals a freeform text
   // input so owners can paste any ElevenLabs voice id directly.
   const knownVoiceIds = new Set(capabilities.voices.map((v) => v.id));
@@ -114,6 +121,33 @@ export function VoiceSettingsForm({
     if (isDefaultPrompt(systemPrompt)) {
       setSystemPrompt(DEFAULT_SYSTEM_PROMPT_BY_LANG[nextLang]);
     }
+  }
+
+  function handleWebsiteExtracted(data: {
+    name: string;
+    description: string;
+    services: string[];
+    location: string;
+    phone: string;
+    email: string;
+  }) {
+    // Build a business context from extracted data
+    const businessContext = [
+      `Business Name: ${data.name}`,
+      data.description && `Description: ${data.description}`,
+      data.location && `Location: ${data.location}`,
+      data.phone && `Phone: ${data.phone}`,
+      data.email && `Email: ${data.email}`,
+      data.services.length > 0 && `Services/Products: ${data.services.join(', ')}`,
+    ]
+      .filter(Boolean)
+      .join('\n');
+
+    // Show toast and open generator with pre-populated data
+    toast.success('Website details extracted! Review and generate your prompt.');
+    setExtractorOpen(false);
+    // The generator modal will use this context
+    setGeneratorOpen(true);
   }
 
   // Split voices into "recommended for this language" vs "also works"
@@ -258,23 +292,44 @@ export function VoiceSettingsForm({
 
       {/* Auto-generate button — opens the template modal */}
       {!disabled && (
-        <div className="flex items-center justify-between rounded-lg border border-accent/30 bg-accent/5 px-4 py-3">
-          <div>
-            <p className="text-sm font-medium">Not sure what to write?</p>
-            <p className="text-xs text-muted-foreground">
-              Generate a prompt and greeting from your tone preferences — no AI needed.
-            </p>
+        <div className="space-y-3">
+          <div className="flex items-center justify-between rounded-lg border border-accent/30 bg-accent/5 px-4 py-3">
+            <div>
+              <p className="text-sm font-medium">Not sure what to write?</p>
+              <p className="text-xs text-muted-foreground">
+                Generate a prompt and greeting from your tone preferences — no AI needed.
+              </p>
+            </div>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="shrink-0 gap-2 border-accent/40 text-accent hover:bg-accent/10 hover:text-accent"
+              onClick={() => setGeneratorOpen(true)}
+            >
+              <Sparkles className="h-3.5 w-3.5" />
+              Auto-generate
+            </Button>
           </div>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            className="shrink-0 gap-2 border-accent/40 text-accent hover:bg-accent/10 hover:text-accent"
-            onClick={() => setGeneratorOpen(true)}
-          >
-            <Sparkles className="h-3.5 w-3.5" />
-            Auto-generate
-          </Button>
+
+          <div className="flex items-center justify-between rounded-lg border border-blue-200 bg-blue-50 dark:border-blue-900/40 dark:bg-blue-950/20 px-4 py-3">
+            <div>
+              <p className="text-sm font-medium text-blue-900 dark:text-blue-100">Have a website?</p>
+              <p className="text-xs text-blue-700 dark:text-blue-300">
+                Extract your business details from your website and auto-populate the prompt.
+              </p>
+            </div>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="shrink-0 gap-2 border-blue-200 text-blue-600 hover:bg-blue-100 dark:border-blue-900/60 dark:text-blue-400 dark:hover:bg-blue-900/40"
+              onClick={() => setExtractorOpen(true)}
+            >
+              <Globe className="h-3.5 w-3.5" />
+              Extract from website
+            </Button>
+          </div>
         </div>
       )}
 
@@ -565,6 +620,13 @@ export function VoiceSettingsForm({
         workspaceName={workspaceName}
         language={language}
         vertical={vertical === 'salon' || vertical === 'dental' ? (vertical as 'salon' | 'dental') : 'restaurant'}
+      />
+
+      <WebsiteExtractorModal
+        open={extractorOpen}
+        onClose={() => setExtractorOpen(false)}
+        onSuccess={handleWebsiteExtracted}
+        workspaceId={workspaceId}
       />
     </form>
   );

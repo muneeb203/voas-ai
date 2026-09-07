@@ -99,6 +99,7 @@ export default async function VoiceSettingsPage() {
               disabled={!isOwner}
               workspaceName={workspaceName}
               vertical={session.active.workspace.vertical}
+              workspaceId={workspaceId}
             />
           </CardContent>
         </Card>
