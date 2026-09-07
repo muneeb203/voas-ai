@@ -18,6 +18,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Badge } from '@/components/ui/badge';
 import { LanguageSwitcher } from '@/components/shared/language-switcher';
+import { VERTICALS } from '@/lib/constants';
 
 interface TopbarProps {
   workspaceName: string;
@@ -34,6 +35,26 @@ function initials(name: string | null, email: string | null): string {
   const parts = source.split(/\s+/);
   if (parts.length >= 2) return (parts[0]![0]! + parts[1]![0]!).toUpperCase();
   return source.slice(0, 2).toUpperCase();
+}
+
+function getVerticalLabel(verticalValue?: string): string | null {
+  if (!verticalValue) return null;
+  const vertical = VERTICALS.find(v => v.value === verticalValue);
+  return vertical?.label ?? null;
+}
+
+function getVerticalBadgeVariant(verticalValue?: string): 'default' | 'secondary' | 'destructive' | 'outline' {
+  if (!verticalValue) return 'secondary';
+  const variants: Record<string, 'default' | 'secondary' | 'destructive' | 'outline'> = {
+    restaurant: 'default',
+    salon: 'default',
+    law: 'default',
+    dental: 'default',
+    default: 'secondary',
+    auto: 'secondary',
+    other: 'secondary',
+  };
+  return variants[verticalValue] ?? 'secondary';
 }
 
 export function Topbar({
@@ -66,6 +87,11 @@ export function Topbar({
             <Badge variant="secondary" className="hidden sm:inline-flex">
               {workspacePlan}
             </Badge>
+            {vertical && getVerticalLabel(vertical) && (
+              <Badge variant={getVerticalBadgeVariant(vertical)} className="hidden sm:inline-flex">
+                {getVerticalLabel(vertical)}
+              </Badge>
+            )}
           </div>
         </div>
 
