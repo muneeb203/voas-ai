@@ -95,6 +95,9 @@ export function VoiceSettingsForm({
   // Website extractor modal
   const [extractorOpen, setExtractorOpen] = useState(false);
 
+  // Website extractor modal
+  const [extractorOpen, setExtractorOpen] = useState(false);
+
   // Voice selection: "custom" is a sentinel that reveals a freeform text
   // input so owners can paste any ElevenLabs voice id directly.
   const knownVoiceIds = new Set(capabilities.voices.map((v) => v.id));
@@ -578,6 +581,13 @@ export function VoiceSettingsForm({
         workspaceName={workspaceName}
         language={language}
         vertical={vertical === 'salon' || vertical === 'dental' ? (vertical as 'salon' | 'dental') : 'restaurant'}
+      />
+
+      <WebsiteExtractorModal
+        open={extractorOpen}
+        onClose={() => setExtractorOpen(false)}
+        onSuccess={handleWebsiteExtracted}
+        workspaceId={workspaceId}
       />
 
       <WebsiteExtractorModal
