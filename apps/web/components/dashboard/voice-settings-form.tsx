@@ -123,31 +123,10 @@ export function VoiceSettingsForm({
     }
   }
 
-  function handleWebsiteExtracted(data: {
-    name: string;
-    description: string;
-    services: string[];
-    location: string;
-    phone: string;
-    email: string;
-  }) {
-    // Build a business context from extracted data
-    const businessContext = [
-      `Business Name: ${data.name}`,
-      data.description && `Description: ${data.description}`,
-      data.location && `Location: ${data.location}`,
-      data.phone && `Phone: ${data.phone}`,
-      data.email && `Email: ${data.email}`,
-      data.services.length > 0 && `Services/Products: ${data.services.join(', ')}`,
-    ]
-      .filter(Boolean)
-      .join('\n');
-
-    // Show toast and open generator with pre-populated data
-    toast.success('Website details extracted! Review and generate your prompt.');
-    setExtractorOpen(false);
-    // The generator modal will use this context
-    setGeneratorOpen(true);
+  function handleWebsiteExtracted(generatedPrompt: string) {
+    // Auto-fill the system prompt field with the generated prompt
+    setSystemPrompt(generatedPrompt);
+    toast.success('System prompt auto-filled! Review and save when ready.');
   }
 
   // Split voices into "recommended for this language" vs "also works"
