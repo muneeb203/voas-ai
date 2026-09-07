@@ -1,222 +1,79 @@
-"""Transactional email for SaaS users.
-
-All sends go through `_dispatch`. When SMTP credentials are configured we send
-via the configured provider (Hostinger, Resend, Gmail — any SMTP host).
-Otherwise we log a stub entry so local dev and CI keep working without mail
-credentials.
-
-Sending happens on a small background thread pool: an SMTP handshake takes
-hundreds of ms (up to a 15s timeout on a bad day) and must never sit inside an
-API request. Callers get fire-and-forget semantics — a mail failure is logged,
-never raised, and can't break the action that triggered it.
-"""
-
-from __future__ import annotations
-
-import smtplib
-from concurrent.futures import ThreadPoolExecutor
-from email.mime.multipart import MIMEMultipart
-from email.mime.text import MIMEText
-from email.utils import parseaddr
-from typing import Any
-
+import httpx
+from datetime import datetime
 from app.config import get_settings
 from app.core.logging import get_logger
+from app.models.email_notification import CallData
 
 log = get_logger(__name__)
 
-# Small and bounded: email volume is low, and this caps how much work a burst of
-# tickets can queue up. Non-daemon so pending sends flush on shutdown.
-_executor = ThreadPoolExecutor(max_workers=4, thread_name_prefix="email")
 
-_ROLE_LABELS = {
-    "owner": "Owner",
-    "manager": "Manager",
-    "staff": "Staff",
-}
-
-
-def _smtp_configured() -> bool:
+async def send_email(recipient_email: str, call_data: CallData, workspace_name: str) -> tuple[bool, str | None]:
+    """Send email via Resend. Returns (success, error_message)"""
     settings = get_settings()
-    return bool(settings.smtp_host and settings.smtp_user and settings.smtp_password)
 
+    if not settings.resend_api_key:
+        log.warning("Resend API key not configured")
+        return False, "Resend API key not configured"
 
-def _send_now(
-    *,
-    to: str,
-    subject: str,
-    body: str,
-    html: str | None,
-    context: dict[str, Any],
-) -> None:
-    """The actual SMTP send. Runs on a worker thread; never raises."""
-    settings = get_settings()
+    minutes = call_data.duration_seconds // 60
+    seconds = call_data.duration_seconds % 60
+    duration_str = f"{minutes}m {seconds}s"
+
+    html_content = f"""
+    <div style="font-family: Arial, sans-serif; max-width: 600px; color: #333;">
+        <h2 style="color: #0A2540;">New Voice Call Received</h2>
+        <table style="width: 100%; border-collapse: collapse; margin: 20px 0;">
+            <tr style="border-bottom: 1px solid #eee;">
+                <td style="padding: 10px; font-weight: bold; width: 30%;">Caller:</td>
+                <td style="padding: 10px;">{call_data.caller_name} ({call_data.caller_phone})</td>
+            </tr>
+            <tr style="border-bottom: 1px solid #eee;">
+                <td style="padding: 10px; font-weight: bold;">Duration:</td>
+                <td style="padding: 10px;">{duration_str}</td>
+            </tr>
+            <tr style="border-bottom: 1px solid #eee;">
+                <td style="padding: 10px; font-weight: bold;">Location:</td>
+                <td style="padding: 10px;">{call_data.location}</td>
+            </tr>
+            <tr style="border-bottom: 1px solid #eee;">
+                <td style="padding: 10px; font-weight: bold;">Inquiry:</td>
+                <td style="padding: 10px;">{call_data.inquiry}</td>
+            </tr>
+        </table>
+        <h3 style="color: #0A2540; margin-top: 20px;">Call Transcript</h3>
+        <p style="background-color: #f5f5f5; padding: 15px; border-radius: 5px; white-space: pre-wrap;">{call_data.transcript[:500]}{'...' if len(call_data.transcript) > 500 else ''}</p>
+        <div style="margin-top: 20px; padding-top: 20px; border-top: 1px solid #eee;">
+            <p style="font-size: 12px; color: #666;">Workspace: {workspace_name}<br>Sent: {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')} UTC</p>
+        </div>
+    </div>
+    """
+
     try:
-        msg = MIMEMultipart("alternative")
-        msg["Subject"] = subject
-        msg["From"] = settings.email_from
-        msg["To"] = to
-        msg.attach(MIMEText(body, "plain", "utf-8"))
-        if html:
-            msg.attach(MIMEText(html, "html", "utf-8"))
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                "https://api.resend.com/emails",
+                headers={
+                    "Authorization": f"Bearer {settings.resend_api_key}",
+                    "Content-Type": "application/json",
+                },
+                json={
+                    "from": "calls@voas.ai",
+                    "to": recipient_email,
+                    "subject": f"New call from {call_data.caller_name}",
+                    "html": html_content,
+                },
+                timeout=10.0,
+            )
 
-        # EMAIL_FROM may carry a display name ("VOAS AI <info@convosol.com>").
-        # That's fine in the header, but the SMTP envelope needs the bare
-        # address or providers reject the message.
-        envelope_from = parseaddr(settings.email_from)[1] or settings.email_from
+            if response.status_code in (200, 201):
+                log.info(f"Email sent to {recipient_email}")
+                return True, None
+            else:
+                error = f"Resend error: {response.status_code}"
+                log.error(error)
+                return False, error
 
-        with smtplib.SMTP(settings.smtp_host, settings.smtp_port, timeout=15) as server:
-            server.starttls()
-            server.login(settings.smtp_user, settings.smtp_password)
-            server.sendmail(envelope_from, [to], msg.as_string())
-
-        log.info("email_sent", to=to, subject=subject, **context)
-    except Exception as exc:
-        log.error("email_send_failed", to=to, subject=subject, error=str(exc), **context)
-
-
-def _dispatch(
-    *,
-    to: str,
-    subject: str,
-    body: str,
-    html: str | None = None,
-    context: dict[str, Any],
-) -> None:
-    settings = get_settings()
-    if not _smtp_configured():
-        log.info(
-            "email_send_stub",
-            to=to,
-            subject=subject,
-            from_=settings.email_from,
-            body_preview=body[:240],
-            **context,
-        )
-        return
-
-    # Hand off to the pool and return immediately — the caller is usually inside
-    # a request and must not wait on a mail server.
-    _executor.submit(
-        _send_now, to=to, subject=subject, body=body, html=html, context=context
-    )
-
-
-def send_welcome(*, to: str, full_name: str | None, workspace_name: str) -> None:
-    greeting = f"Hi {full_name}," if full_name else "Hi,"
-    body = (
-        f"{greeting}\n\n"
-        f'Welcome to VOAS AI — your workspace "{workspace_name}" is ready.\n\n'
-        f"Your AI front desk can answer calls, take orders, and handle customer "
-        f"messages from one dashboard. Next steps:\n"
-        f"  • Add your menu in Knowledge Base\n"
-        f"  • Connect voice or WhatsApp under Integrations\n"
-        f"  • Invite your team from the Team page\n\n"
-        f"Open your dashboard any time to get started.\n\n"
-        f"— VOAS AI"
-    )
-    html = (
-        f"<p>{greeting}</p>"
-        f"<p>Welcome to <strong>VOAS AI</strong> — your workspace "
-        f"<strong>{workspace_name}</strong> is ready.</p>"
-        f"<p>Your AI front desk can answer calls, take orders, and handle "
-        f"customer messages from one dashboard.</p>"
-        f"<p><strong>Next steps:</strong></p>"
-        f"<ul>"
-        f"<li>Add your menu in Knowledge Base</li>"
-        f"<li>Connect voice or WhatsApp under Integrations</li>"
-        f"<li>Invite your team from the Team page</li>"
-        f"</ul>"
-        f"<p>Open your dashboard any time to get started.</p>"
-        f"<p>— VOAS AI</p>"
-    )
-    _dispatch(
-        to=to,
-        subject=f"Welcome to VOAS AI — {workspace_name} is ready",
-        body=body,
-        html=html,
-        context={"template": "welcome", "workspace_name": workspace_name},
-    )
-
-
-def send_team_invite(
-    *,
-    to: str,
-    workspace_name: str,
-    accept_url: str,
-    role: str,
-) -> None:
-    role_label = _ROLE_LABELS.get(role, role.title())
-    body = (
-        f"Hi,\n\n"
-        f'You\'ve been invited to join "{workspace_name}" on VOAS AI as {role_label}.\n\n'
-        f"Accept your invite (expires in 7 days):\n{accept_url}\n\n"
-        f"If you don't have a VOAS account yet, you'll be asked to sign up first.\n\n"
-        f"— VOAS AI"
-    )
-    html = (
-        f"<p>Hi,</p>"
-        f"<p>You've been invited to join <strong>{workspace_name}</strong> on "
-        f"VOAS AI as <strong>{role_label}</strong>.</p>"
-        f'<p><a href="{accept_url}">Accept your invite</a> (expires in 7 days)</p>'
-        f"<p>If you don't have a VOAS account yet, you'll be asked to sign up first.</p>"
-        f"<p>— VOAS AI</p>"
-    )
-    _dispatch(
-        to=to,
-        subject=f"You're invited to {workspace_name} on VOAS AI",
-        body=body,
-        html=html,
-        context={"template": "team_invite", "workspace_name": workspace_name, "role": role},
-    )
-
-
-def send_ticket_created(*, to: str, ticket_id: str, subject: str) -> None:
-    _dispatch(
-        to=to,
-        subject=f"We got your ticket: {subject}",
-        body=(
-            f"Hi,\n\nThanks for reaching out — we've logged your ticket "
-            f"#{ticket_id[:8]} ({subject}). The VOAS team will reply within "
-            f"one business day. You can view the ticket any time in your "
-            f"dashboard under Support.\n\n— VOAS AI"
-        ),
-        context={"template": "ticket_created", "ticket_id": ticket_id},
-    )
-
-
-def send_ticket_user_replied(*, to: str, ticket_id: str, subject: str) -> None:
-    _dispatch(
-        to=to,
-        subject=f"New reply on ticket: {subject}",
-        body=(
-            f"A workspace user replied on ticket #{ticket_id[:8]} ({subject}). "
-            f"Open the admin support inbox to respond."
-        ),
-        context={"template": "ticket_user_replied", "ticket_id": ticket_id},
-    )
-
-
-def send_ticket_admin_replied(*, to: str, ticket_id: str, subject: str) -> None:
-    _dispatch(
-        to=to,
-        subject=f"Update on your ticket: {subject}",
-        body=(
-            f"Hi,\n\nThe VOAS team replied on your ticket #{ticket_id[:8]} "
-            f"({subject}). Open the conversation in your dashboard under "
-            f"Support to view it.\n\n— VOAS AI"
-        ),
-        context={"template": "ticket_admin_replied", "ticket_id": ticket_id},
-    )
-
-
-def send_ticket_resolved(*, to: str, ticket_id: str, subject: str) -> None:
-    _dispatch(
-        to=to,
-        subject=f"Ticket resolved: {subject}",
-        body=(
-            f"Your ticket #{ticket_id[:8]} ({subject}) is marked resolved. "
-            f"If it's not actually fixed, reply on the ticket and we'll reopen it."
-        ),
-        context={"template": "ticket_resolved", "ticket_id": ticket_id},
-    )
+    except Exception as e:
+        error = f"Email failed: {str(e)}"
+        log.error(error)
+        return False, error
