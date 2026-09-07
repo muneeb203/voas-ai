@@ -270,3 +270,16 @@ class VoiceCapabilities(BaseModel):
     languages: list[dict]
     vapi_configured: bool
     vapi_public_key: str | None
+
+
+class WebsiteExtractorRequest(BaseModel):
+    url: str = Field(..., min_length=5, max_length=500)
+
+
+class WebsiteExtractorResponse(BaseModel):
+    name: str
+    description: str
+    services: list[str]
+    location: str
+    phone: str
+    email: str
