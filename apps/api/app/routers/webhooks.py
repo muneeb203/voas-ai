@@ -26,6 +26,7 @@ from app.services import (
     billing_service,
     booking_service,
     customer_service,
+    email_queue_service,
     error_log_service,
     salon_service,
     voice_order_service,
@@ -671,6 +672,24 @@ async def vapi_webhook(
                 cost_usd=cost_usd,
                 has_breakdown=bool(cost_breakdown),
             )
+
+            # Send email notification for the call
+            if duration and duration > 0:  # Only send for calls with actual duration
+                from app.models.email_notification import CallData
+
+                call_data = CallData(
+                    caller_name=call.get("phoneNumber", "Unknown"),
+                    caller_phone=call.get("phoneNumber", ""),
+                    duration_seconds=duration,
+                    transcript=analysis.get("transcript", ""),
+                    inquiry=summary or "",
+                    location=location_id or "",
+                )
+                background_tasks.add_task(
+                    email_queue_service.handle_new_call,
+                    workspace_id,
+                    call_data,
+                )
 
             billing_service.record_voice_call_minutes(
                 workspace_id=workspace_id,
