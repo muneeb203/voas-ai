@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { Loader2, Globe, AlertCircle } from 'lucide-react';
 import { toast } from 'sonner';
+import { createClient } from '@/lib/supabase/client';
 import {
   Dialog,
   DialogContent,
@@ -51,9 +52,20 @@ export function WebsiteExtractorModal({
     setError(null);
 
     try {
-      const response = await fetch(`/api/workspaces/${workspaceId}/voice/extract-website`, {
+      const supabase = createClient();
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+
+      if (sessionError || !session?.access_token) {
+        throw new Error('Not authenticated. Please log in again.');
+      }
+
+      const apiUrl = (process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000').replace(/\/+$/, '');
+      const response = await fetch(`${apiUrl}/v1/workspaces/${workspaceId}/voice/extract-website`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`,
+        },
         body: JSON.stringify({ url: url.trim() }),
       });
 
