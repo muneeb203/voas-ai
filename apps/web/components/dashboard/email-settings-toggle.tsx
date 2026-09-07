@@ -83,7 +83,7 @@ export function EmailSettingsToggle({ workspaceId }: { workspaceId: string }) {
               Rate limit: 10 calls/hour. Queued calls sent after 15-30 minutes.
             </p>
           </div>
-          <Switch checked={enabled} onCheckedChange={toggleNotifications} />
+          <Switch checked={enabled} onChange={(e) => toggleNotifications()} />
         </div>
       </div>
 
