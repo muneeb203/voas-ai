@@ -19,6 +19,7 @@ import {
   Scissors,
   Smile,
   UserCog,
+  Mail,
   type LucideIcon,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -69,6 +70,7 @@ function buildSections(vertical: string): NavSection[] {
     { href: '/team', labelKey: 'team', icon: Users },
     { href: '/settings', labelKey: 'settings', icon: Settings },
     { href: '/support', labelKey: 'support', icon: LifeBuoy },
+    { href: '/emails', labelKey: 'emails', label: 'Emails', icon: Mail },
   ];
   return [
     { titleKey: 'overview', items: overview },
