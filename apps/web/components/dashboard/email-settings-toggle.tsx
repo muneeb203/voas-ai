@@ -32,7 +32,10 @@ export function EmailSettingsToggle({ workspaceId }: { workspaceId: string }) {
 
   async function fetchSettings() {
     try {
-      const res = await fetch(`/v1/workspaces/${workspaceId}/email-settings`);
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+      const res = await fetch(`${apiUrl}/v1/workspaces/${workspaceId}/email-settings`, {
+        credentials: 'include',
+      });
       const data = await res.json();
       if (data.data) {
         setEnabled(data.data.enabled);
@@ -46,7 +49,10 @@ export function EmailSettingsToggle({ workspaceId }: { workspaceId: string }) {
 
   async function fetchLogs() {
     try {
-      const res = await fetch(`/v1/workspaces/${workspaceId}/email-logs?limit=50`);
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+      const res = await fetch(`${apiUrl}/v1/workspaces/${workspaceId}/email-logs?limit=50`, {
+        credentials: 'include',
+      });
       const data = await res.json();
       setLogs(data.data || []);
     } catch (err) {
@@ -59,13 +65,18 @@ export function EmailSettingsToggle({ workspaceId }: { workspaceId: string }) {
   async function toggleNotifications() {
     const newEnabled = !enabled;
     try {
-      const res = await fetch(`/v1/workspaces/${workspaceId}/email-settings`, {
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+      const res = await fetch(`${apiUrl}/v1/workspaces/${workspaceId}/email-settings`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({ enabled: newEnabled }),
       });
-      if (res.ok) {
-        setEnabled(newEnabled);
+      const data = await res.json();
+      if (res.ok && data.data) {
+        setEnabled(data.data.enabled);
+      } else {
+        console.error('Failed to toggle:', data);
       }
     } catch (err) {
       console.error('Failed to toggle notifications:', err);
