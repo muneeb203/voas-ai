@@ -130,9 +130,9 @@ booked via book_appointment. When unsure, say so and offer a human."""
 
 SALON_DEFAULT_GREETING = "Hi, thanks for calling! Would you like to book an appointment?"
 
-# Lawyer vertical: client intake and consultation defaults. Services are injected
+# Law vertical: client intake and consultation defaults. Services are injected
 # into the prompt at sync time.
-LAWYER_DEFAULT_SYSTEM_PROMPT = """You are the professional and knowledgeable front-desk agent for a law firm.
+LAW_DEFAULT_SYSTEM_PROMPT = """You are the professional and knowledgeable front-desk agent for a legal practice.
 
 Your job:
 - Greet warmly and professionally. Use the client's name if they offer it.
@@ -149,7 +149,7 @@ Appointment booking (IMPORTANT — follow exactly):
 
 Tone: professional, courteous, confident, and reassuring. Never promise legal outcomes or make commitments you can't keep. When unsure about details, say so and offer to have an attorney call back. Always maintain confidentiality."""
 
-LAWYER_DEFAULT_GREETING = "Good day, thanks for calling. How can our firm help you with your legal matter?"
+LAW_DEFAULT_GREETING = "Good day, thanks for calling. How can our firm help you with your legal matter?"
 
 # Voice roster. Each entry has:
 #   id        — ElevenLabs voice id (or a friendly alias resolved in vapi._VOICE_ID_MAP)

@@ -13,8 +13,8 @@ from app.models.voice import (
     DEFAULT_GREETING_BY_LANG,
     DEFAULT_SYSTEM_PROMPT,
     DEFAULT_SYSTEM_PROMPT_BY_LANG,
-    LAWYER_DEFAULT_GREETING,
-    LAWYER_DEFAULT_SYSTEM_PROMPT,
+    LAW_DEFAULT_GREETING,
+    LAW_DEFAULT_SYSTEM_PROMPT,
     SALON_DEFAULT_GREETING,
     SALON_DEFAULT_SYSTEM_PROMPT,
     LocationVoiceConfigSafe,
@@ -113,14 +113,24 @@ def get_or_create_settings(workspace_id: str) -> VoiceSettings:
         return _hydrate_settings(res.data[0], workspace_id)
 
     vertical = _vertical(workspace_id)
+    is_salon = vertical == "salon"
+    is_law = vertical == "law"
     is_booking = vertical in ("salon", "dental")
     res = (
         db.table("voice_settings")
         .insert(
             {
                 "workspace_id": workspace_id,
-                "system_prompt": SALON_DEFAULT_SYSTEM_PROMPT if is_booking else DEFAULT_SYSTEM_PROMPT,
-                "greeting": SALON_DEFAULT_GREETING if is_booking else DEFAULT_GREETING,
+                "system_prompt": (
+                    SALON_DEFAULT_SYSTEM_PROMPT if is_salon
+                    else LAW_DEFAULT_SYSTEM_PROMPT if is_law
+                    else DEFAULT_SYSTEM_PROMPT
+                ),
+                "greeting": (
+                    SALON_DEFAULT_GREETING if is_salon
+                    else LAW_DEFAULT_GREETING if is_law
+                    else DEFAULT_GREETING
+                ),
                 "voice": "rachel",
                 "model": "gpt-4o-mini",
                 "enabled": False,

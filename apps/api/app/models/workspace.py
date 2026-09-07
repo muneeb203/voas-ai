@@ -3,7 +3,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field, field_validator
 
-WorkspaceVertical = Literal["default", "restaurant", "lawyer", "dental", "salon", "auto", "other"]
+WorkspaceVertical = Literal["default", "restaurant", "law", "dental", "salon", "auto", "other"]
 WorkspacePlan = Literal["trial", "essentials", "professional", "business", "enterprise"]
 WorkspaceStatus = Literal["active", "suspended", "deleted"]
 MemberRole = Literal["owner", "manager", "staff"]
