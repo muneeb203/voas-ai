@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { Loader2, Globe, AlertCircle } from 'lucide-react';
 import { toast } from 'sonner';
-import { createClient } from '@/lib/supabase/client';
+import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import {
   Dialog,
   DialogContent,
@@ -52,7 +52,7 @@ export function WebsiteExtractorModal({
     setError(null);
 
     try {
-      const supabase = createClient();
+      const supabase = createSupabaseBrowserClient();
       const { data: { session }, error: sessionError } = await supabase.auth.getSession();
 
       if (sessionError || !session?.access_token) {
