@@ -1,51 +1,17 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
-import { Switch } from '@/components/ui/switch';
-
-interface EmailLog {
-  id: string;
-  recipient_email: string;
-  call_data: {
-    caller_name: string;
-    duration_seconds: number;
-  };
-  sent_at: string;
-  status: 'success' | 'failed';
-}
-
-interface Settings {
-  enabled: boolean;
-  recipient_email: string;
-}
+import type { EmailLog } from '@/lib/api/email';
 
 export function EmailSettingsToggle({ workspaceId }: { workspaceId: string }) {
-  const [enabled, setEnabled] = useState(false);
   const [email, setEmail] = useState('');
   const [logs, setLogs] = useState<EmailLog[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetchSettings();
+    fetchLogs();
   }, [workspaceId]);
-
-  async function fetchSettings() {
-    try {
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-      const res = await fetch(`${apiUrl}/v1/workspaces/${workspaceId}/email-settings`, {
-        credentials: 'include',
-      });
-      const data = await res.json();
-      if (data.data) {
-        setEnabled(data.data.enabled);
-        setEmail(data.data.recipient_email);
-      }
-      await fetchLogs();
-    } catch (err) {
-      console.error('Failed to fetch settings:', err);
-    }
-  }
 
   async function fetchLogs() {
     try {
@@ -55,6 +21,9 @@ export function EmailSettingsToggle({ workspaceId }: { workspaceId: string }) {
       });
       const data = await res.json();
       setLogs(data.data || []);
+      if (data.data && data.data.length > 0) {
+        setEmail(data.data[0].recipient_email);
+      }
     } catch (err) {
       console.error('Failed to fetch logs:', err);
     } finally {
@@ -62,39 +31,15 @@ export function EmailSettingsToggle({ workspaceId }: { workspaceId: string }) {
     }
   }
 
-  async function toggleNotifications() {
-    const newEnabled = !enabled;
-    try {
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-      const res = await fetch(`${apiUrl}/v1/workspaces/${workspaceId}/email-settings`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({ enabled: newEnabled }),
-      });
-      const data = await res.json();
-      if (res.ok && data.data) {
-        setEnabled(data.data.enabled);
-      } else {
-        console.error('Failed to toggle:', data);
-      }
-    } catch (err) {
-      console.error('Failed to toggle notifications:', err);
-    }
-  }
-
   return (
     <>
       <div className="bg-card border rounded-lg p-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <p className="font-medium">Call Notifications</p>
-            <p className="text-sm text-muted-foreground">{email}</p>
-            <p className="text-xs text-muted-foreground mt-2">
-              Rate limit: 10 calls/hour. Queued calls sent after 15-30 minutes.
-            </p>
-          </div>
-          <Switch checked={enabled} onChange={(e) => toggleNotifications()} />
+        <div>
+          <p className="font-medium">Call Notifications</p>
+          <p className="text-sm text-muted-foreground">{email || 'Loading...'}</p>
+          <p className="text-xs text-muted-foreground mt-2">
+            Email notifications are <span className="font-semibold text-green-600">enabled by default</span>. Rate limit: 10 calls/hour. Excess emails queued for 15-30 minutes.
+          </p>
         </div>
       </div>
 
