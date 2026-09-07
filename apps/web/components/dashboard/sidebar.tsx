@@ -7,18 +7,17 @@ import {
   LayoutDashboard,
   MessageSquare,
   ShoppingBag,
-  Users2,
   BookOpen,
   Plug,
   BarChart3,
   MapPin,
-  MonitorSmartphone,
   Users,
   Settings,
   LifeBuoy,
   Compass,
   CalendarDays,
   Scissors,
+  Smile,
   UserCog,
   type LucideIcon,
 } from 'lucide-react';
@@ -39,31 +38,34 @@ interface NavSection {
   items: NavItem[];
 }
 
-// Nav is vertical-aware: a salon sees Appointments / Services / Staff where a
-// restaurant sees Orders / Knowledge Base.
+// Nav is vertical-aware: salon/dental see Appointments / Services / Staff where a
+// restaurant sees Orders / Knowledge Base. default vertical hides these.
 function buildSections(vertical: string): NavSection[] {
-  const isSalon = vertical === 'salon';
+  const isBooking = vertical === 'salon' || vertical === 'dental';
   const overview: NavItem[] = [
     { href: '/dashboard', labelKey: 'dashboard', icon: LayoutDashboard },
     { href: '/conversations', labelKey: 'conversations', icon: MessageSquare },
-    isSalon
+    isBooking
       ? { href: '/appointments', labelKey: 'appointments', label: 'Appointments', icon: CalendarDays }
       : { href: '/orders', labelKey: 'orders', icon: ShoppingBag },
-    { href: '/customers', labelKey: 'customers', icon: Users2 },
   ];
   const setup: NavItem[] = [
-    isSalon
-      ? { href: '/services', labelKey: 'services', label: 'Services', icon: Scissors }
+    isBooking
+      ? {
+          href: '/services',
+          labelKey: 'services',
+          label: 'Services',
+          icon: vertical === 'dental' ? Smile : Scissors,
+        }
       : { href: '/knowledge-base', labelKey: 'knowledgeBase', icon: BookOpen },
     { href: '/integrations', labelKey: 'integrations', icon: Plug },
     { href: '/analytics', labelKey: 'analytics', icon: BarChart3 },
   ];
   const workspace: NavItem[] = [
     { href: '/locations', labelKey: 'locations', icon: MapPin },
-    ...(isSalon
+    ...(isBooking
       ? [{ href: '/staff', labelKey: 'staff', label: 'Staff', icon: UserCog }]
       : []),
-    { href: '/self-order', labelKey: 'selfOrder', icon: MonitorSmartphone },
     { href: '/team', labelKey: 'team', icon: Users },
     { href: '/settings', labelKey: 'settings', icon: Settings },
     { href: '/support', labelKey: 'support', icon: LifeBuoy },
