@@ -1,4 +1,4 @@
-from fastapi import APIRouter, BackgroundTasks, status
+from fastapi import APIRouter, BackgroundTasks, HTTPException, status
 
 from app.deps import OwnerContextDep, WorkspaceContextDep
 from app.models.voice import (
@@ -7,8 +7,10 @@ from app.models.voice import (
     VoiceCapabilities,
     VoiceSettings,
     VoiceSettingsUpdate,
+    WebsiteExtractorRequest,
+    WebsiteExtractorResponse,
 )
-from app.services import voice_service
+from app.services import voice_service, website_extractor_service
 from app.utils.responses import DataResponse, ok
 
 router = APIRouter(tags=["voice"])
@@ -88,3 +90,20 @@ async def upsert_location_voice(
 )
 async def disable_location_voice(location_id: str, ctx: OwnerContextDep) -> None:
     voice_service.disable_location_config(ctx.workspace_id, location_id, ctx.user.id)
+
+
+@router.post(
+    "/workspaces/{workspace_id}/voice/extract-website",
+    response_model=DataResponse[WebsiteExtractorResponse],
+)
+async def extract_website(
+    payload: WebsiteExtractorRequest, ctx: OwnerContextDep
+) -> DataResponse[WebsiteExtractorResponse]:
+    """Extract business details from a website using semantic HTML parsing + Claude AI."""
+    try:
+        extracted = await website_extractor_service.extract_website_details(payload.url)
+        return ok(extracted)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail="Failed to extract website details")
