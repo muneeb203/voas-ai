@@ -27,7 +27,7 @@ create table public.workspaces (
   slug text not null unique,
   plan text not null default 'starter' check (plan in ('starter', 'growth', 'scale', 'enterprise')),
   vertical text not null default 'restaurant'
-    check (vertical in ('restaurant', 'dental', 'salon', 'auto', 'other')),
+    check (vertical in ('default', 'restaurant', 'dental', 'salon', 'auto', 'other')),
   status text not null default 'active' check (status in ('active', 'suspended', 'deleted')),
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
