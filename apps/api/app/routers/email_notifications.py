@@ -40,12 +40,12 @@ async def update_email_settings(
                 {"enabled": payload.enabled}
             ).eq("workspace_id", ctx.workspace_id).execute()
         else:
-            # Create new with workspace owner email
+            # Create new with workspace owner email (enabled by default)
             owner_email = ctx.user.email if hasattr(ctx.user, 'email') else "owner@example.com"
 
             updated = db.table("email_notification_settings").insert({
                 "workspace_id": ctx.workspace_id,
-                "enabled": payload.enabled,
+                "enabled": True,
                 "recipient_email": owner_email,
                 "rate_limit_per_hour": 10,
             }).execute()
