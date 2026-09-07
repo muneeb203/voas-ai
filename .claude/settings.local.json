@@ -14,7 +14,8 @@
       "Bash(pnpm --filter @voas/web add next-intl)",
       "mcp__visualize__show_widget",
       "Bash(command -v node)",
-      "Bash(command -v pnpm)"
+      "Bash(command -v pnpm)",
+      "WebSearch"
     ]
   }
 }
