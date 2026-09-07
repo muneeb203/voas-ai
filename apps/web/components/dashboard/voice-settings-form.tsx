@@ -265,46 +265,25 @@ export function VoiceSettingsForm({
         </Select>
       </Field>
 
-      {/* Auto-generate button — opens the template modal */}
+      {/* Website extractor button */}
       {!disabled && (
-        <div className="space-y-3">
-          <div className="flex items-center justify-between rounded-lg border border-accent/30 bg-accent/5 px-4 py-3">
-            <div>
-              <p className="text-sm font-medium">Not sure what to write?</p>
-              <p className="text-xs text-muted-foreground">
-                Generate a prompt and greeting from your tone preferences — no AI needed.
-              </p>
-            </div>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="shrink-0 gap-2 border-accent/40 text-accent hover:bg-accent/10 hover:text-accent"
-              onClick={() => setGeneratorOpen(true)}
-            >
-              <Sparkles className="h-3.5 w-3.5" />
-              Auto-generate
-            </Button>
+        <div className="flex items-center justify-between rounded-lg border border-blue-200 bg-blue-50 dark:border-blue-900/40 dark:bg-blue-950/20 px-4 py-3">
+          <div>
+            <p className="text-sm font-medium text-blue-900 dark:text-blue-100">Have a website?</p>
+            <p className="text-xs text-blue-700 dark:text-blue-300">
+              Extract your business details from your website and auto-populate the prompt.
+            </p>
           </div>
-
-          <div className="flex items-center justify-between rounded-lg border border-blue-200 bg-blue-50 dark:border-blue-900/40 dark:bg-blue-950/20 px-4 py-3">
-            <div>
-              <p className="text-sm font-medium text-blue-900 dark:text-blue-100">Have a website?</p>
-              <p className="text-xs text-blue-700 dark:text-blue-300">
-                Extract your business details from your website and auto-populate the prompt.
-              </p>
-            </div>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="shrink-0 gap-2 border-blue-200 text-blue-600 hover:bg-blue-100 dark:border-blue-900/60 dark:text-blue-400 dark:hover:bg-blue-900/40"
-              onClick={() => setExtractorOpen(true)}
-            >
-              <Globe className="h-3.5 w-3.5" />
-              Extract from website
-            </Button>
-          </div>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="shrink-0 gap-2 border-blue-200 text-blue-600 hover:bg-blue-100 dark:border-blue-900/60 dark:text-blue-400 dark:hover:bg-blue-900/40"
+            onClick={() => setExtractorOpen(true)}
+          >
+            <Globe className="h-3.5 w-3.5" />
+            Extract from website
+          </Button>
         </div>
       )}
 
