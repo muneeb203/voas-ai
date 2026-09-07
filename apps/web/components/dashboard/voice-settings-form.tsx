@@ -95,9 +95,6 @@ export function VoiceSettingsForm({
   // Website extractor modal
   const [extractorOpen, setExtractorOpen] = useState(false);
 
-  // Website extractor modal
-  const [extractorOpen, setExtractorOpen] = useState(false);
-
   // Voice selection: "custom" is a sentinel that reveals a freeform text
   // input so owners can paste any ElevenLabs voice id directly.
   const knownVoiceIds = new Set(capabilities.voices.map((v) => v.id));
