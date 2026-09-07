@@ -27,6 +27,7 @@ const ITEMS: NavItem[] = [
   { href: '/admin/workspaces', label: 'Workspaces', icon: Building2 },
   { href: '/admin/users', label: 'Users', icon: Users },
   { href: '/admin/support', label: 'Support inbox', icon: LifeBuoy },
+  { href: '/admin/emails', label: 'Email notifications', icon: Mail },
   { href: '/admin/announcements', label: 'Announcements', icon: Megaphone },
   { href: '/admin/usage', label: 'Usage & billing', icon: Gauge },
   { href: '/admin/logs', label: 'Logs', icon: ListTree },

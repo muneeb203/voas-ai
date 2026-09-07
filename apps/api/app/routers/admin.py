@@ -762,3 +762,87 @@ async def update_admin_push_settings(
     )
     row = final.data[0] if final.data else {}
     return ok(AdminPushSettings(**row))
+
+
+# ---------- Email notifications -------------------------------------------------
+
+
+class AdminEmailStats(BaseModel):
+    workspace_id: str
+    workspace_name: str
+    emails_sent_today: int
+    emails_queued: int
+    total_sent: int
+
+
+@router.get("/emails/stats", response_model=DataResponse[list[AdminEmailStats]])
+async def get_email_stats(_: AdminContextDep) -> DataResponse[list[AdminEmailStats]]:
+    """Get email statistics for all workspaces."""
+    db = get_supabase_admin()
+
+    # Get all workspaces
+    workspaces = db.table("workspaces").select("id, name").eq("status", "active").execute()
+
+    stats = []
+    for ws in workspaces.data or []:
+        ws_id = ws["id"]
+
+        # Count emails sent today
+        today = datetime.now(UTC).date().isoformat()
+        sent_today = db.table("email_logs").select("id").eq("workspace_id", ws_id).gte("sent_at", f"{today}T00:00:00Z").execute()
+
+        # Count queued emails
+        queued = db.table("email_queue").select("id").eq("workspace_id", ws_id).eq("status", "pending").execute()
+
+        # Count total sent
+        total_sent = db.table("email_logs").select("id").eq("workspace_id", ws_id).execute()
+
+        stats.append(AdminEmailStats(
+            workspace_id=ws_id,
+            workspace_name=ws["name"],
+            emails_sent_today=len(sent_today.data or []),
+            emails_queued=len(queued.data or []),
+            total_sent=len(total_sent.data or []),
+        ))
+
+    return ok(stats)
+
+
+class AdminEmailLog(BaseModel):
+    workspace_id: str
+    workspace_name: str
+    recipient_email: str
+    caller_name: str
+    duration_seconds: int
+    sent_at: str
+    status: str
+
+
+@router.get("/emails/logs", response_model=DataResponse[list[AdminEmailLog]])
+async def get_all_email_logs(
+    _: AdminContextDep,
+    limit: int = Query(100),
+    offset: int = Query(0),
+) -> DataResponse[list[AdminEmailLog]]:
+    """Get email logs across all workspaces."""
+    db = get_supabase_admin()
+
+    # Get all email logs with workspace info
+    logs = db.table("email_logs").select(
+        "*, workspaces:workspace_id(name)"
+    ).order("sent_at", desc=True).range(offset, offset + limit - 1).execute()
+
+    result = []
+    for log in logs.data or []:
+        workspace_name = log.get("workspaces", {}).get("name", "Unknown") if log.get("workspaces") else "Unknown"
+        result.append(AdminEmailLog(
+            workspace_id=log["workspace_id"],
+            workspace_name=workspace_name,
+            recipient_email=log["recipient_email"],
+            caller_name=log["call_data"].get("caller_name", "Unknown"),
+            duration_seconds=log["call_data"].get("duration_seconds", 0),
+            sent_at=log["sent_at"],
+            status=log["status"],
+        ))
+
+    return ok(result)
