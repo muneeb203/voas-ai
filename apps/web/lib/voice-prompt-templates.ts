@@ -12,7 +12,7 @@ export type GreetingLength = 'brief' | 'detailed'
 export type LanguageFormality = 'formal' | 'casual'
 export type BusinessPersonality = 'fine-dining' | 'quick-service'
 
-export type BusinessVertical = 'restaurant' | 'salon'
+export type BusinessVertical = 'restaurant' | 'salon' | 'dental'
 
 export interface GeneratorOptions {
   language: Language
@@ -49,6 +49,13 @@ export const SALON_PERSONALITY_LABELS: Record<Language, { 'fine-dining': string;
   ar: { 'fine-dining': 'صالون راقٍ / سبا', 'quick-service': 'صالون بدون موعد' },
 }
 
+// For dental the two-way toggle means pediatric vs. general.
+export const DENTAL_PERSONALITY_LABELS: Record<Language, { 'fine-dining': string; 'quick-service': string }> = {
+  en: { 'fine-dining': 'Pediatric clinic', 'quick-service': 'General dental' },
+  ur: { 'fine-dining': 'بچوں کے دندانوں کا کلینک', 'quick-service': 'عام دندانوں کا کلینک' },
+  ar: { 'fine-dining': 'عيادة طب أسنان الأطفال', 'quick-service': 'عيادة طب أسنان عامة' },
+}
+
 export const FRIENDLINESS_LABELS: Record<Language, { formal: string; friendly: string }> = {
   en: { formal: 'Formal', friendly: 'Friendly' },
   ur: { formal: 'سنجیدہ', friendly: 'دوستانہ' },
@@ -68,10 +75,15 @@ export const GREETING_LENGTH_LABELS: Record<Language, { brief: string; detailed:
 export function generateVoicePrompt(opts: GeneratorOptions): GeneratedPrompts {
   const name = opts.businessName.trim() || 'our business'
   const options = { ...opts, businessName: name }
-  switch (options.language) {
-    case 'en': return _generateEnglish(options)
+
+  // Dental only supports English and Arabic
+  const isDental = options.vertical === 'dental'
+  const language = isDental && options.language === 'ur' ? 'en' : options.language
+
+  switch (language) {
+    case 'en': return isDental ? _generateDentalEnglish(options) : _generateEnglish(options)
     case 'ur': return _generateUrdu(options)
-    case 'ar': return _generateArabic(options)
+    case 'ar': return isDental ? _generateDentalArabic(options) : _generateArabic(options)
   }
 }
 
@@ -310,6 +322,113 @@ function _generateUrdu(opts: GeneratorOptions): GeneratedPrompts {
 }
 
 // ---------------------------------------------------------------------------
+// DENTAL (ENGLISH)
+// ---------------------------------------------------------------------------
+
+function _generateDentalEnglish(opts: GeneratorOptions): GeneratedPrompts {
+  const { businessName: n, description, friendliness, greetingLength, languageFormality, businessPersonality } = opts
+  const hasDesc = description.trim().length > 0
+  const desc = description.trim()
+
+  const isPediatric = businessPersonality === 'fine-dining'
+
+  const role: Record<BusinessPersonality, string> = {
+    'fine-dining': `You are the warm and reassuring AI voice assistant for ${n}, a pediatric dental clinic.`,
+    'quick-service': `You are the professional AI voice assistant for ${n}, a dental clinic.`,
+  }
+
+  const descLine = hasDesc ? `${n} is ${desc}.` : ''
+
+  const purpose: Record<Friendliness, string> = isPediatric
+    ? {
+        formal:
+          `Your role is to help young patients and parents feel at ease, book appointments accurately, and provide clear information about pediatric dental services. Maintain a respectful, warm manner that puts children at ease.`,
+        friendly:
+          `Your job is to make kids feel safe and excited about their dental visit, help parents find the perfect appointment time, and make the booking process fun and easy. Keep every call warm, reassuring, and friendly.`,
+      }
+    : {
+        formal:
+          `Your role is to handle patient inquiries professionally, book appointments accurately, and provide clear information about dental procedures and services. Maintain a respectful and courteous manner throughout every call.`,
+        friendly:
+          `Your job is to make every patient feel genuinely welcome, answer their questions about procedures, and book their appointment smoothly. Keep every call warm, supportive, and easy.`,
+      }
+
+  const style: Record<LanguageFormality, string> = {
+    formal:
+      `Always use polished, professional language. Preferred phrases: "certainly", "of course", "I would be happy to help". Avoid contractions and informal expressions.`,
+    casual:
+      `Use natural, conversational language. Contractions are fine. Phrases like "sure", "absolutely", and "no problem" fit perfectly. Adapt to the patient's energy and keep things comfortable.`,
+  }
+
+  const jobRules: Record<BusinessPersonality, string> = isPediatric
+    ? {
+        'fine-dining':
+          `When booking, be thorough: confirm the service (cleaning, check-up, etc.), the child's age, parent's contact info, preferred appointment time, and parent's name. Only offer times you know are available. Repeat appointment details before confirming. Never promise availability you're unsure of.`,
+        'quick-service':
+          `Book efficiently: get the service, child's age, parent's contact, appointment time, and parent's name. Confirm details before wrapping up. Only offer times you know are open.`,
+      }
+    : {
+        'fine-dining':
+          `When booking, be thorough: confirm the procedure (cleaning, filling, root canal, etc.), patient's concerns or history if relevant, preferred time, and patient's name. Only offer times you know are available. Repeat appointment details back before confirming. Never guess availability.`,
+        'quick-service':
+          `Book efficiently: get the procedure type, appointment time, and patient name. Confirm details before wrapping up. Only offer times you know are open.`,
+      }
+
+  const general = isPediatric
+    ? `Rules you must always follow:
+- Never promise an appointment time, procedure, or dentist you are not certain is available.
+- Always speak in a way that reassures children — avoid scary words like "pain" or "shot", use "sleepy jelly" instead of "anesthetic".
+- Keep responses short and upbeat — children and parents are on a call.
+- If a parent asks something outside your knowledge, offer to transfer them to a team member.
+- If a child sounds nervous, acknowledge their feelings warmly and remind them our team is friendly and caring.
+- Stay on topic: appointments, pediatric dental services, and the clinic only.`
+    : `Rules you must always follow:
+- Never promise an appointment time, procedure, or dentist you are not certain is available.
+- If a patient asks about complex procedures, be honest and offer to transfer them to the dentist for detailed discussion.
+- Keep responses short and direct — the patient is on a phone call.
+- If the patient sounds anxious, acknowledge their concern warmly and reassure them.
+- Provide accurate information about what to expect before procedures.
+- Stay on topic: appointments, dental procedures, and the business only.`
+
+  const systemPrompt = [
+    role[businessPersonality],
+    descLine,
+    purpose[friendliness],
+    style[languageFormality],
+    jobRules[businessPersonality],
+    general,
+  ]
+    .filter(Boolean)
+    .join('\n\n')
+
+  type ToneKey = `${Friendliness}-${GreetingLength}-${BusinessPersonality}`
+  const greetings: Record<ToneKey, string> = isPediatric
+    ? {
+        'formal-brief-fine-dining': `Thank you for calling ${n}. How may I help you today?`,
+        'formal-brief-quick-service': `Thanks for calling ${n}. Would you like to book an appointment?`,
+        'formal-detailed-fine-dining': `Thank you for calling ${n}. I'm your AI assistant, here to help book your child's appointment, answer questions about our services, or anything else you need. How may I help you today?`,
+        'formal-detailed-quick-service': `Hello, thanks for calling ${n}. I'm your AI assistant — I can book your child's appointment, tell you about our services, or help with anything you need. What can I do for you?`,
+        'friendly-brief-fine-dining': `Welcome to ${n}! How can I help you today?`,
+        'friendly-brief-quick-service': `Hi! You've reached ${n}. Looking to book an appointment for your little one?`,
+        'friendly-detailed-fine-dining': `Welcome to ${n}! I'm your AI assistant, here to make booking your child's appointment easy and stress-free. Whether you want to schedule a visit or learn about our services — I've got you. How can I help?`,
+        'friendly-detailed-quick-service': `Hey, welcome to ${n}! I'm your AI assistant — I can book your child in, answer questions about our pediatric services, or help with anything you need. What can I do for you?`,
+      }
+    : {
+        'formal-brief-fine-dining': `Thank you for calling ${n}. How may I assist you today?`,
+        'formal-brief-quick-service': `Thanks for calling ${n}. What can we help you with?`,
+        'formal-detailed-fine-dining': `Thank you for calling ${n}. I'm your AI assistant, here to help book your appointment, answer questions about our procedures, or anything else you need. How may I assist you today?`,
+        'formal-detailed-quick-service': `Hello, thanks for calling ${n}. I'm your AI assistant — I can book your appointment, answer questions about our services, or help with anything you need. What can I do for you?`,
+        'friendly-brief-fine-dining': `Welcome to ${n}! How can I help you today?`,
+        'friendly-brief-quick-service': `Hi! You've reached ${n}. Ready to schedule an appointment?`,
+        'friendly-detailed-fine-dining': `Welcome to ${n}! I'm your AI assistant, and I'm here to make scheduling your visit smooth and easy. Whether you're booking an appointment or have questions about our services — I'm here to help. How can I assist you?`,
+        'friendly-detailed-quick-service': `Hey, welcome to ${n}! I'm your AI assistant — I can book you in, answer questions about our dental services, or help with anything you need. What can I do for you today?`,
+      }
+
+  const key: ToneKey = `${friendliness}-${greetingLength}-${businessPersonality}`
+  return { systemPrompt, greeting: greetings[key] }
+}
+
+// ---------------------------------------------------------------------------
 // ARABIC
 // ---------------------------------------------------------------------------
 
@@ -428,6 +547,129 @@ function _generateArabic(opts: GeneratorOptions): GeneratedPrompts {
           `أهلاً وسهلاً في ${n}! أنا مساعدك الذكي ويسعدني مساعدتك. سواء أردت تقديم طلب أو الاستفسار عن قائمتنا، أنا هنا لك. كيف أقدر أخدمك اليوم؟`,
         'friendly-detailed-quick-service':
           `هلا والله! أهلاً بك في ${n}! أنا مساعدك الذكي — أقدر آخذ طلبك، أعرفك بقائمتنا، أو أجاوب على أي سؤال. إيش تبي اليوم؟`,
+      }
+
+  const key: ToneKey = `${friendliness}-${greetingLength}-${businessPersonality}`
+  return { systemPrompt, greeting: greetings[key] }
+}
+
+// ---------------------------------------------------------------------------
+// DENTAL (ARABIC)
+// ---------------------------------------------------------------------------
+
+function _generateDentalArabic(opts: GeneratorOptions): GeneratedPrompts {
+  const { businessName: n, description, friendliness, greetingLength, languageFormality, businessPersonality } = opts
+  const hasDesc = description.trim().length > 0
+  const desc = description.trim()
+
+  const isPediatric = businessPersonality === 'fine-dining'
+
+  const role: Record<BusinessPersonality, string> = {
+    'fine-dining': `أنت المساعد الصوتي الدافئ والمطمئن لعيادة ${n} لطب أسنان الأطفال.`,
+    'quick-service': `أنت المساعد الصوتي المحترف لعيادة ${n} لطب الأسنان.`,
+  }
+
+  const descLine = hasDesc ? `${n} هي ${desc}.` : ''
+
+  const purpose: Record<Friendliness, string> = isPediatric
+    ? {
+        formal:
+          `دورك هو مساعدة المرضى الصغار وأولياء أمورهم على الشعور بالارتياح، وحجز المواعيد بدقة، وتقديم معلومات واضحة عن خدمات طب أسنان الأطفال. حافظ على أسلوب دافئ ومهذب يطمئن الأطفال.`,
+        friendly:
+          `مهمتك هي جعل الأطفال يشعرون بالأمان والحماس لزيارة طبيب الأسنان، ومساعدة الآباء على إيجاد وقت الموعد المثالي، وجعل عملية الحجز ممتعة وسهلة. اجعل كل مكالمة دافئة وطمئنينة وودية.`,
+      }
+    : {
+        formal:
+          `دورك هو التعامل مع استفسارات المرضى باحترافية عالية، وحجز المواعيد بدقة، وتقديم معلومات واضحة عن الإجراءات والخدمات الطبية. احرص على أسلوب محترم ومهذب في كل مكالمة.`,
+        friendly:
+          `مهمتك هي جعل كل مريض يشعر بالترحيب الحار، والإجابة على أسئلتهم عن الإجراءات، وحجز موعده بسلاسة. اجعل كل مكالمة دافئة وداعمة وسهلة.`,
+      }
+
+  const style: Record<LanguageFormality, string> = {
+    formal:
+      `استخدم لغة احترافية وفصيحة في جميع الأوقات. الكلمات المفضلة: "بالتأكيد"، "حاضر"، "يسعدني مساعدتك". تجنب الكلمات العامية والغير رسمية.`,
+    casual:
+      `يمكنك استخدام لهجة طبيعية ومريحة. كلمات مثل "تمام"، "بالتأكيد"، و"حاضر" مناسبة تماماً. تكيف مع أسلوب المريض وحافظ على الدفء والودية.`,
+  }
+
+  const jobRules: Record<BusinessPersonality, string> = isPediatric
+    ? {
+        'fine-dining':
+          `عند الحجز، كن دقيقاً: أكّد الخدمة (تنظيف، فحص، إلخ)، عمر الطفل، معلومات الوالد، الوقت المفضل، واسم الوالد. اعرض فقط الأوقات المتاحة. كرّر تفاصيل الموعد قبل التأكيد. لا تعِد بتوفر شيء لست متأكداً منه.`,
+        'quick-service':
+          `احجز بكفاءة: الخدمة، عمر الطفل، معلومات الوالد، وقت الموعد، واسم الوالد. أكّد التفاصيل قبل الانتهاء. اعرض فقط الأوقات المتاحة.`,
+      }
+    : {
+        'fine-dining':
+          `عند الحجز، كن دقيقاً: أكّد الإجراء (تنظيف، حشو، معالجة جذرية، إلخ)، مخاوف المريض أو سجله الطبي إن لزم الأمر، الوقت المفضل، واسم المريض. اعرض فقط الأوقات المتاحة. كرّر تفاصيل الموعد قبل التأكيد. لا تخمّن التوفر.`,
+        'quick-service':
+          `احجز بكفاءة: نوع الإجراء، وقت الموعد، واسم المريض. أكّد التفاصيل قبل الانتهاء. اعرض فقط الأوقات المتاحة.`,
+      }
+
+  const general = isPediatric
+    ? `القواعس الأساسية:
+- لا تعِد بموعد أو إجراء أو طبيب لست متأكداً من توفره.
+- تحدث دائماً بطريقة تطمئن الأطفال — تجنب الكلمات المخيفة مثل "ألم" أو "حقنة"، استخدم "جل النوم" بدلاً من "مخدر".
+- اجعل الإجابات قصيرة وإيجابية — الأطفال وأولياء الأمور على هاتف.
+- إذا سأل الوالد عن شيء خارج نطاق معرفتك، اعرض تحويله إلى أحد أعضاء الفريق.
+- إذا بدا الطفل عصبياً، اعترف بمشاعره بدفء وذكّره بأن فريقنا ودود وحنون.
+- ابقَ في الموضوع: المواعيد وخدمات طب أسنان الأطفال والعيادة فقط.`
+    : `القواعس الأساسية:
+- لا تعِد بموعد أو إجراء أو طبيب لست متأكداً من توفره.
+- إذا سأل المريض عن إجراءات معقدة، كن صريحاً واعرض تحويله إلى طبيب الأسنان للنقاش التفصيلي.
+- اجعل الإجابات قصيرة ومباشرة — المريض على هاتف.
+- إذا بدا المريض قلقاً، اعترف بمخاوفه بدفء وطمئنه.
+- قدم معلومات دقيقة عما يتوقعه قبل الإجراءات.
+- ابقَ في الموضوع: المواعيد والإجراءات وطب الأسنان فقط.`
+
+  const systemPrompt = [
+    role[businessPersonality],
+    descLine,
+    purpose[friendliness],
+    style[languageFormality],
+    jobRules[businessPersonality],
+    general,
+  ]
+    .filter(Boolean)
+    .join('\n\n')
+
+  type ToneKey = `${Friendliness}-${GreetingLength}-${BusinessPersonality}`
+  const greetings: Record<ToneKey, string> = isPediatric
+    ? {
+        'formal-brief-fine-dining':
+          `شكراً لاتصالك بـ ${n}، كيف يمكنني مساعدتك؟`,
+        'formal-brief-quick-service':
+          `أهلاً بك في ${n}، هل تودّ حجز موعد؟`,
+        'formal-detailed-fine-dining':
+          `شكراً جزيلاً لاتصالك بـ ${n}. أنا مساعدك الذكي، وأنا هنا لمساعدتك في حجز موعد طفلك والإجابة على أسئلتك حول خدماتنا أو أي شيء آخر. كيف يمكنني مساعدتك؟`,
+        'formal-detailed-quick-service':
+          `مرحباً وشكراً لاتصالك بـ ${n}. أنا مساعدك الذكي — يمكنني حجز موعد طفلك والإجابة على أسئلتك عن خدماتنا والمساعدة في أي شيء تحتاجه. كيف أساعدك؟`,
+        'friendly-brief-fine-dining':
+          `أهلاً وسهلاً في ${n}! كيف أقدر أساعدك اليوم؟`,
+        'friendly-brief-quick-service':
+          `هلا! وصلت لـ ${n}، تبي تحجز موعد للصغير؟`,
+        'friendly-detailed-fine-dining':
+          `أهلاً وسهلاً في ${n}! أنا مساعدك الذكي وسعيد أن أساعدك في حجز موعد طفلك بسهولة وراحة. سواء أردت حجز زيارة أو معرفة خدماتنا — أنا هنا لك. كيف أقدر أساعدك؟`,
+        'friendly-detailed-quick-service':
+          `هلا والله! أهلاً بك في ${n}! أنا مساعدك الذكي — أقدر أحجز لطفلك، أجاوب على أسئلتك عن خدمات طب أسنان الأطفال، أو أساعدك بأي شيء تحتاجه. إيش تبي اليوم؟`,
+      }
+    : {
+        'formal-brief-fine-dining':
+          `شكراً لاتصالك بـ ${n}، كيف يمكنني خدمتك؟`,
+        'formal-brief-quick-service':
+          `أهلاً بك في ${n}، كيف يمكننا مساعدتك؟`,
+        'formal-detailed-fine-dining':
+          `شكراً جزيلاً لاتصالك بـ ${n}. أنا مساعدك الذكي، وأنا هنا لمساعدتك في حجز موعدك والإجابة على أسئلتك حول إجراءاتنا أو أي شيء آخر. كيف يمكنني خدمتك؟`,
+        'formal-detailed-quick-service':
+          `مرحباً وشكراً لاتصالك بـ ${n}. أنا مساعدك الذكي — يمكنني حجز موعدك والإجابة على أسئلتك عن خدماتنا والمساعدة في أي شيء تحتاجه. ماذا أقدم لك؟`,
+        'friendly-brief-fine-dining':
+          `أهلاً وسهلاً في ${n}! كيف أقدر أساعدك اليوم؟`,
+        'friendly-brief-quick-service':
+          `هلا! وصلت لـ ${n}، تبي تحجز موعد؟`,
+        'friendly-detailed-fine-dining':
+          `أهلاً وسهلاً في ${n}! أنا مساعدك الذكي وسعيد بمساعدتك في حجز موعدك بسهولة. سواء أردت حجز موعد أو أسئلة عن خدماتنا — أنا هنا لك. كيف أقدر أساعدك اليوم؟`,
+        'friendly-detailed-quick-service':
+          `هلا والله! أهلاً بك في ${n}! أنا مساعدك الذكي — أقدر أحجز لك موعد وأجاوب على أسئلتك عن خدمات طب الأسنان أو أساعدك بأي شيء تحتاجه. إيش تبي اليوم؟`,
       }
 
   const key: ToneKey = `${friendliness}-${greetingLength}-${businessPersonality}`

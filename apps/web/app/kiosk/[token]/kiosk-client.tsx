@@ -1,7 +1,8 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Mic, PhoneOff } from 'lucide-react';
+import { Mic, PhoneOff, ShoppingCart } from 'lucide-react';
+import { KioskManualOrder } from './kiosk-manual-order';
 import {
   claimKioskSession,
   heartbeatKioskSession,
@@ -55,6 +56,7 @@ interface KioskClientProps {
   theme: 'warm' | 'light' | 'gradient';
   sessionLockEnabled: boolean;
   vertical?: string;
+  orderMode?: 'voice' | 'manual' | 'both';
 }
 
 type KioskState =
@@ -151,9 +153,16 @@ export function KioskClient({
   theme,
   sessionLockEnabled,
   vertical = 'restaurant',
+  orderMode = 'voice',
 }: KioskClientProps) {
   const cfg = (THEME_CFG[theme] ?? THEME_CFG['gradient']) as ThemeCfg;
   const isSalon = vertical === 'salon';
+  // Tap-to-order is admin-gated and restaurant-only.
+  // Salon never gets manual; server already collapses that to 'voice', but guard
+  // here too. 'both' shows the switch button; 'manual' opens straight to tapping.
+  const effectiveMode = isSalon ? 'voice' : orderMode;
+  const showManualSwitch = effectiveMode === 'both';
+  const [manualMode, setManualMode] = useState(effectiveMode === 'manual');
 
   const [kioskState, setKioskState] = useState<KioskState>('idle');
   const [orderItems, setOrderItems] = useState<OrderItem[]>([]);
@@ -921,6 +930,32 @@ export function KioskClient({
   const isActive =
     kioskState === 'recording' || kioskState === 'processing' || kioskState === 'speaking';
 
+  // Manual (tap-to-order) mode: its own screen, reusing the theme wrapper and
+  // header. Kept separate from the voice state machine so neither can break the
+  // other. Only reachable when admin has enabled it (restaurant kiosks only).
+  if (manualMode && effectiveMode !== 'voice') {
+    return (
+      <div
+        className={`relative flex min-h-screen flex-col overflow-hidden ${cfg.wrapperClass}`}
+        style={cfg.wrapperStyle}
+      >
+        <header className="relative z-10 flex flex-col items-center pt-8">
+          <p className={`text-2xl font-black tracking-tight ${cfg.textPrimary}`}>
+            {workspaceName}
+          </p>
+          <p className={`mt-1 text-xs ${cfg.textSecondary}`}>{locationName}</p>
+        </header>
+        <KioskManualOrder
+          token={token}
+          accentColor={cfg.accentColor}
+          isLight={isLight}
+          canExit={showManualSwitch}
+          onExit={() => setManualMode(false)}
+        />
+      </div>
+    );
+  }
+
   return (
     <div
       className={`relative flex min-h-screen flex-col overflow-hidden ${cfg.wrapperClass}`}
@@ -1049,6 +1084,19 @@ export function KioskClient({
                   ? 'Book or check in — your AI assistant is ready'
                   : 'Speak your order — your AI assistant is ready'}
               </p>
+              {showManualSwitch && (
+                <button
+                  onClick={() => setManualMode(true)}
+                  className={`mt-6 inline-flex items-center gap-2 rounded-full border px-6 py-3 text-base font-semibold transition-colors ${
+                    isLight
+                      ? 'border-[#0A2540]/20 bg-[#0A2540]/5 text-[#0A2540] hover:bg-[#0A2540]/10'
+                      : 'border-white/20 bg-white/5 text-white hover:bg-white/10'
+                  }`}
+                >
+                  <ShoppingCart className="h-5 w-5" />
+                  Order by tapping instead
+                </button>
+              )}
             </div>
           </div>
         )}

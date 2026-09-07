@@ -90,14 +90,6 @@ function buildSteps(vertical: string): TourStep[] {
     },
   };
 
-  const customers: TourStep = {
-    element: '[data-tour="customers"]',
-    popover: {
-      title: 'Customers',
-      description: 'Profiles built automatically from who contacts you — history, spend, and more.',
-    },
-  };
-
   const analytics: TourStep = {
     element: '[data-tour="analytics"]',
     popover: {
@@ -153,7 +145,6 @@ function buildSteps(vertical: string): TourStep[] {
         integrations,
         work,
         conversations,
-        customers,
         analytics,
         staff,
         locations,
@@ -167,7 +158,6 @@ function buildSteps(vertical: string): TourStep[] {
         integrations,
         work,
         conversations,
-        customers,
         analytics,
         locations,
         verticals,

@@ -11,6 +11,7 @@ import { requireDashboardSession } from '@/lib/auth/workspace';
 const WorkspaceSchema = z.object({
   name: z.string().min(2, 'Name is too short').max(120),
   vertical: z.enum(['restaurant', 'dental', 'salon', 'auto', 'other']),
+  currency: z.enum(['USD', 'PKR', 'AED', 'SAR', 'GBP', 'EUR', 'INR']),
 });
 
 const ProfileSchema = z.object({
@@ -46,6 +47,7 @@ export async function updateWorkspaceAction(
   const parsed = WorkspaceSchema.safeParse({
     name: String(formData.get('name') ?? '').trim(),
     vertical: String(formData.get('vertical') ?? 'restaurant'),
+    currency: String(formData.get('currency') ?? 'USD'),
   });
   if (!parsed.success) {
     return {

@@ -1,5 +1,6 @@
 from datetime import UTC, datetime
 
+from app.config import get_settings
 from app.core.exceptions import AppError, ForbiddenError, NotFoundError
 from app.core.logging import get_logger
 from app.core.supabase import get_supabase_admin
@@ -12,7 +13,7 @@ from app.models.ticket import (
     TicketStatus,
     TicketWithMessages,
 )
-from app.services import audit_service, email_service
+from app.services import audit_service, email_service, notification_service
 
 log = get_logger(__name__)
 
@@ -206,6 +207,10 @@ def create_ticket(workspace_id: str, user_id: str, payload: TicketCreate) -> Tic
     if email:
         email_service.send_ticket_created(to=email, ticket_id=ticket_id, subject=payload.subject)
 
+    notification_service.notify_admin_ticket(
+        workspace_id=workspace_id, ticket_id=ticket_id, subject=payload.subject, kind="created"
+    )
+
     return _hydrate_ticket(ticket_row, 1, ticket_row["created_at"])
 
 
@@ -272,6 +277,17 @@ def add_user_message(
         resource_type="support_ticket",
         resource_id=ticket_id,
         metadata={"sender_type": "user", "status_after": new_status},
+    )
+
+    # Tell the support team a customer is waiting. Without this the reply only
+    # shows up if someone happens to open the admin inbox.
+    support_inbox = get_settings().support_notification_email
+    if support_inbox:
+        email_service.send_ticket_user_replied(
+            to=support_inbox, ticket_id=ticket_id, subject=ticket["subject"]
+        )
+    notification_service.notify_admin_ticket(
+        workspace_id=workspace_id, ticket_id=ticket_id, subject=ticket["subject"], kind="reply"
     )
 
     return _hydrate_message(msg_res.data[0])

@@ -107,3 +107,97 @@ export async function kioskSpeak(token: string, text: string): Promise<Blob | nu
     return null;
   }
 }
+
+
+// ── Manual (tap-to-order) mode ────────────────────────────────────────────────
+
+export interface KioskMenuOption {
+  id: string;
+  name: string;
+  price_delta_cents: number;
+  is_default: boolean;
+}
+
+export interface KioskMenuGroup {
+  id: string;
+  name: string;
+  min_select: number;
+  max_select: number;
+  required: boolean;
+  options: KioskMenuOption[];
+}
+
+export interface KioskMenuItem {
+  id: string;
+  name: string;
+  description: string | null;
+  price_cents: number;
+  image_url: string | null;
+  modifier_groups: KioskMenuGroup[];
+}
+
+export interface KioskMenuCategory {
+  id: string;
+  name: string;
+  items: KioskMenuItem[];
+}
+
+export interface KioskMenu {
+  categories: KioskMenuCategory[];
+  currency_symbol: string;
+  currency_decimals: number;
+}
+
+export interface ManualOrderLine {
+  item_id: string;
+  quantity: number;
+  option_ids: string[];
+}
+
+export interface ManualOrderResult {
+  success: boolean;
+  order_id: string | null;
+  order_number: string | null;
+  total: string | null;
+  message: string | null;
+}
+
+export function getKioskMenu(token: string): Promise<ApiResponse<KioskMenu>> {
+  return publicFetch(`/v1/kiosk/${token}/menu`, { cache: 'no-store' });
+}
+
+export function placeManualOrder(
+  token: string,
+  items: ManualOrderLine[],
+): Promise<ApiResponse<ManualOrderResult>> {
+  return publicFetch(`/v1/kiosk/${token}/manual-order`, {
+    method: 'POST',
+    body: JSON.stringify({ items }),
+  });
+}
+
+
+export function getPhoneMenu(token: string): Promise<ApiResponse<KioskMenu>> {
+  return publicFetch(`/v1/order/${token}/menu`, { cache: 'no-store' });
+}
+
+export interface PhoneOrderInfo {
+  workspace_name: string;
+  location_name: string;
+  order_lock_enabled: boolean;
+  order_lock_minutes: number;
+}
+
+export function getPhoneOrderInfo(token: string): Promise<ApiResponse<PhoneOrderInfo>> {
+  return publicFetch(`/v1/order/${token}/info`, { cache: 'no-store' });
+}
+
+export function placePhoneOrder(
+  token: string,
+  items: ManualOrderLine[],
+): Promise<ApiResponse<ManualOrderResult>> {
+  return publicFetch(`/v1/order/${token}/place`, {
+    method: 'POST',
+    body: JSON.stringify({ items }),
+  });
+}

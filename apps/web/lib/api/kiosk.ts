@@ -21,6 +21,13 @@ export interface KioskSettings {
   kiosk_credits_balance: number;
   kiosk_credits_used_this_month: number;
   kiosk_month_start: string | null;
+  restaurant_tone: string | null;
+  restaurant_handover: string | null;
+  salon_tone: string | null;
+  salon_handover: string | null;
+  phone_ordering_enabled?: boolean;
+  phone_order_lock_enabled?: boolean;
+  phone_order_lock_minutes?: number;
 }
 
 export interface KioskInfo {
@@ -29,6 +36,7 @@ export interface KioskInfo {
   theme: 'warm' | 'light' | 'gradient';
   session_lock_enabled: boolean;
   vertical: string;
+  order_mode: 'voice' | 'manual' | 'both';
 }
 
 export function listKioskTokens(workspaceId: string) {
@@ -51,8 +59,11 @@ export function revokeKioskToken(workspaceId: string, tokenId: string) {
 }
 
 export function getKioskSettings(workspaceId: string) {
+  // Config that an admin/owner changes and expects to see immediately — don't
+  // serve a stale cached copy (the 30s cache made toggles look like they hadn't
+  // saved).
   return apiCall<KioskSettings>(`/v1/workspaces/${workspaceId}/kiosk-settings`, {
-    next: { revalidate: 30 },
+    cache: 'no-store',
   });
 }
 

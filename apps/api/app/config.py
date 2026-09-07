@@ -29,11 +29,14 @@ class Settings(BaseSettings):
 
     resend_api_key: str | None = None
     email_from: str = "no-reply@voas.ai"
+    # Where "a customer replied on a ticket" alerts go. Unset = no alert sent.
+    support_notification_email: str | None = None
     smtp_host: str | None = None
     smtp_port: int = 587
     smtp_user: str | None = None
     smtp_password: str | None = None
 
+    rate_limit_enabled: bool = True
     rate_limit_global_per_hour: int = Field(default=1000, ge=1)
     rate_limit_writes_per_minute: int = Field(default=100, ge=1)
 
@@ -87,6 +90,21 @@ class Settings(BaseSettings):
     @property
     def google_calendar_configured(self) -> bool:
         return bool(self.google_client_id and self.google_client_secret)
+
+    # --- Web Push (PWA "mobile app" notifications). No-op without the VAPID
+    # keypair. Generate once with:
+    #   python -c "from py_vapid import Vapid01; v=Vapid01(); v.generate_keys(); \
+    #     import base64; \
+    #     print('PRIVATE', base64.urlsafe_b64encode(v.private_key.private_numbers().private_value.to_bytes(32,'big')).decode().rstrip('=')); \
+    #     print('PUBLIC', v.public_key_urlsafe_base64())"
+    # The public key also goes to the frontend as NEXT_PUBLIC_VAPID_PUBLIC_KEY. ---
+    vapid_public_key: str | None = None
+    vapid_private_key: str | None = None
+    vapid_subject: str = "mailto:info@convosol.com"
+
+    @property
+    def push_configured(self) -> bool:
+        return bool(self.vapid_public_key and self.vapid_private_key)
 
     # --- Dashboard help bot (Gemini). No-op without GEMINI_API_KEY. ---
     gemini_api_key: str | None = None

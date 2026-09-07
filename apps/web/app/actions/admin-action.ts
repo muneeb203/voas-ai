@@ -158,11 +158,47 @@ export async function updateWorkspaceBillingAction(
 
 export async function updateAdminKioskSettingsAction(
   workspaceId: string,
-  body: { kiosk_enabled?: boolean; max_kiosk_urls?: number; kiosk_monthly_limit?: number },
+  body: {
+    kiosk_enabled?: boolean;
+    max_kiosk_urls?: number;
+    kiosk_monthly_limit?: number;
+    manual_ordering_enabled?: boolean;
+    kiosk_order_mode?: 'voice' | 'manual' | 'both';
+    phone_ordering_enabled?: boolean;
+  },
 ) {
   await requireAdminSession(`/admin/workspaces/${workspaceId}`);
   const { updateAdminKioskSettings } = await import('@/lib/api/admin');
   const res = await updateAdminKioskSettings(workspaceId, body);
+  if (isApiError(res)) return { error: res.error.message };
+  revalidatePath(`/admin/workspaces/${workspaceId}`);
+  return { error: null };
+}
+
+export async function updateAdminPushSettingsAction(
+  workspaceId: string,
+  body: {
+    push_enabled?: boolean;
+    recipients?: 'owners_managers' | 'all';
+    notify_order?: boolean;
+    notify_appointment?: boolean;
+    notify_ticket?: boolean;
+    notify_kiosk_low?: boolean;
+    notify_announcement?: boolean;
+  },
+) {
+  await requireAdminSession(`/admin/workspaces/${workspaceId}`);
+  const { updateAdminPushSettings } = await import('@/lib/api/admin');
+  const res = await updateAdminPushSettings(workspaceId, body);
+  if (isApiError(res)) return { error: res.error.message };
+  revalidatePath(`/admin/workspaces/${workspaceId}`);
+  return { error: null };
+}
+
+export async function setWorkspaceVoiceModelAction(workspaceId: string, model: string) {
+  await requireAdminSession(`/admin/workspaces/${workspaceId}`);
+  const { setWorkspaceVoiceModel } = await import('@/lib/api/admin');
+  const res = await setWorkspaceVoiceModel(workspaceId, model);
   if (isApiError(res)) return { error: res.error.message };
   revalidatePath(`/admin/workspaces/${workspaceId}`);
   return { error: null };

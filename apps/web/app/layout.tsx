@@ -1,4 +1,4 @@
-import type { Metadata } from 'next';
+import type { Metadata, Viewport } from 'next';
 import { cookies } from 'next/headers';
 import { SITE } from '@/lib/constants';
 import { Toaster } from '@/components/ui/toaster';
@@ -15,6 +15,11 @@ export const metadata: Metadata = {
   icons: {
     icon: '/favicon.svg',
     apple: '/apple-touch-icon.png',
+  },
+  appleWebApp: {
+    capable: true,
+    title: 'VOAS',
+    statusBarStyle: 'default',
   },
   openGraph: {
     title: SITE.name,
@@ -33,6 +38,10 @@ export const metadata: Metadata = {
     index: true,
     follow: true,
   },
+};
+
+export const viewport: Viewport = {
+  themeColor: '#0A2540',
 };
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {

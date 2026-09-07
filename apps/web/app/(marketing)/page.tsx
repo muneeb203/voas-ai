@@ -7,6 +7,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { CallToAction } from '@/components/marketing/cta';
 import { DemoVideoSection } from '@/components/marketing/demo-video-section';
+import { InstallPrompt } from '@/components/shared/install-prompt';
 
 const HOW_IT_WORKS = [
   {
@@ -295,6 +296,8 @@ export default function HomePage() {
         primaryLabel="Start free"
         secondaryLabel="Schedule a demo"
       />
+
+      <InstallPrompt />
     </>
   );
 }

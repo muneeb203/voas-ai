@@ -16,6 +16,7 @@ from app.core.exceptions import (
     validation_exception_handler,
 )
 from app.core.logging import configure_logging, get_logger
+from app.core.rate_limit import RateLimitMiddleware
 from app.routers import (
     admin,
     analytics,
@@ -23,6 +24,7 @@ from app.routers import (
     contact,
     conversations,
     customers,
+    dental,
     google,
     health,
     help,
@@ -32,6 +34,7 @@ from app.routers import (
     menu,
     notifications,
     orders,
+    push,
     salon,
     tickets,
     voice,
@@ -105,6 +108,10 @@ def create_app() -> FastAPI:
         lifespan=lifespan,
     )
 
+    # Order matters: Starlette runs the LAST-added middleware outermost. Add the
+    # rate limiter FIRST and CORS LAST so CORS wraps it — a 429 then still carries
+    # CORS headers and the browser can read it, instead of an opaque CORS error.
+    app.add_middleware(RateLimitMiddleware)
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors_origins_list,
@@ -130,12 +137,14 @@ def create_app() -> FastAPI:
     app.include_router(orders.router, prefix="/v1")
     app.include_router(menu.router, prefix="/v1")
     app.include_router(salon.router, prefix="/v1")
+    app.include_router(dental.router, prefix="/v1")
     app.include_router(google.router, prefix="/v1")
     app.include_router(google.public_router, prefix="/v1")
     app.include_router(analytics.router, prefix="/v1")
     app.include_router(billing.router, prefix="/v1")
     app.include_router(help.router, prefix="/v1")
     app.include_router(notifications.router, prefix="/v1")
+    app.include_router(push.router, prefix="/v1")
     app.include_router(voice.router, prefix="/v1")
     app.include_router(whatsapp.router, prefix="/v1")
     app.include_router(kiosk.router, prefix="/v1")

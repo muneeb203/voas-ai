@@ -147,6 +147,16 @@ def create_workspace(payload: WorkspaceCreate, user_id: str, user_email: str | N
         except Exception as exc:
             log.error("welcome_email_failed", workspace_id=workspace_id, error=str(exc))
 
+    # Alert the VOAS admin team so they can reach out / onboard.
+    try:
+        from app.services import notification_service
+
+        notification_service.notify_admin_signup(
+            workspace_id=workspace_id, workspace_name=payload.name
+        )
+    except Exception as exc:
+        log.error("admin_signup_notify_failed", workspace_id=workspace_id, error=str(exc))
+
     return Workspace.model_validate(workspace)
 
 

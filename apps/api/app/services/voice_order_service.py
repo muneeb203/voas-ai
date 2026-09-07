@@ -68,10 +68,15 @@ def place_order_from_tool_call(
     customer_id: str | None,
     customer_phone: str | None,
     arguments: dict[str, Any],
+    assign_token: bool = False,
 ) -> dict[str, Any]:
     """Materialize a Vapi tool call into an orders row. Returns a summary
     payload to send back to Vapi as the tool result — the agent reads it
-    aloud to the customer."""
+    aloud to the customer.
+
+    `assign_token` gives the order a short per-location daily number (kiosk
+    manual orders), so a customer and staff can match on it.
+    """
     db = get_supabase_admin()
 
     raw_items = arguments.get("items") or []
@@ -127,6 +132,20 @@ def place_order_from_tool_call(
     special = str(arguments.get("special_instructions") or "").strip() or None
     notes = f"Fulfillment: {fulfillment}." + (f" {special}" if special else "")
 
+    # Short per-location daily token, only for orders that need one (kiosk
+    # manual). Best-effort: if the counter call fails, the order still saves —
+    # a missing token is far better than a lost order.
+    order_token: str | None = None
+    if assign_token and location_id:
+        try:
+            seq_res = db.rpc(
+                "next_kiosk_order_token", {"p_location_id": location_id}
+            ).execute()
+            if seq_res.data is not None:
+                order_token = str(seq_res.data)
+        except Exception as exc:
+            log.error("order_token_failed", location_id=location_id, error=str(exc))
+
     order_res = (
         db.table("orders")
         .insert(
@@ -145,6 +164,7 @@ def place_order_from_tool_call(
                 "customer_name": str(arguments.get("customer_name") or "").strip() or None,
                 "payment_status": "unpaid",
                 "notes": notes,
+                "order_token": order_token,
             }
         )
         .execute()
@@ -186,6 +206,7 @@ def place_order_from_tool_call(
     return {
         "success": True,
         "order_id": order["id"],
+        "order_token": order_token,
         "total_dollars": round(total_cents / 100, 2),
         "items_count": sum(int(i["quantity"]) for i in items_json),
         "customer_name": str(arguments.get("customer_name") or "").strip() or None,

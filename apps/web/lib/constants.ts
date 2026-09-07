@@ -14,10 +14,10 @@ export type WorkspaceRole = (typeof WORKSPACE_ROLES)[number];
 // (Orders/Menu for restaurant, Appointments/Services/Staff for salon).
 // The rest are on the roadmap and show the base experience until built.
 export const VERTICALS = [
+  { value: 'default', label: 'Default', available: true },
   { value: 'restaurant', label: 'Restaurant', available: true },
   { value: 'salon', label: 'Salon', available: true },
-  { value: 'lawyer', label: 'Lawyer', available: true },
-  { value: 'dental', label: 'Dental', available: false },
+  { value: 'dental', label: 'Dental', available: true },
   { value: 'auto', label: 'Auto repair', available: false },
   { value: 'other', label: 'Other', available: false },
 ] as const;
@@ -96,15 +96,4 @@ export const DASHBOARD_NAV = [
   { href: '/team', label: 'Team', icon: 'Users' },
   { href: '/settings', label: 'Settings', icon: 'Settings' },
   { href: '/support', label: 'Support', icon: 'LifeBuoy' },
-] as const;
-
-export const ADMIN_NAV = [
-  { href: '/admin/workspaces', label: 'Workspaces', icon: 'Building2' },
-  { href: '/admin/users', label: 'Users', icon: 'Users' },
-  { href: '/admin/support', label: 'Support Inbox', icon: 'LifeBuoy' },
-  { href: '/admin/audit-log', label: 'Audit Log', icon: 'ScrollText' },
-  { href: '/admin/contact-submissions', label: 'Contact Forms', icon: 'Mail' },
-  { href: '/admin/announcements', label: 'Announcements', icon: 'Megaphone' },
-  { href: '/admin/usage', label: 'Usage & billing', icon: 'Gauge' },
-  { href: '/admin/settings', label: 'Settings', icon: 'Settings' },
 ] as const;

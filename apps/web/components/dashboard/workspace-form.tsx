@@ -13,11 +13,13 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { VERTICALS } from '@/lib/constants';
+import { CURRENCY_OPTIONS, DEFAULT_CURRENCY } from '@/lib/currency';
 import { updateWorkspaceAction, type FormState } from '@/app/actions/settings-action';
 
 interface WorkspaceFormProps {
   defaultName: string;
   defaultVertical: string;
+  defaultCurrency?: string;
   slug: string;
   disabled?: boolean;
 }
@@ -27,6 +29,7 @@ const IDLE: FormState = { status: 'idle' };
 export function WorkspaceForm({
   defaultName,
   defaultVertical,
+  defaultCurrency = DEFAULT_CURRENCY,
   slug,
   disabled,
 }: WorkspaceFormProps) {
@@ -86,6 +89,26 @@ export function WorkspaceForm({
               <SelectItem key={v.value} value={v.value} disabled={!v.available}>
                 {v.label}
                 {!v.available ? ' (coming soon)' : ''}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </Field>
+
+      <Field
+        label="Currency"
+        htmlFor="currency"
+        error={fieldErrors?.currency}
+        hint="Shown on prices across your dashboard, kiosk, receipts, and order messages. Doesn't convert amounts — only changes the symbol."
+      >
+        <Select name="currency" defaultValue={defaultCurrency} disabled={disabled || pending}>
+          <SelectTrigger id="currency">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {CURRENCY_OPTIONS.map((o) => (
+              <SelectItem key={o.code} value={o.code}>
+                {o.label}
               </SelectItem>
             ))}
           </SelectContent>

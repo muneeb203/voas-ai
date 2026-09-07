@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useTransition } from 'react';
+import { useMoney } from '@/components/dashboard/currency-provider';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { Plus, Pencil, Trash2, Clock, RefreshCw } from 'lucide-react';
@@ -20,15 +21,24 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import {
-  createServiceAction,
-  updateServiceAction,
-  deleteServiceAction,
+  createServiceAction as createSalonServiceAction,
+  updateServiceAction as updateSalonServiceAction,
+  deleteServiceAction as deleteSalonServiceAction,
 } from '@/app/actions/salon-action';
+import {
+  createServiceAction as createDentalServiceAction,
+  updateServiceAction as updateDentalServiceAction,
+  deleteServiceAction as deleteDentalServiceAction,
+} from '@/app/actions/dental-action';
 import type { SalonService } from '@/lib/api/salon';
+import type { DentalService } from '@/lib/api/dental';
+
+type Service = SalonService | DentalService;
 
 interface Props {
-  initialServices: SalonService[];
+  initialServices: Service[];
   canEdit: boolean;
+  vertical?: string;
 }
 
 interface FormState {
@@ -49,7 +59,7 @@ const EMPTY: FormState = {
   active: true,
 };
 
-function toForm(s: SalonService): FormState {
+function toForm(s: Service): FormState {
   return {
     name: s.name,
     description: s.description ?? '',
@@ -60,20 +70,30 @@ function toForm(s: SalonService): FormState {
   };
 }
 
-export function ServicesEditor({ initialServices, canEdit }: Props) {
+export function ServicesEditor({ initialServices, canEdit, vertical = 'salon' }: Props) {
+  const money = useMoney();
   const router = useRouter();
   const [refreshing, startRefresh] = useTransition();
   const [open, setOpen] = useState(false);
-  const [editing, setEditing] = useState<SalonService | null>(null);
+  const [editing, setEditing] = useState<Service | null>(null);
   const [form, setForm] = useState<FormState>(EMPTY);
   const [saving, setSaving] = useState(false);
+
+  const isDental = vertical === 'dental';
+  const createAction = isDental ? createDentalServiceAction : createSalonServiceAction;
+  const updateAction = isDental ? updateDentalServiceAction : updateSalonServiceAction;
+  const deleteAction = isDental ? deleteDentalServiceAction : deleteSalonServiceAction;
+  const serviceName = isDental ? 'procedure' : 'service';
+  const serviceExamples = isDental
+    ? ['Cleaning', 'Root Canal', 'Filling']
+    : ['Women\'s Haircut', 'Men\'s Haircut', 'Hair Coloring'];
 
   function openAdd() {
     setEditing(null);
     setForm(EMPTY);
     setOpen(true);
   }
-  function openEdit(s: SalonService) {
+  function openEdit(s: Service) {
     setEditing(s);
     setForm(toForm(s));
     setOpen(true);
@@ -91,18 +111,23 @@ export function ServicesEditor({ initialServices, canEdit }: Props) {
     };
     setSaving(true);
     const res = editing
-      ? await updateServiceAction(editing.id, body)
-      : await createServiceAction(body);
+      ? await updateAction(editing.id, body)
+      : await createAction(body);
     setSaving(false);
     if (res.error) return toast.error(res.error);
-    toast.success(editing ? 'Service updated' : 'Service added');
+    const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+    toast.success(
+      editing
+        ? `${capitalize(serviceName)} updated`
+        : `${capitalize(serviceName)} added`,
+    );
     setOpen(false);
     router.refresh();
   }
 
-  async function handleDelete(s: SalonService) {
+  async function handleDelete(s: Service) {
     if (!confirm(`Delete "${s.name}"? This can't be undone.`)) return;
-    const res = await deleteServiceAction(s.id);
+    const res = await deleteAction(s.id);
     if (res.error) return toast.error(res.error);
     toast.success('Service deleted');
     router.refresh();
@@ -121,7 +146,7 @@ export function ServicesEditor({ initialServices, canEdit }: Props) {
         </Button>
         {canEdit && (
           <Button onClick={openAdd}>
-            <Plus className="h-4 w-4" /> Add service
+            <Plus className="h-4 w-4" /> Add {serviceName}
           </Button>
         )}
       </div>
@@ -129,7 +154,8 @@ export function ServicesEditor({ initialServices, canEdit }: Props) {
       {initialServices.length === 0 ? (
         <Card>
           <CardContent className="py-12 text-center text-sm text-muted-foreground">
-            No services yet. {canEdit ? 'Add your first treatment to start taking bookings.' : ''}
+            No {isDental ? 'procedures' : 'services'} yet.{' '}
+            {canEdit ? `Add your first ${isDental ? 'procedure' : 'service'} to start taking bookings.` : ''}
           </CardContent>
         </Card>
       ) : (
@@ -149,7 +175,7 @@ export function ServicesEditor({ initialServices, canEdit }: Props) {
                   )}
                   <div className="mt-2 flex items-center gap-3 text-sm">
                     <span className="font-semibold tabular-nums">
-                      ${(s.price_cents / 100).toFixed(2)}
+                      {money(s.price_cents)}
                     </span>
                     <span className="flex items-center gap-1 text-muted-foreground">
                       <Clock className="h-3.5 w-3.5" />
@@ -177,7 +203,9 @@ export function ServicesEditor({ initialServices, canEdit }: Props) {
       <Dialog open={open} onOpenChange={(v) => !saving && setOpen(v)}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>{editing ? 'Edit service' : 'Add service'}</DialogTitle>
+            <DialogTitle>
+              {editing ? `Edit ${serviceName}` : `Add ${serviceName}`}
+            </DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
             <div className="space-y-2">
@@ -186,7 +214,7 @@ export function ServicesEditor({ initialServices, canEdit }: Props) {
                 id="svc-name"
                 value={form.name}
                 onChange={(e) => setForm({ ...form, name: e.target.value })}
-                placeholder="e.g. Women's Haircut"
+                placeholder={`e.g. ${serviceExamples[0]}`}
               />
             </div>
             <div className="space-y-2">
@@ -247,7 +275,11 @@ export function ServicesEditor({ initialServices, canEdit }: Props) {
               Cancel
             </Button>
             <Button onClick={handleSave} disabled={saving}>
-              {saving ? 'Saving…' : editing ? 'Save changes' : 'Add service'}
+              {saving
+                ? 'Saving…'
+                : editing
+                  ? 'Save changes'
+                  : `Add ${serviceName}`}
             </Button>
           </DialogFooter>
         </DialogContent>

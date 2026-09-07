@@ -203,6 +203,18 @@ export interface AdminActivityItem {
   channel: string | null;
 }
 
+export type AdminLogCategory = 'config' | 'operation' | 'error';
+
+export interface AdminGlobalLogItem {
+  at: string;
+  category: AdminLogCategory;
+  label: string;
+  title: string;
+  subtitle: string | null;
+  workspace_id: string | null;
+  workspace_name: string;
+}
+
 export interface AdminUsageHistoryPoint {
   date: string;
   voice_minutes: number;
@@ -334,6 +346,16 @@ export function listAdminAuditLogs(params: {
   return apiCall<AdminAuditEntry[]>(`/v1/admin/audit-logs${suffix}`, { cache: 'no-store' });
 }
 
+export function listAdminGlobalLog(
+  params: { workspace_id?: string; limit?: number } = {},
+) {
+  const qs = new URLSearchParams();
+  if (params.workspace_id) qs.set('workspace_id', params.workspace_id);
+  if (params.limit) qs.set('limit', String(params.limit));
+  const suffix = qs.toString() ? `?${qs}` : '';
+  return apiCall<AdminGlobalLogItem[]>(`/v1/admin/logs${suffix}`, { cache: 'no-store' });
+}
+
 export function listAnnouncements() {
   return apiCall<Announcement[]>(`/v1/admin/announcements`, {
     cache: 'no-store',
@@ -414,6 +436,9 @@ export interface AdminKioskSettings {
   kiosk_credits_balance: number;
   kiosk_credits_used_this_month: number;
   kiosk_month_start: string | null;
+  manual_ordering_enabled: boolean;
+  kiosk_order_mode: 'voice' | 'manual' | 'both';
+  phone_ordering_enabled: boolean;
 }
 
 export function getAdminKioskSettings(workspaceId: string) {
@@ -425,7 +450,7 @@ export function getAdminKioskSettings(workspaceId: string) {
 
 export function updateAdminKioskSettings(
   workspaceId: string,
-  body: { kiosk_enabled?: boolean; max_kiosk_urls?: number; kiosk_monthly_limit?: number },
+  body: { kiosk_enabled?: boolean; max_kiosk_urls?: number; kiosk_monthly_limit?: number; manual_ordering_enabled?: boolean; kiosk_order_mode?: 'voice' | 'manual' | 'both'; phone_ordering_enabled?: boolean },
 ) {
   return apiCall<AdminKioskSettings>(`/v1/admin/workspaces/${workspaceId}/kiosk-settings`, {
     method: 'PATCH',
@@ -433,10 +458,48 @@ export function updateAdminKioskSettings(
   });
 }
 
+export function setWorkspaceVoiceModel(workspaceId: string, model: string) {
+  return apiCall<{ model: string }>(`/v1/admin/workspaces/${workspaceId}/voice-model`, {
+    method: 'PATCH',
+    body: { model },
+  });
+}
+
 export function topupKioskCredits(workspaceId: string, amount: number) {
   return apiCall<AdminKioskSettings>(`/v1/admin/workspaces/${workspaceId}/kiosk-topup`, {
     method: 'POST',
     body: { amount },
+  });
+}
+
+// --- Push notification settings (admin-controlled) ---
+
+export interface AdminPushSettings {
+  push_enabled: boolean;
+  recipients: 'owners_managers' | 'all';
+  notify_order: boolean;
+  notify_appointment: boolean;
+  notify_ticket: boolean;
+  notify_kiosk_low: boolean;
+  notify_announcement: boolean;
+}
+
+export type AdminPushSettingsUpdate = Partial<AdminPushSettings>;
+
+export function getAdminPushSettings(workspaceId: string) {
+  return apiCall<AdminPushSettings>(
+    `/v1/admin/workspaces/${workspaceId}/push-settings`,
+    { cache: 'no-store' },
+  );
+}
+
+export function updateAdminPushSettings(
+  workspaceId: string,
+  body: AdminPushSettingsUpdate,
+) {
+  return apiCall<AdminPushSettings>(`/v1/admin/workspaces/${workspaceId}/push-settings`, {
+    method: 'PATCH',
+    body,
   });
 }
 

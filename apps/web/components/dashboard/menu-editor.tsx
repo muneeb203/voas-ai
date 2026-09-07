@@ -19,7 +19,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
-import { formatCents } from './order-badges';
+import { useMoney } from '@/components/dashboard/currency-provider';
 import {
   createCategoryAction,
   createItemAction,
@@ -303,6 +303,7 @@ function ItemRow({
   isOwner: boolean;
   onEdit: () => void;
 }) {
+  const formatCents = useMoney();
   const router = useRouter();
   const [expanded, setExpanded] = useState(false);
 
@@ -386,6 +387,7 @@ function ModifierGroupRow({
   group: MenuItem['modifier_groups'][number];
   isOwner: boolean;
 }) {
+  const formatCents = useMoney();
   const router = useRouter();
   return (
     <div className="rounded-md border border-border bg-muted/30 p-3">

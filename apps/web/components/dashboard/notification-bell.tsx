@@ -19,17 +19,52 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import { cn } from '@/lib/utils';
 import type { Notification } from '@/lib/types';
 
-const POLL_MS = 45_000;
+// Realtime is the primary signal; this is a slow safety net if the socket drops.
+const POLL_MS = 120_000;
 
 function typeLabel(type: Notification['type']): string {
-  if (type === 'order_placed') return 'Order';
-  return 'Update';
+  switch (type) {
+    case 'order_placed':
+      return 'Order';
+    case 'ticket_reply':
+    case 'ticket_resolved':
+    case 'admin_ticket':
+      return 'Ticket';
+    case 'kiosk_low':
+      return 'Kiosk';
+    case 'appointment_booked':
+      return 'Booking';
+    case 'usage_limit':
+    case 'admin_limit':
+      return 'Limit';
+    case 'admin_signup':
+      return 'Signup';
+    case 'admin_error':
+      return 'Error';
+    default:
+      return 'Update';
+  }
 }
 
-export function NotificationBell() {
+interface NotificationBellProps {
+  fetchAction?: typeof fetchNotificationsAction;
+  markReadAction?: typeof markNotificationReadAction;
+  markAllReadAction?: typeof markAllNotificationsReadAction;
+  /** Optional control rendered at the bottom of the dropdown (e.g. the
+   * "Enable device notifications" toggle on the dashboard). */
+  footer?: React.ReactNode;
+}
+
+export function NotificationBell({
+  fetchAction = fetchNotificationsAction,
+  markReadAction = markNotificationReadAction,
+  markAllReadAction = markAllNotificationsReadAction,
+  footer,
+}: NotificationBellProps = {}) {
   const [open, setOpen] = useState(false);
   const [items, setItems] = useState<Notification[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
@@ -37,18 +72,53 @@ export function NotificationBell() {
   const [pending, startTransition] = useTransition();
 
   const refresh = useCallback(async () => {
-    const res = await fetchNotificationsAction();
+    const res = await fetchAction();
     if ('data' in res && res.data) {
-      setItems(res.data.items);
-      setUnreadCount(res.data.unread_count);
+      const filtered = res.data.items.filter(
+        (n) => n.type !== 'admin_error' && n.type !== 'admin_limit' && n.type !== 'admin_signup' && n.type !== 'admin_ticket'
+      );
+      setItems(filtered);
+      const filteredUnread = filtered.filter((n) => !n.read_at).length;
+      setUnreadCount(filteredUnread);
     }
     setLoading(false);
-  }, []);
+  }, [fetchAction]);
 
   useEffect(() => {
     void refresh();
     const id = window.setInterval(() => void refresh(), POLL_MS);
     return () => window.clearInterval(id);
+  }, [refresh]);
+
+  // Realtime: a new notification row for this user pushes an instant refresh —
+  // no waiting on the slow poll. RLS scopes the stream to the user's own rows.
+  useEffect(() => {
+    const supabase = createSupabaseBrowserClient();
+    let channel: ReturnType<typeof supabase.channel> | null = null;
+    let cancelled = false;
+
+    supabase.auth.getUser().then(({ data }) => {
+      const userId = data.user?.id;
+      if (!userId || cancelled) return;
+      channel = supabase
+        .channel(`notifications:${userId}`)
+        .on(
+          'postgres_changes',
+          {
+            event: 'INSERT',
+            schema: 'public',
+            table: 'notifications',
+            filter: `user_id=eq.${userId}`,
+          },
+          () => void refresh(),
+        )
+        .subscribe();
+    });
+
+    return () => {
+      cancelled = true;
+      if (channel) void supabase.removeChannel(channel);
+    };
   }, [refresh]);
 
   useEffect(() => {
@@ -68,7 +138,7 @@ export function NotificationBell() {
     setUnreadCount(0);
 
     startTransition(async () => {
-      const result = await markAllNotificationsReadAction();
+      const result = await markAllReadAction();
       if (result.error) {
         // Revert the optimistic update on failure.
         setItems(previousItems);
@@ -93,7 +163,7 @@ export function NotificationBell() {
 
     startTransition(async () => {
       if (wasUnread) {
-        await markNotificationReadAction(notification.id);
+        await markReadAction(notification.id);
       }
       await refresh();
       setOpen(false);
@@ -150,7 +220,9 @@ export function NotificationBell() {
           </p>
         ) : (
           <div className="max-h-80 overflow-y-auto">
-            {items.map((n) => {
+            {items
+              .filter((n) => n.type !== 'admin_error' && n.type !== 'admin_limit' && n.type !== 'admin_signup' && n.type !== 'admin_ticket')
+              .map((n) => {
               const inner = (
                 <div
                   className={cn(
@@ -209,6 +281,13 @@ export function NotificationBell() {
               );
             })}
           </div>
+        )}
+
+        {footer && (
+          <>
+            <DropdownMenuSeparator />
+            {footer}
+          </>
         )}
       </DropdownMenuContent>
     </DropdownMenu>

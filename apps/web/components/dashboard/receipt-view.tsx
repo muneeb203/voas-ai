@@ -1,5 +1,5 @@
 import { format } from 'date-fns';
-import { formatCents } from '@/components/dashboard/order-badges';
+import { useMoney } from '@/components/dashboard/currency-provider';
 import type { Location, Order } from '@/lib/types';
 
 interface ReceiptViewProps {
@@ -9,6 +9,7 @@ interface ReceiptViewProps {
 }
 
 export function ReceiptView({ order, workspaceName, location }: ReceiptViewProps) {
+  const formatCents = useMoney();
   const itemCount = order.items_json.reduce((sum, i) => sum + i.quantity, 0);
   const addressLine = location
     ? [location.address, location.city, location.state, location.postal_code]

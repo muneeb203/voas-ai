@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { Sparkles, CheckCircle2, AlertCircle, Loader2, Globe } from 'lucide-react';
+import { Sparkles, CheckCircle2, AlertCircle, Loader2, Phone, PhoneOff, Globe } from 'lucide-react';
 import { toast } from 'sonner';
 import { useActionState } from '@/lib/use-action-state';
 import { Badge } from '@/components/ui/badge';
@@ -87,6 +87,13 @@ export function VoiceSettingsForm({
 
   // Generator modal
   const [generatorOpen, setGeneratorOpen] = useState(false);
+  // Prominent on/off state — drives the toggle's live label and colour.
+  const [agentEnabled, setAgentEnabled] = useState(settings.enabled);
+  const modelLabel =
+    capabilities.models.find((m) => m.id === settings.model)?.label ?? settings.model;
+
+  // Website extractor modal
+  const [extractorOpen, setExtractorOpen] = useState(false);
 
   // Website extractor modal
   const [extractorOpen, setExtractorOpen] = useState(false);
@@ -404,34 +411,63 @@ export function VoiceSettingsForm({
           )}
         </Field>
 
-        <Field label="LLM" htmlFor="model" error={fieldErrors?.model}>
-          <Select name="model" defaultValue={settings.model} disabled={disabled || pending}>
-            <SelectTrigger id="model">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {capabilities.models.map((m) => (
-                <SelectItem key={m.id} value={m.id}>
-                  {m.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+        <Field label="LLM" htmlFor="model-display" hint="Managed by VOAS. Contact support to change.">
+          <div
+            id="model-display"
+            className="flex h-10 items-center rounded-md border border-input bg-muted/40 px-3 text-sm text-muted-foreground"
+          >
+            {modelLabel}
+          </div>
         </Field>
       </div>
 
-      <label className="flex items-center gap-2 text-sm">
-        <input
-          type="checkbox"
+      <div
+        className={cn(
+          'flex items-center justify-between gap-4 rounded-lg border p-4 transition-colors',
+          agentEnabled ? 'border-success/40 bg-success/5' : 'border-border bg-muted/40',
+        )}
+      >
+        <div className="flex items-center gap-3">
+          <span
+            className={cn(
+              'flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full',
+              agentEnabled ? 'bg-success/15 text-success' : 'bg-muted text-muted-foreground',
+            )}
+          >
+            {agentEnabled ? <Phone className="h-4 w-4" /> : <PhoneOff className="h-4 w-4" />}
+          </span>
+          <div>
+            <div className="flex items-center gap-2">
+              <p className="text-sm font-semibold">Voice agent</p>
+              <Badge variant={agentEnabled ? 'success' : 'secondary'}>
+                {agentEnabled ? 'Enabled' : 'Disabled'}
+              </Badge>
+            </div>
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              {agentEnabled
+                ? 'Incoming calls are answered by the AI.'
+                : 'Callers hear a short “we’re unavailable” message, then the call ends.'}
+            </p>
+          </div>
+        </div>
+        <Switch
           name="enabled"
-          defaultChecked={settings.enabled}
-          className="h-4 w-4 rounded border-input"
+          checked={agentEnabled}
+          onChange={(e) => setAgentEnabled(e.target.checked)}
           disabled={disabled || pending}
+          aria-label="Toggle voice agent"
         />
-        Voice agent enabled (incoming calls answered)
-      </label>
+      </div>
 
-      <Field label="Order confirmations" htmlFor="send_order_confirmations">
+      <Field
+        label="Order confirmations"
+        htmlFor="send_order_confirmations"
+        help={
+          <Badge variant="accent" className="px-1.5 py-0 text-[10px] uppercase tracking-wide">
+            Beta
+          </Badge>
+        }
+      >
         <div className="flex items-center gap-3">
           <Switch
             id="send_order_confirmations"
@@ -544,7 +580,14 @@ export function VoiceSettingsForm({
         }}
         workspaceName={workspaceName}
         language={language}
-        vertical={vertical === 'salon' ? 'salon' : 'restaurant'}
+        vertical={vertical === 'salon' || vertical === 'dental' ? (vertical as 'salon' | 'dental') : 'restaurant'}
+      />
+
+      <WebsiteExtractorModal
+        open={extractorOpen}
+        onClose={() => setExtractorOpen(false)}
+        onSuccess={handleWebsiteExtracted}
+        workspaceId={workspaceId}
       />
 
       <WebsiteExtractorModal

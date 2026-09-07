@@ -381,6 +381,11 @@ def _notify_usage_threshold(
             ),
             link="/settings?tab=billing",
         )
+        notification_service.notify_admin_limit(
+            workspace_id=workspace_id,
+            workspace_name=ws_row.get("name") or workspace_id,
+            kind=f"{label} exhausted",
+        )
         warnings[warn_key] = "blocked"
     elif ratio >= _LIMIT_NOTIFY_THRESHOLD and warnings.get(warn_key) not in ("warned", "blocked"):
         pct = int(ratio * 100)

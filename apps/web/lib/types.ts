@@ -10,6 +10,7 @@ export interface Workspace {
   vertical: Vertical;
   status: 'active' | 'suspended' | 'deleted';
   usage_enforcement_disabled?: boolean;
+  currency?: string;
   created_at: string;
   updated_at: string;
 }
@@ -249,6 +250,7 @@ export interface Order {
   customer_name: string | null;
   payment_status: PaymentStatus;
   pos_order_id: string | null;
+  order_token: string | null;
   notes: string | null;
   created_at: string;
   updated_at: string;
@@ -439,7 +441,18 @@ export interface HelpChatReply {
   reply: string;
 }
 
-export type NotificationType = 'order_placed' | 'product_update' | 'usage_limit';
+export type NotificationType =
+  | 'order_placed'
+  | 'product_update'
+  | 'usage_limit'
+  | 'ticket_reply'
+  | 'ticket_resolved'
+  | 'kiosk_low'
+  | 'appointment_booked'
+  | 'admin_signup'
+  | 'admin_error'
+  | 'admin_ticket'
+  | 'admin_limit';
 
 export interface Notification {
   id: string;

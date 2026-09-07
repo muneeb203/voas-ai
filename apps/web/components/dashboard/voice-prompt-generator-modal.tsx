@@ -18,6 +18,7 @@ import {
   LANGUAGE_FORMALITY_LABELS,
   PERSONALITY_LABELS,
   SALON_PERSONALITY_LABELS,
+  DENTAL_PERSONALITY_LABELS,
   FRIENDLINESS_LABELS,
   GREETING_LENGTH_LABELS,
   type Language,
@@ -152,7 +153,11 @@ export function VoicePromptGeneratorModal({
 
   const formalityLabels = LANGUAGE_FORMALITY_LABELS[language]
   const personalityLabels =
-    (vertical === 'salon' ? SALON_PERSONALITY_LABELS : PERSONALITY_LABELS)[language]
+    (vertical === 'salon'
+      ? SALON_PERSONALITY_LABELS
+      : vertical === 'dental'
+        ? DENTAL_PERSONALITY_LABELS
+        : PERSONALITY_LABELS)[language]
   const friendlinessLabels = FRIENDLINESS_LABELS[language]
   const greetingLengthLabels = GREETING_LENGTH_LABELS[language]
 

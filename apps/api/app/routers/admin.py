@@ -1,6 +1,7 @@
 from datetime import UTC, datetime, timedelta
+from typing import Literal
 
-from fastapi import APIRouter, Query, status
+from fastapi import APIRouter, BackgroundTasks, Query, status
 from pydantic import BaseModel, Field
 
 from app.core.supabase import get_supabase_admin
@@ -11,6 +12,7 @@ from app.models.admin import (
     AdminContactSubmission,
     AdminContactUpdate,
     AdminErrorLogEntry,
+    AdminGlobalLogItem,
     AdminKnowledgeBase,
     AdminUsageHistoryPoint,
     AdminUserSummary,
@@ -31,6 +33,7 @@ from app.models.ticket import (
     TicketStatus,
     TicketWithMessages,
 )
+from app.models.voice import VoiceSettings
 from app.models.workspace import Workspace
 from app.services import (
     admin_activity_service,
@@ -44,6 +47,7 @@ from app.services import (
     billing_service,
     error_log_service,
     impersonation_service,
+    voice_service,
 )
 from app.utils.responses import DataResponse, ok
 
@@ -114,6 +118,15 @@ async def get_workspace_activity(
     return ok(admin_activity_service.list_activity(workspace_id, limit=limit))
 
 
+@router.get("/logs", response_model=DataResponse[list[AdminGlobalLogItem]])
+async def get_global_log(
+    _: AdminContextDep,
+    workspace_id: str | None = Query(default=None),
+    limit: int = Query(default=100, ge=1, le=300),
+) -> DataResponse[list[AdminGlobalLogItem]]:
+    return ok(admin_activity_service.list_global_log(workspace_id, limit=limit))
+
+
 @router.get(
     "/workspaces/{workspace_id}/usage-history",
     response_model=DataResponse[list[AdminUsageHistoryPoint]],
@@ -146,6 +159,25 @@ async def get_workspace_knowledge_base(
     workspace_id: str, _: AdminContextDep
 ) -> DataResponse[AdminKnowledgeBase]:
     return ok(admin_kb_service.get_knowledge_base(workspace_id))
+
+
+class AdminVoiceModelBody(BaseModel):
+    model: str = Field(..., min_length=1, max_length=80)
+
+
+@router.patch(
+    "/workspaces/{workspace_id}/voice-model",
+    response_model=DataResponse[VoiceSettings],
+)
+async def set_workspace_voice_model(
+    workspace_id: str,
+    body: AdminVoiceModelBody,
+    ctx: AdminContextDep,
+    background_tasks: BackgroundTasks,
+) -> DataResponse[VoiceSettings]:
+    settings = voice_service.set_model_admin(workspace_id, body.model, ctx.user.id)
+    background_tasks.add_task(voice_service.sync_assistant_now, workspace_id)
+    return ok(settings)
 
 
 @router.post(
@@ -390,22 +422,30 @@ class AdminKioskSettings(BaseModel):
     kiosk_credits_balance: int = 0
     kiosk_credits_used_this_month: int = 0
     kiosk_month_start: str | None = None
+    manual_ordering_enabled: bool = False
+    kiosk_order_mode: str = "both"
+    phone_ordering_enabled: bool = False
 
 
 class AdminKioskSettingsUpdate(BaseModel):
     kiosk_enabled: bool | None = None
     max_kiosk_urls: int | None = Field(default=None, ge=1, le=10)
     kiosk_monthly_limit: int | None = Field(default=None, ge=0)
+    # Admin-gated while tap-to-order rolls out. Restaurant kiosks only.
+    manual_ordering_enabled: bool | None = None
+    kiosk_order_mode: Literal["voice", "manual", "both"] | None = None
+    phone_ordering_enabled: bool | None = None
 
 
 class KioskTopupBody(BaseModel):
     amount: int = Field(..., ge=1, le=100_000)
 
 
-_KIOSK_SELECT = (
-    "kiosk_enabled, max_kiosk_urls, theme, session_lock_enabled, "
-    "kiosk_monthly_limit, kiosk_credits_balance, kiosk_credits_used_this_month, kiosk_month_start"
-)
+# Select all columns rather than naming them: a named column that a not-yet-run
+# migration would add (e.g. manual_ordering_enabled) makes every read here 500,
+# which is how credit top-ups broke when the code deployed ahead of the schema.
+# The response model ignores extras and defaults anything absent.
+_KIOSK_SELECT = "*"
 
 
 # ---------- Kiosk performance metrics -----------------------------------------
@@ -532,6 +572,12 @@ async def update_admin_kiosk_settings(
         changes["kiosk_enabled"] = body.kiosk_enabled
     if body.max_kiosk_urls is not None:
         changes["max_kiosk_urls"] = body.max_kiosk_urls
+    if body.manual_ordering_enabled is not None:
+        changes["manual_ordering_enabled"] = body.manual_ordering_enabled
+    if body.kiosk_order_mode is not None:
+        changes["kiosk_order_mode"] = body.kiosk_order_mode
+    if body.phone_ordering_enabled is not None:
+        changes["phone_ordering_enabled"] = body.phone_ordering_enabled
     if body.kiosk_monthly_limit is not None:
         changes["kiosk_monthly_limit"] = body.kiosk_monthly_limit
         # First time monthly limit is set: seed balance and start the billing cycle
@@ -621,3 +667,98 @@ async def topup_kiosk_credits(
     }).execute()
 
     return ok(AdminKioskSettings(**res.data[0]))
+
+
+# ---------- Push notification settings (admin-controlled) ---------------------
+
+
+class AdminPushSettings(BaseModel):
+    push_enabled: bool = True
+    recipients: str = "owners_managers"
+    notify_order: bool = True
+    notify_appointment: bool = True
+    notify_ticket: bool = True
+    notify_kiosk_low: bool = True
+    notify_announcement: bool = True
+
+
+class AdminPushSettingsUpdate(BaseModel):
+    push_enabled: bool | None = None
+    recipients: Literal["owners_managers", "all"] | None = None
+    notify_order: bool | None = None
+    notify_appointment: bool | None = None
+    notify_ticket: bool | None = None
+    notify_kiosk_low: bool | None = None
+    notify_announcement: bool | None = None
+
+
+@router.get(
+    "/workspaces/{workspace_id}/push-settings",
+    response_model=DataResponse[AdminPushSettings],
+)
+async def get_admin_push_settings(
+    workspace_id: str, _: AdminContextDep
+) -> DataResponse[AdminPushSettings]:
+    db = get_supabase_admin()
+    res = (
+        db.table("workspace_push_settings")
+        .select("*")
+        .eq("workspace_id", workspace_id)
+        .limit(1)
+        .execute()
+    )
+    if res.data:
+        return ok(AdminPushSettings(**res.data[0]))
+    return ok(AdminPushSettings())
+
+
+@router.patch(
+    "/workspaces/{workspace_id}/push-settings",
+    response_model=DataResponse[AdminPushSettings],
+)
+async def update_admin_push_settings(
+    workspace_id: str,
+    body: AdminPushSettingsUpdate,
+    ctx: AdminContextDep,
+) -> DataResponse[AdminPushSettings]:
+    db = get_supabase_admin()
+    changes = body.model_dump(exclude_none=True)
+
+    existing = (
+        db.table("workspace_push_settings")
+        .select("id")
+        .eq("workspace_id", workspace_id)
+        .limit(1)
+        .execute()
+    )
+    if existing.data:
+        if changes:
+            db.table("workspace_push_settings").update(changes).eq(
+                "workspace_id", workspace_id
+            ).execute()
+    else:
+        db.table("workspace_push_settings").insert(
+            {"workspace_id": workspace_id, **changes}
+        ).execute()
+
+    if changes:
+        db.table("audit_logs").insert({
+            "actor_type": "admin",
+            "actor_id": ctx.admin_id,
+            "workspace_id": workspace_id,
+            "action": "push.settings.update",
+            "resource_type": "workspace_push_settings",
+            "metadata": changes,
+        }).execute()
+
+    # Re-read so the response is always the authoritative row (UPDATE doesn't
+    # reliably return representation in supabase-py).
+    final = (
+        db.table("workspace_push_settings")
+        .select("*")
+        .eq("workspace_id", workspace_id)
+        .limit(1)
+        .execute()
+    )
+    row = final.data[0] if final.data else {}
+    return ok(AdminPushSettings(**row))
