@@ -17,6 +17,7 @@ export const VERTICALS = [
   { value: 'default', label: 'Default', available: true },
   { value: 'restaurant', label: 'Restaurant', available: true },
   { value: 'salon', label: 'Salon', available: true },
+  { value: 'lawyer', label: 'Lawyer', available: true },
   { value: 'dental', label: 'Dental', available: true },
   { value: 'auto', label: 'Auto repair', available: false },
   { value: 'other', label: 'Other', available: false },
