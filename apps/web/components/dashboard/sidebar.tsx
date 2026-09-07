@@ -39,9 +39,9 @@ interface NavSection {
 }
 
 // Nav is vertical-aware: salon/dental see Appointments / Services / Staff where a
-// restaurant sees Orders / Knowledge Base.
+// restaurant sees Orders / Knowledge Base. default vertical hides these.
 function buildSections(vertical: string): NavSection[] {
-  const isBooking = vertical === 'salon' || vertical === 'dental';
+  const isBooking = (vertical === 'salon' || vertical === 'dental') && vertical !== 'default';
   const overview: NavItem[] = [
     { href: '/dashboard', labelKey: 'dashboard', icon: LayoutDashboard },
     { href: '/conversations', labelKey: 'conversations', icon: MessageSquare },

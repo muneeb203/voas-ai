@@ -14,6 +14,7 @@ export type WorkspaceRole = (typeof WORKSPACE_ROLES)[number];
 // (Orders/Menu for restaurant, Appointments/Services/Staff for salon).
 // The rest are on the roadmap and show the base experience until built.
 export const VERTICALS = [
+  { value: 'default', label: 'Default', available: true },
   { value: 'restaurant', label: 'Restaurant', available: true },
   { value: 'salon', label: 'Salon', available: true },
   { value: 'dental', label: 'Dental', available: true },
