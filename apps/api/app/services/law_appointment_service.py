@@ -7,6 +7,8 @@ from app.core.exceptions import AppError
 def book_appointment(workspace_id: str, data: LawAppointmentCreate) -> LawAppointment:
     """Book a law appointment without staff requirements."""
     db = get_supabase_admin()
+    print(f"[DEBUG] Booking appointment for workspace: {workspace_id}")
+    print(f"[DEBUG] Customer: {data.customer_name}, Phone: {data.customer_phone}")
 
     # Parse starts_at to ensure it's valid
     try:
@@ -35,9 +37,13 @@ def book_appointment(workspace_id: str, data: LawAppointmentCreate) -> LawAppoin
         "notes": data.notes,
     }
 
+    print(f"[DEBUG] Inserting row: {row}")
     res = db.table("law_appointments").insert(row).execute()
+    print(f"[DEBUG] Insert response: {res.data}")
 
     if not res.data:
+        print(f"[DEBUG] Insert failed, no data returned")
         raise AppError("Could not save the appointment")
 
+    print(f"[DEBUG] Successfully saved appointment: {res.data[0]['id']}")
     return LawAppointment(**res.data[0])
