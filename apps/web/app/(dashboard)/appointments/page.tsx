@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import { requireDashboardSession } from '@/lib/auth/workspace';
 import { listAppointments, listServices } from '@/lib/api/salon';
+import { listLawAppointments } from '@/lib/api/law';
 import { isApiError } from '@/lib/types';
 import { PageHeader } from '@/components/dashboard/page-header';
 import { AppointmentsList } from '@/components/dashboard/appointments-list';
@@ -10,15 +11,19 @@ export const metadata: Metadata = { title: 'Appointments' };
 
 export default async function AppointmentsPage() {
   const session = await requireDashboardSession('/appointments');
-  const [res, servicesRes] = await Promise.all([
-    listAppointments(session.active.workspace_id),
-    listServices(session.active.workspace_id, true),
-  ]);
-  const appointments = !isApiError(res) ? res.data : [];
-  const services = !isApiError(servicesRes) ? servicesRes.data : [];
-
   const vertical = session.active.workspace.vertical;
   const isLaw = vertical === 'law';
+
+  const [appointmentsRes, servicesRes] = await Promise.all([
+    isLaw
+      ? listLawAppointments(session.active.workspace_id)
+      : listAppointments(session.active.workspace_id),
+    listServices(session.active.workspace_id, true),
+  ]);
+
+  const appointments = !isApiError(appointmentsRes) ? appointmentsRes.data : [];
+  const services = !isApiError(servicesRes) ? servicesRes.data : [];
+
   const eyebrow = isLaw ? 'Case Management' : 'Salon';
   const description = isLaw
     ? 'Every consultation and client meeting taken by the AI and your team.'
@@ -34,7 +39,7 @@ export default async function AppointmentsPage() {
         />
         <RefreshButton />
       </div>
-      <AppointmentsList initialAppointments={appointments} services={services} vertical={vertical} />
+      <AppointmentsList initialAppointments={appointments} services={services} vertical={session.active.workspace.vertical} />
     </div>
   );
 }
