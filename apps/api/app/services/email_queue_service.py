@@ -22,7 +22,30 @@ async def handle_new_call(workspace_id: str, call_data: CallData):
     if not settings.data:
         # Auto-create settings with enabled=true for new workspaces
         log.info(f"Creating email settings for workspace {workspace_id}")
-        owner_email = "owner@example.com"  # Fallback, will be updated via API
+
+        # Get workspace owner's actual email
+        owner_result = (
+            db.table("workspace_members")
+            .select("user_id")
+            .eq("workspace_id", workspace_id)
+            .eq("role", "owner")
+            .limit(1)
+            .execute()
+        )
+
+        owner_email = None
+        if owner_result.data:
+            owner_user_id = owner_result.data[0]["user_id"]
+            # Get email from auth.users
+            from app.core.supabase import get_supabase_client
+            auth_client = get_supabase_client()
+            user_data = auth_client.auth.admin.get_user(owner_user_id)
+            owner_email = user_data.user.email if user_data.user else None
+
+        if not owner_email:
+            log.warning(f"Could not find owner email for workspace {workspace_id}")
+            return
+
         db.table("email_notification_settings").insert({
             "workspace_id": workspace_id,
             "enabled": True,

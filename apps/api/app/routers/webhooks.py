@@ -21,6 +21,7 @@ from app.core.logging import get_logger
 from app.core.supabase import get_supabase_admin
 from app.integrations import twilio_whatsapp, vapi
 from app.models.customer import CustomerUpsert
+from app.models.email_notification import CallData
 from app.models.law_appointment import LawAppointmentCreate
 from app.models.salon import BookAppointmentInput
 from app.services import (
@@ -28,6 +29,7 @@ from app.services import (
     booking_service,
     customer_service,
     email_queue_service,
+    email_service,
     error_log_service,
     law_appointment_service,
     salon_service,
