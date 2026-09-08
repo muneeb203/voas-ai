@@ -5,7 +5,7 @@ export interface LawAppointment {
   id: string;
   workspace_id: string;
   service_id: string | null;
-  customer_name: string;
+  customer_name: string | null;
   customer_phone: string | null;
   customer_email?: string | null;
   starts_at: string;
