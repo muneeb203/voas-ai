@@ -42,7 +42,7 @@ def _check_dental_vertical(workspace_id: str) -> None:
 		.execute()
 	)
 	if not ws.data or ws.data[0].get("vertical") != "dental":
-		raise AppError("INVALID_VERTICAL", "Appointments are only available for dental workspaces.")
+		raise AppError("Appointments are only available for dental workspaces.")
 
 
 def _one_month_ahead(d: date) -> date:
