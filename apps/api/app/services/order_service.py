@@ -18,7 +18,7 @@ def _check_restaurant_vertical(workspace_id: str) -> None:
 		.execute()
 	)
 	if not ws.data or ws.data[0].get("vertical") != "restaurant":
-		raise AppError("INVALID_VERTICAL", "Orders are only available for restaurant workspaces.")
+		raise AppError("Orders are only available for restaurant workspaces.")
 
 
 def create_manual_order(
