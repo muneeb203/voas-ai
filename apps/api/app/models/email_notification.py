@@ -45,7 +45,7 @@ class EmailLog(BaseModel):
     recipient_email: str
     call_data: CallData
     sent_at: datetime
-    status: Literal["success", "failed"]
+    status: Literal["success", "failed", "queued", "skipped"]
     error_message: str | None
 
 
