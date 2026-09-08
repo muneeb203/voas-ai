@@ -80,13 +80,16 @@ export function ServicesEditor({ initialServices, canEdit, vertical = 'salon' }:
   const [saving, setSaving] = useState(false);
 
   const isDental = vertical === 'dental';
+  const isLaw = vertical === 'law';
   const createAction = isDental ? createDentalServiceAction : createSalonServiceAction;
   const updateAction = isDental ? updateDentalServiceAction : updateSalonServiceAction;
   const deleteAction = isDental ? deleteDentalServiceAction : deleteSalonServiceAction;
-  const serviceName = isDental ? 'procedure' : 'service';
+  const serviceName = isDental ? 'procedure' : isLaw ? 'practice area' : 'service';
   const serviceExamples = isDental
     ? ['Cleaning', 'Root Canal', 'Filling']
-    : ['Women\'s Haircut', 'Men\'s Haircut', 'Hair Coloring'];
+    : isLaw
+      ? ['Family Law', 'Criminal Defense', 'Corporate Law']
+      : ['Women\'s Haircut', 'Men\'s Haircut', 'Hair Coloring'];
 
   function openAdd() {
     setEditing(null);
