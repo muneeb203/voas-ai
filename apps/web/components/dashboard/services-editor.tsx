@@ -107,9 +107,9 @@ export function ServicesEditor({ initialServices, canEdit, vertical = 'salon' }:
     const body = {
       name: form.name.trim(),
       description: form.description.trim() || null,
-      price_cents: Math.round((parseFloat(form.price) || 0) * 100),
+      price_cents: isLaw ? 0 : Math.round((parseFloat(form.price) || 0) * 100),
       duration_minutes: Math.max(1, parseInt(form.duration, 10) || 30),
-      buffer_after_minutes: Math.max(0, parseInt(form.buffer, 10) || 0),
+      buffer_after_minutes: isLaw ? 0 : Math.max(0, parseInt(form.buffer, 10) || 0),
       is_active: form.active,
     };
     setSaving(true);
@@ -229,18 +229,20 @@ export function ServicesEditor({ initialServices, canEdit, vertical = 'salon' }:
                 rows={2}
               />
             </div>
-            <div className="grid grid-cols-3 gap-3">
-              <div className="space-y-2">
-                <Label htmlFor="svc-price">Price ($)</Label>
-                <Input
-                  id="svc-price"
-                  type="number"
-                  min={0}
-                  step="0.01"
-                  value={form.price}
-                  onChange={(e) => setForm({ ...form, price: e.target.value })}
-                />
-              </div>
+            <div className={`grid gap-3 ${isLaw ? 'grid-cols-1' : 'grid-cols-3'}`}>
+              {!isLaw && (
+                <div className="space-y-2">
+                  <Label htmlFor="svc-price">Price ($)</Label>
+                  <Input
+                    id="svc-price"
+                    type="number"
+                    min={0}
+                    step="0.01"
+                    value={form.price}
+                    onChange={(e) => setForm({ ...form, price: e.target.value })}
+                  />
+                </div>
+              )}
               <div className="space-y-2">
                 <Label htmlFor="svc-dur">Duration (min)</Label>
                 <Input
@@ -251,16 +253,18 @@ export function ServicesEditor({ initialServices, canEdit, vertical = 'salon' }:
                   onChange={(e) => setForm({ ...form, duration: e.target.value })}
                 />
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="svc-buf">Buffer (min)</Label>
-                <Input
-                  id="svc-buf"
-                  type="number"
-                  min={0}
-                  value={form.buffer}
-                  onChange={(e) => setForm({ ...form, buffer: e.target.value })}
-                />
-              </div>
+              {!isLaw && (
+                <div className="space-y-2">
+                  <Label htmlFor="svc-buf">Buffer (min)</Label>
+                  <Input
+                    id="svc-buf"
+                    type="number"
+                    min={0}
+                    value={form.buffer}
+                    onChange={(e) => setForm({ ...form, buffer: e.target.value })}
+                  />
+                </div>
+              )}
             </div>
             <div className="flex items-center justify-between rounded-lg border p-3">
               <div>
