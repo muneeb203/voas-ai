@@ -1,5 +1,6 @@
 from fastapi import APIRouter, BackgroundTasks, status
 
+from app.core.supabase import get_supabase_admin
 from app.deps import CurrentUserDep, OwnerContextDep, WorkspaceContextDep
 from app.models.workspace import (
     CurrentUserProfile,
@@ -109,3 +110,21 @@ async def book_law_appointment(
 ) -> DataResponse[LawAppointment]:
     appointment = law_appointment_service.book_appointment(ctx.workspace_id, payload)
     return ok(appointment)
+
+
+@router.get(
+    "/workspaces/{workspace_id}/law/appointments",
+    response_model=DataResponse[list[LawAppointment]],
+)
+async def list_law_appointments(ctx: WorkspaceContextDep) -> DataResponse[list[LawAppointment]]:
+    db = get_supabase_admin()
+    res = (
+        db.table("law_appointments")
+        .select("*")
+        .eq("workspace_id", ctx.workspace_id)
+        .order("starts_at", desc=False)
+        .limit(100)
+        .execute()
+    )
+    appointments = [LawAppointment(**row) for row in res.data or []]
+    return ok(appointments)
