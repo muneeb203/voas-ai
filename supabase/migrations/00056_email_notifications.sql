@@ -52,4 +52,4 @@ using (workspace_id in (select workspace_id from public.workspace_members where 
 create index idx_email_queue_scheduled on public.email_queue(scheduled_time, status);
 create index idx_email_queue_workspace on public.email_queue(workspace_id);
 create index idx_email_logs_workspace on public.email_logs(workspace_id);
-create index idx_email_logs_created on public.email_logs(created_at desc);
+create index idx_email_logs_sent on public.email_logs(sent_at desc);
