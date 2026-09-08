@@ -20,6 +20,8 @@ import {
   Smile,
   UserCog,
   Mail,
+  Gavel,
+  FileText,
   type LucideIcon,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -39,39 +41,50 @@ interface NavSection {
   items: NavItem[];
 }
 
-// Nav is vertical-aware: salon/dental see Appointments / Services / Staff where a
-// restaurant sees Orders / Knowledge Base. default vertical hides these.
+// Nav is vertical-aware: salon/dental see Appointments / Services / Staff,
+// lawyer sees Appointments / Legal Services / Cases, restaurant sees Orders.
 function buildSections(vertical: string): NavSection[] {
   const isBooking = vertical === 'salon' || vertical === 'dental';
+  const isLawyer = vertical === 'law';
+
   const overview: NavItem[] = [
     { href: '/dashboard', labelKey: 'dashboard', icon: LayoutDashboard },
     { href: '/conversations', labelKey: 'conversations', icon: MessageSquare },
-    isBooking
+    isBooking || isLawyer
       ? { href: '/appointments', labelKey: 'appointments', label: 'Appointments', icon: CalendarDays }
       : { href: '/orders', labelKey: 'orders', icon: ShoppingBag },
   ];
+
   const setup: NavItem[] = [
-    isBooking
+    isLawyer
       ? {
           href: '/services',
           labelKey: 'services',
-          label: 'Services',
-          icon: vertical === 'dental' ? Smile : Scissors,
+          label: 'Legal Services',
+          icon: Gavel,
         }
-      : { href: '/knowledge-base', labelKey: 'knowledgeBase', icon: BookOpen },
+      : isBooking
+        ? {
+            href: '/services',
+            labelKey: 'services',
+            label: 'Services',
+            icon: vertical === 'dental' ? Smile : Scissors,
+          }
+        : { href: '/knowledge-base', labelKey: 'knowledgeBase', icon: BookOpen },
     { href: '/integrations', labelKey: 'integrations', icon: Plug },
     { href: '/analytics', labelKey: 'analytics', icon: BarChart3 },
   ];
+
   const workspace: NavItem[] = [
     { href: '/locations', labelKey: 'locations', icon: MapPin },
-    ...(isBooking
-      ? [{ href: '/staff', labelKey: 'staff', label: 'Staff', icon: UserCog }]
-      : []),
+    ...(isLawyer ? [{ href: '/cases', labelKey: 'cases', label: 'Cases', icon: FileText }] : []),
+    ...(isBooking ? [{ href: '/staff', labelKey: 'staff', label: 'Staff', icon: UserCog }] : []),
     { href: '/team', labelKey: 'team', icon: Users },
     { href: '/settings', labelKey: 'settings', icon: Settings },
     { href: '/support', labelKey: 'support', icon: LifeBuoy },
     { href: '/emails', labelKey: 'emails', label: 'Emails', icon: Mail },
   ];
+
   return [
     { titleKey: 'overview', items: overview },
     { titleKey: 'setup', items: setup },
