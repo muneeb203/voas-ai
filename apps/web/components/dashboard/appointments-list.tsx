@@ -56,9 +56,11 @@ function whenLabel(iso: string): string {
 export function AppointmentsList({
   initialAppointments,
   services,
+  vertical = 'salon',
 }: {
   initialAppointments: SalonAppointment[];
   services: SalonService[];
+  vertical?: string;
 }) {
   const router = useRouter();
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -74,13 +76,17 @@ export function AppointmentsList({
     router.refresh();
   }
 
+  const isLaw = vertical === 'law';
   const canBook = services.length > 0;
+  const setupMessage = isLaw
+    ? 'Add practice areas to schedule consultations.'
+    : 'Add a service + staff to take bookings.';
 
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-end gap-3">
         {!canBook && (
-          <p className="text-xs text-muted-foreground">Add a service + staff to take bookings.</p>
+          <p className="text-xs text-muted-foreground">{setupMessage}</p>
         )}
         <Button onClick={() => setNewOpen(true)} disabled={!canBook}>
           <Plus className="h-4 w-4" /> New appointment
