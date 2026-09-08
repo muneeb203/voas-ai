@@ -24,7 +24,7 @@ class Workspace(BaseModel):
 
 class WorkspaceCreate(BaseModel):
     name: str = Field(..., min_length=2, max_length=120)
-    vertical: WorkspaceVertical = "restaurant"
+    vertical: WorkspaceVertical = "law"
     location_name: str | None = Field(default=None, max_length=200)
     location_address: str | None = Field(default=None, max_length=300)
     location_city: str | None = Field(default=None, max_length=100)
