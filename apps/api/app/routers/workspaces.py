@@ -7,7 +7,12 @@ from app.models.workspace import (
     WorkspaceCreate,
     WorkspaceUpdate,
 )
-from app.services import voice_service, workspace_service
+from app.services import voice_service, workspace_service, consultation_hours_service
+from app.models.consultation_hours import (
+    ConsultationHours,
+    ConsultationHoursResponse,
+    ConsultationHoursUpdate,
+)
 from app.utils.responses import DataResponse, ok
 
 router = APIRouter(tags=["workspaces"])
@@ -58,3 +63,26 @@ async def update_workspace(
 @router.delete("/workspaces/{workspace_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_workspace(ctx: OwnerContextDep) -> None:
     workspace_service.soft_delete_workspace(ctx.workspace_id, ctx.user.id)
+
+
+@router.get(
+    "/workspaces/{workspace_id}/consultation-hours",
+    response_model=DataResponse[ConsultationHoursResponse],
+)
+async def get_consultation_hours(ctx: WorkspaceContextDep) -> DataResponse[ConsultationHoursResponse]:
+    hours = consultation_hours_service.get_consultation_hours(ctx.workspace_id)
+    return ok(hours)
+
+
+@router.patch(
+    "/workspaces/{workspace_id}/consultation-hours",
+    response_model=DataResponse[ConsultationHoursResponse],
+)
+async def update_consultation_hours(
+    payload: ConsultationHoursUpdate,
+    ctx: OwnerContextDep,
+) -> DataResponse[ConsultationHoursResponse]:
+    hours = consultation_hours_service.upsert_consultation_hours(
+        ctx.workspace_id, payload.hours
+    )
+    return ok(hours)
