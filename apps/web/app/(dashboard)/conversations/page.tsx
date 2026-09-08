@@ -176,8 +176,9 @@ export default async function ConversationsPage({
                     <TableCell>
                       {c.email_status ? (
                         <Badge variant={
-                          c.email_status === 'sent' ? 'default' :
+                          c.email_status === 'sent' || c.email_status === 'success' ? 'default' :
                           c.email_status === 'queued' ? 'secondary' :
+                          c.email_status === 'skipped' ? 'outline' :
                           'destructive'
                         }>
                           {c.email_status}
