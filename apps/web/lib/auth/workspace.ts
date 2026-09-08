@@ -114,8 +114,42 @@ export async function requireDashboardSession(
     case 'no-user':
     case 'unauthorized':
       redirect(`/login?next=${encodeURIComponent(redirectPathIfNoSession)}`);
-    case 'no-workspace':
-      redirect('/onboarding');
+    case 'no-workspace': {
+      // Auto-create law workspace for new users
+      const supabase = createSupabaseServerClient();
+      const { data: { user } } = await supabase.auth.getUser();
+
+      if (user) {
+        try {
+          const fullName = typeof user.user_metadata?.full_name === 'string'
+            ? user.user_metadata.full_name
+            : '';
+          const workspaceName = fullName ? `${fullName.split(' ')[0]}'s practice` : 'My practice';
+          const slug = `${workspaceName.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${Date.now()}`.slice(0, 60);
+
+          await supabase
+            .from('workspaces')
+            .insert({
+              name: workspaceName,
+              slug,
+              vertical: 'law',
+              plan: 'trial',
+            })
+            .select()
+            .single();
+
+          // Retry the session fetch to get the new workspace
+          const retryResult = await fetchSession();
+          if (retryResult.kind === 'session') {
+            return retryResult.session;
+          }
+        } catch (error) {
+          console.error('Failed to auto-create workspace:', error);
+        }
+      }
+
+      redirect('/login?next=/dashboard');
+    }
     case 'backend-down': {
       const apiUrl = (process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000').replace(
         /\/+$/,

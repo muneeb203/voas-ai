@@ -16,7 +16,6 @@ const PUBLIC_PATHS = [
 
 const DASHBOARD_PREFIXES = [
   '/dashboard',
-  '/onboarding',
   '/conversations',
   '/orders',
   '/knowledge-base',
