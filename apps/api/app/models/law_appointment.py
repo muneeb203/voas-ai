@@ -19,7 +19,8 @@ class LawAppointment(BaseModel):
     customer_phone: str | None = None
     customer_email: str | None = None
     starts_at: str
+    ends_at: str | None = None
     status: str
     notes: str | None = None
     created_at: str
-    updated_at: str
+    updated_at: str | None = None
