@@ -47,6 +47,7 @@ interface Props {
   appointmentId?: string;
   fixedServiceId?: string;
   fixedServiceName?: string;
+  vertical?: string;
 }
 
 export function AppointmentDialog({
@@ -57,6 +58,7 @@ export function AppointmentDialog({
   appointmentId,
   fixedServiceId,
   fixedServiceName,
+  vertical = 'salon',
 }: Props) {
   const money = useMoney();
   const router = useRouter();
@@ -168,9 +170,11 @@ export function AppointmentDialog({
                 }}
               />
             </div>
-            <Button variant="outline" onClick={findTimes} disabled={loading}>
-              {loading ? 'Finding…' : 'Find times'}
-            </Button>
+            {vertical !== 'law' && (
+              <Button variant="outline" onClick={findTimes} disabled={loading}>
+                {loading ? 'Finding…' : 'Find times'}
+              </Button>
+            )}
           </div>
 
           {searched &&
