@@ -1,11 +1,13 @@
 import type { Metadata } from 'next';
 import { requireDashboardSession } from '@/lib/auth/workspace';
-import { listAppointments, listServices } from '@/lib/api/salon';
-import { listLawAppointments } from '@/lib/api/law';
+import { listAppointments, listServices, type SalonAppointment } from '@/lib/api/salon';
+import { listLawAppointments, type LawAppointment } from '@/lib/api/law';
 import { isApiError } from '@/lib/types';
 import { PageHeader } from '@/components/dashboard/page-header';
 import { AppointmentsList } from '@/components/dashboard/appointments-list';
 import { RefreshButton } from '@/components/dashboard/refresh-button';
+
+type Appointment = SalonAppointment | LawAppointment;
 
 export const metadata: Metadata = { title: 'Appointments' };
 
@@ -21,7 +23,7 @@ export default async function AppointmentsPage() {
     listServices(session.active.workspace_id, true),
   ]);
 
-  const appointments = !isApiError(appointmentsRes) ? appointmentsRes.data : [];
+  const appointments: Appointment[] = !isApiError(appointmentsRes) ? appointmentsRes.data : [];
   const services = !isApiError(servicesRes) ? servicesRes.data : [];
 
   const eyebrow = isLaw ? 'Case Management' : 'Salon';
