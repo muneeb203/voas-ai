@@ -130,9 +130,9 @@ export function AdminEmailDashboard() {
                       <Badge
                         variant={
                           log.status === 'success' ? 'default' :
+                          log.status === 'failed' ? 'destructive' :
                           log.status === 'queued' ? 'secondary' :
-                          log.status === 'skipped' ? 'outline' :
-                          'destructive'
+                          'outline'
                         }
                       >
                         {log.status}
