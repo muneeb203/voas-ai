@@ -1,9 +1,12 @@
-‘use server’;
-
+import type { Metadata } from ‘next’;
 import { redirect } from ‘next/navigation’;
 import { createSupabaseServerClient } from ‘@/lib/supabase/server’;
 import { createWorkspace } from ‘@/lib/api/workspaces’;
 import { isApiError } from ‘@/lib/types’;
+
+export const metadata: Metadata = {
+  title: ‘Setting up workspace’,
+};
 
 export default async function OnboardingPage() {
   const supabase = createSupabaseServerClient();
