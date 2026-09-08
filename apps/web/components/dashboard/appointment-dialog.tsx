@@ -20,6 +20,7 @@ import {
   bookAppointmentAction,
   rescheduleAppointmentAction,
 } from '@/app/actions/salon-action';
+import { getLawAvailabilityAction } from '@/app/actions/law-action';
 import type { AvailabilitySlot, SalonService } from '@/lib/api/salon';
 
 function fmtDate(d: Date): string {
@@ -86,10 +87,17 @@ export function AppointmentDialog({
   }
 
   async function findTimes() {
-    if (!activeServiceId) return toast.error('Pick a service first');
+    if (!activeServiceId && vertical !== 'law') return toast.error('Pick a service first');
     setLoading(true);
     setSelected(null);
-    const res = await getAvailabilityAction(activeServiceId, date);
+
+    let res;
+    if (vertical === 'law') {
+      res = await getLawAvailabilityAction(date);
+    } else {
+      res = await getAvailabilityAction(activeServiceId, date);
+    }
+
     setLoading(false);
     setSearched(true);
     if (res.error) return toast.error(res.error);
