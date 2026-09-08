@@ -102,34 +102,87 @@ async def update_workspace_vertical(
     payload: UpdateVerticalRequest,
     ctx: AdminContextDep,
 ) -> DataResponse[Workspace]:
-    """Update workspace vertical (business type). Admin only."""
+    """Update workspace vertical (business type). Admin only. All errors logged to audit trail."""
     db = get_supabase_admin()
+    from app.core.exceptions import NotFoundError
+    from app.core.logging import get_logger
 
-    # Validate vertical
-    valid_verticals = ["restaurant", "dental", "salon", "auto", "law", "other", "default"]
-    if payload.vertical not in valid_verticals:
-        raise ValueError(f"Invalid vertical: {payload.vertical}")
+    log = get_logger(__name__)
 
-    # Update workspace
-    updated = db.table("workspaces").update(
-        {"vertical": payload.vertical}
-    ).eq("id", workspace_id).execute()
+    try:
+        # Validate vertical
+        valid_verticals = ["restaurant", "dental", "salon", "auto", "law", "other", "default"]
+        if payload.vertical not in valid_verticals:
+            error_msg = f"Invalid vertical: {payload.vertical}"
+            # Log error to audit log
+            db.table("audit_logs").insert({
+                "actor_type": "admin",
+                "actor_id": ctx.admin_id,
+                "workspace_id": workspace_id,
+                "action": "workspace.vertical.update.error",
+                "resource_type": "workspace",
+                "metadata": {
+                    "requested_vertical": payload.vertical,
+                    "error": error_msg,
+                },
+            }).execute()
+            raise ValueError(error_msg)
 
-    if not updated.data:
-        from app.core.exceptions import NotFoundError
-        raise NotFoundError("Workspace not found")
+        # Update workspace
+        updated = db.table("workspaces").update(
+            {"vertical": payload.vertical}
+        ).eq("id", workspace_id).execute()
 
-    # Log to audit log
-    db.table("audit_logs").insert({
-        "actor_type": "admin",
-        "actor_id": ctx.admin_id,
-        "workspace_id": workspace_id,
-        "action": "workspace.vertical.update",
-        "resource_type": "workspace",
-        "metadata": {"new_vertical": payload.vertical},
-    }).execute()
+        if not updated.data:
+            error_msg = "Workspace not found"
+            # Log error to audit log
+            db.table("audit_logs").insert({
+                "actor_type": "admin",
+                "actor_id": ctx.admin_id,
+                "workspace_id": workspace_id,
+                "action": "workspace.vertical.update.error",
+                "resource_type": "workspace",
+                "metadata": {
+                    "requested_vertical": payload.vertical,
+                    "error": error_msg,
+                },
+            }).execute()
+            raise NotFoundError(error_msg)
 
-    return ok(Workspace(**updated.data[0]))
+        # Log success to audit log
+        db.table("audit_logs").insert({
+            "actor_type": "admin",
+            "actor_id": ctx.admin_id,
+            "workspace_id": workspace_id,
+            "action": "workspace.vertical.update",
+            "resource_type": "workspace",
+            "metadata": {"new_vertical": payload.vertical},
+        }).execute()
+
+        return ok(Workspace(**updated.data[0]))
+
+    except Exception as e:
+        error_msg = str(e)
+        log.error(f"Error updating workspace {workspace_id} vertical: {error_msg}")
+
+        # Log unexpected errors to audit log
+        try:
+            db.table("audit_logs").insert({
+                "actor_type": "admin",
+                "actor_id": ctx.admin_id,
+                "workspace_id": workspace_id,
+                "action": "workspace.vertical.update.error",
+                "resource_type": "workspace",
+                "metadata": {
+                    "requested_vertical": payload.vertical,
+                    "error": error_msg,
+                    "error_type": type(e).__name__,
+                },
+            }).execute()
+        except Exception as log_error:
+            log.error(f"Failed to log error: {log_error}")
+
+        raise
 
 
 @router.delete("/workspaces/{workspace_id}", status_code=status.HTTP_204_NO_CONTENT)
