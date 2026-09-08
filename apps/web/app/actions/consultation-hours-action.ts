@@ -1,6 +1,8 @@
 'use server';
 
 import { requireDashboardSession } from '@/lib/auth/workspace';
+import { apiCall } from '@/lib/api/client';
+import { isApiError } from '@/lib/types';
 
 type DayKey = 'mon' | 'tue' | 'wed' | 'thu' | 'fri' | 'sat' | 'sun';
 type DayHours = { enabled: boolean; start: string; end: string };
@@ -19,52 +21,32 @@ export async function getConsultationHoursAction() {
   const session = await requireDashboardSession('/settings?tab=availability');
   const workspaceId = session.active.workspace.id;
 
-  try {
-    const res = await fetch(
-      `${process.env.NEXT_PUBLIC_API_URL}/v1/workspaces/${workspaceId}/consultation-hours`,
-      {
-        method: 'GET',
-        headers: {
-          Authorization: `Bearer ${session.auth?.session?.access_token}`,
-        },
-      }
-    );
+  const res = await apiCall<{ hours: ConsultationHours }>(
+    `/v1/workspaces/${workspaceId}/consultation-hours`
+  );
 
-    if (!res.ok) {
-      return { error: 'Failed to load consultation hours' };
-    }
-
-    const data = await res.json();
-    return { hours: data.data.hours as ConsultationHours };
-  } catch (error) {
-    return { error: 'Failed to load consultation hours' };
+  if (isApiError(res)) {
+    return { error: res.error.message };
   }
+
+  return { hours: res.data.hours };
 }
 
 export async function saveConsultationHoursAction(hours: ConsultationHours) {
   const session = await requireDashboardSession('/settings?tab=availability');
   const workspaceId = session.active.workspace.id;
 
-  try {
-    const res = await fetch(
-      `${process.env.NEXT_PUBLIC_API_URL}/v1/workspaces/${workspaceId}/consultation-hours`,
-      {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${session.auth?.session?.access_token}`,
-        },
-        body: JSON.stringify({ hours }),
-      }
-    );
-
-    if (!res.ok) {
-      return { error: 'Failed to save consultation hours' };
+  const res = await apiCall<{ hours: ConsultationHours }>(
+    `/v1/workspaces/${workspaceId}/consultation-hours`,
+    {
+      method: 'PATCH',
+      body: { hours },
     }
+  );
 
-    const data = await res.json();
-    return { hours: data.data.hours as ConsultationHours };
-  } catch (error) {
-    return { error: 'Failed to save consultation hours' };
+  if (isApiError(res)) {
+    return { error: res.error.message };
   }
+
+  return { hours: res.data.hours };
 }
