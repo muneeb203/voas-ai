@@ -32,3 +32,30 @@ export async function getLawAvailabilityAction(
 
   return { error: null, slots: res.data.slots };
 }
+
+export interface BookLawAppointmentInput {
+  starts_at: string;
+  customer_name: string;
+  customer_phone?: string | null;
+  customer_email?: string | null;
+  notes?: string | null;
+}
+
+export async function bookLawAppointmentAction(body: BookLawAppointmentInput) {
+  const session = await requireDashboardSession('/appointments');
+  const workspaceId = session.active.workspace.id;
+
+  const res = await apiCall(
+    `/v1/workspaces/${workspaceId}/law/appointments`,
+    {
+      method: 'POST',
+      body,
+    }
+  );
+
+  if (isApiError(res)) {
+    return { error: res.error.message };
+  }
+
+  return { error: null };
+}
