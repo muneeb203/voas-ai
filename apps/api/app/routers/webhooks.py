@@ -21,6 +21,7 @@ from app.core.logging import get_logger
 from app.core.supabase import get_supabase_admin
 from app.integrations import twilio_whatsapp, vapi
 from app.models.customer import CustomerUpsert
+from app.models.law_appointment import LawAppointmentCreate
 from app.models.salon import BookAppointmentInput
 from app.services import (
     billing_service,
@@ -28,6 +29,7 @@ from app.services import (
     customer_service,
     email_queue_service,
     error_log_service,
+    law_appointment_service,
     salon_service,
     voice_order_service,
     voice_service,
@@ -531,18 +533,35 @@ async def vapi_webhook(
                     )
                     continue
                 try:
-                    appt = booking_service.create_appointment(
-                        workspace_id,
-                        BookAppointmentInput(
-                            service_id=svc.id,
-                            starts_at=slot.starts_at,
-                            staff_id=slot.staff_id,
-                            customer_name=a.get("customer_name") or (conv or {}).get("customer_name"),
-                            customer_phone=a.get("customer_phone") or (conv or {}).get("customer_phone"),
-                            location_id=location_id,
-                            conversation_id=conv["id"] if conv else None,
-                        ),
-                    )
+                    # Get workspace vertical to determine which booking service to use
+                    ws = db.table("workspaces").select("vertical").eq("id", workspace_id).limit(1).execute()
+                    vertical = ws.data[0].get("vertical", "salon") if ws.data else "salon"
+
+                    if vertical == "law":
+                        # Law appointments don't use staff management
+                        appt = law_appointment_service.book_appointment(
+                            workspace_id,
+                            LawAppointmentCreate(
+                                service_id=svc.id,
+                                starts_at=slot.starts_at,
+                                customer_name=a.get("customer_name") or (conv or {}).get("customer_name"),
+                                customer_phone=a.get("customer_phone") or (conv or {}).get("customer_phone"),
+                            ),
+                        )
+                    else:
+                        # Salon, dental, etc. use staff-based booking
+                        appt = booking_service.create_appointment(
+                            workspace_id,
+                            BookAppointmentInput(
+                                service_id=svc.id,
+                                starts_at=slot.starts_at,
+                                staff_id=slot.staff_id,
+                                customer_name=a.get("customer_name") or (conv or {}).get("customer_name"),
+                                customer_phone=a.get("customer_phone") or (conv or {}).get("customer_phone"),
+                                location_id=location_id,
+                                conversation_id=conv["id"] if conv else None,
+                            ),
+                        )
                 except AppError as exc:
                     results.append({"toolCallId": tc_id, "result": exc.message})
                     continue
@@ -562,7 +581,7 @@ async def vapi_webhook(
                     )
                     continue
                 when = _spoken_time(appt.starts_at, workspace_id, location_id)
-                staff = f" with {appt.staff_name}" if appt.staff_name else ""
+                staff = f" with {appt.staff_name}" if hasattr(appt, 'staff_name') and appt.staff_name else ""
                 log.info("vapi_book_ok", workspace_id=workspace_id, appointment_id=appt.id)
                 results.append(
                     {
