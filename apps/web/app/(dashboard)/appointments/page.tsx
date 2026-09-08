@@ -23,7 +23,7 @@ export default async function AppointmentsPage() {
     listServices(session.active.workspace_id, true),
   ]);
 
-  const appointments: Appointment[] = !isApiError(appointmentsRes) ? appointmentsRes.data : [];
+  const appointments: Appointment[] = !isApiError(appointmentsRes) ? (appointmentsRes.data as Appointment[]) : [];
   const services = !isApiError(servicesRes) ? servicesRes.data : [];
 
   const eyebrow = isLaw ? 'Case Management' : 'Salon';
