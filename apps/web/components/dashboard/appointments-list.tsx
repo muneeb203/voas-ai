@@ -119,11 +119,12 @@ export function AppointmentsList({
           <TableBody>
             {initialAppointments.map((a) => {
               const meta = STATUS_META[a.status];
+              const isSalon = 'service_name' in a;
               return (
                 <TableRow key={a.id}>
                   <TableCell className="font-medium">{whenLabel(a.starts_at)}</TableCell>
-                  <TableCell>{a.service_name}</TableCell>
-                  <TableCell className="text-muted-foreground">{a.staff_name ?? '—'}</TableCell>
+                  <TableCell>{isSalon ? (a as SalonAppointment).service_name : 'Consultation'}</TableCell>
+                  <TableCell className="text-muted-foreground">{isSalon ? (a as SalonAppointment).staff_name ?? '—' : '—'}</TableCell>
                   <TableCell className="text-muted-foreground">
                     {a.customer_name ?? a.customer_phone ?? '—'}
                   </TableCell>
