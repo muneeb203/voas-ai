@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import { redirect } from 'next/navigation';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
+import { createSupabaseAdminClient } from '@/lib/supabase/admin';
 
 export const metadata: Metadata = {
   title: 'Setting up workspace',
@@ -14,6 +15,7 @@ export default async function OnboardingPage() {
     redirect('/login?next=/onboarding');
   }
 
+  // Check if user already has workspace
   const { data: memberships } = await supabase
     .from('workspace_members')
     .select('workspace_id')
@@ -24,31 +26,36 @@ export default async function OnboardingPage() {
     redirect('/dashboard');
   }
 
-  // Auto-create law workspace for new users
-  const fullName = typeof user.user_metadata?.full_name === 'string'
-    ? user.user_metadata.full_name
-    : '';
-  const workspaceName = fullName ? `${fullName.split(' ')[0]}'s practice` : 'My practice';
-
+  // Create workspace via admin (server-side)
   try {
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-    const { data: { session } } = await supabase.auth.getSession();
+    const adminClient = createSupabaseAdminClient();
 
-    if (session?.access_token) {
-      await fetch(`${apiUrl}/v1/workspaces`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${session.access_token}`,
-        },
-        body: JSON.stringify({
-          name: workspaceName,
-          vertical: 'law',
-        }),
+    const fullName = typeof user.user_metadata?.full_name === 'string'
+      ? user.user_metadata.full_name
+      : '';
+    const workspaceName = fullName ? `${fullName.split(' ')[0]}'s practice` : 'My practice';
+
+    // Create workspace
+    const wsRes = await adminClient.table('workspaces').insert({
+      name: workspaceName,
+      slug: `${workspaceName.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${Date.now()}`.slice(0, 60),
+      vertical: 'law',
+      plan: 'trial',
+    }).select().single();
+
+    if (wsRes.data) {
+      const workspaceId = wsRes.data.id;
+
+      // Add user as owner
+      await adminClient.table('workspace_members').insert({
+        workspace_id: workspaceId,
+        user_id: user.id,
+        role: 'owner',
+        joined_at: new Date().toISOString(),
       });
     }
   } catch (error) {
-    console.error('Failed to create workspace:', error);
+    console.error('Workspace creation error:', error);
   }
 
   redirect('/dashboard');
