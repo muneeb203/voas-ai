@@ -86,6 +86,42 @@ export type PlanId = (typeof PLANS)[number]['id'];
 export const TICKET_STATUSES = ['open', 'in_progress', 'waiting_user', 'resolved', 'closed'] as const;
 export const TICKET_PRIORITIES = ['low', 'normal', 'high', 'urgent'] as const;
 
+// Lawyer-specific services/practice areas
+export const LAWYER_SERVICES = [
+  { id: 'family-law', label: 'Family Law', icon: '👨‍👩‍👧‍👦' },
+  { id: 'criminal-law', label: 'Criminal Defense', icon: '⚖️' },
+  { id: 'corporate-law', label: 'Corporate Law', icon: '🏢' },
+  { id: 'personal-injury', label: 'Personal Injury', icon: '🤕' },
+  { id: 'real-estate', label: 'Real Estate', icon: '🏠' },
+  { id: 'immigration', label: 'Immigration', icon: '✈️' },
+  { id: 'intellectual-property', label: 'Intellectual Property', icon: '💡' },
+  { id: 'bankruptcy', label: 'Bankruptcy', icon: '📋' },
+  { id: 'employment-law', label: 'Employment Law', icon: '👔' },
+  { id: 'tax-law', label: 'Tax Law', icon: '📊' },
+] as const;
+
+// Lawyer-specific appointment types
+export const LAWYER_APPOINTMENT_TYPES = [
+  { id: 'initial-consultation', label: 'Initial Consultation' },
+  { id: 'follow-up-consultation', label: 'Follow-up Consultation' },
+  { id: 'court-appearance', label: 'Court Appearance' },
+  { id: 'deposition', label: 'Deposition' },
+  { id: 'settlement-conference', label: 'Settlement Conference' },
+  { id: 'client-meeting', label: 'Client Meeting' },
+  { id: 'document-review', label: 'Document Review' },
+  { id: 'case-strategy', label: 'Case Strategy Meeting' },
+] as const;
+
+// Case/Matter statuses
+export const CASE_STATUSES = [
+  { id: 'intake', label: 'Intake', color: 'bg-blue-100 text-blue-800' },
+  { id: 'active', label: 'Active', color: 'bg-green-100 text-green-800' },
+  { id: 'pending', label: 'Pending', color: 'bg-yellow-100 text-yellow-800' },
+  { id: 'closed', label: 'Closed', color: 'bg-gray-100 text-gray-800' },
+  { id: 'settled', label: 'Settled', color: 'bg-purple-100 text-purple-800' },
+  { id: 'dismissed', label: 'Dismissed', color: 'bg-red-100 text-red-800' },
+] as const;
+
 export const DASHBOARD_NAV = [
   { href: '/dashboard', label: 'Dashboard', icon: 'LayoutDashboard' },
   { href: '/conversations', label: 'Conversations', icon: 'MessageSquare' },
