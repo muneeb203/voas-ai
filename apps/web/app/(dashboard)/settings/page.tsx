@@ -49,6 +49,7 @@ export default async function SettingsPage({
         <TabsList>
           <TabsTrigger value="workspace">Workspace</TabsTrigger>
           <TabsTrigger value="profile">Profile</TabsTrigger>
+          <TabsTrigger value="availability">Availability</TabsTrigger>
           {canViewBilling && <TabsTrigger value="billing">Billing</TabsTrigger>}
         </TabsList>
 
@@ -113,6 +114,37 @@ export default async function SettingsPage({
             </CardHeader>
             <CardContent>
               <RestartTourButton />
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="availability" className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>Consultation Hours</CardTitle>
+              <CardDescription>
+                Set your available times for consultations and appointments. The AI will offer these times to clients.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                <div className="rounded-lg border border-amber-200 bg-amber-50 p-4">
+                  <p className="text-sm text-amber-900">
+                    <span className="font-semibold">Coming soon:</span> Set your weekly consultation hours here. For now, use the "Find times" button when scheduling appointments.
+                  </p>
+                </div>
+                <div className="space-y-3">
+                  <div>
+                    <h4 className="text-sm font-medium">How it works:</h4>
+                    <ul className="mt-2 space-y-2 text-sm text-muted-foreground">
+                      <li>• Set your available hours for each day of the week</li>
+                      <li>• When clients call, AI will offer available consultation slots</li>
+                      <li>• Consultations will be booked automatically from your available times</li>
+                      <li>• You can customize duration and buffer time between consultations</li>
+                    </ul>
+                  </div>
+                </div>
+              </div>
             </CardContent>
           </Card>
         </TabsContent>
