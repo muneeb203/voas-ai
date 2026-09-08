@@ -7,7 +7,7 @@ from app.models.workspace import (
     WorkspaceCreate,
     WorkspaceUpdate,
 )
-from app.services import voice_service, workspace_service, consultation_hours_service
+from app.services import voice_service, workspace_service, consultation_hours_service, law_availability_service
 from app.models.consultation_hours import (
     ConsultationHours,
     ConsultationHoursResponse,
@@ -86,3 +86,12 @@ async def update_consultation_hours(
         ctx.workspace_id, payload.hours
     )
     return ok(hours)
+
+
+@router.get("/workspaces/{workspace_id}/law/availability")
+async def get_law_availability(
+    ctx: WorkspaceContextDep,
+    date: str,
+) -> DataResponse[dict]:
+    slots = law_availability_service.get_availability_slots(ctx.workspace_id, date)
+    return ok({"date": date, "slots": slots})
