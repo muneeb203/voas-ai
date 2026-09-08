@@ -19,7 +19,7 @@ interface EmailLog {
   caller_name: string;
   duration_seconds: number;
   sent_at: string;
-  status: string;
+  status: 'success' | 'failed' | 'queued' | 'skipped';
 }
 
 export function AdminEmailDashboard() {
