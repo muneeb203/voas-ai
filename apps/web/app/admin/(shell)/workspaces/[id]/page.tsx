@@ -27,6 +27,7 @@ import {
 } from '@/components/ui/table';
 import { AdminPageHeader } from '@/components/admin/admin-page-header';
 import { WorkspaceActions } from '@/components/admin/workspace-actions';
+import { WorkspaceVerticalSelect } from '@/components/admin/workspace-vertical-select';
 import {
   StatusBadge,
   PriorityBadge,
@@ -278,13 +279,16 @@ async function WorkspaceTabs({
     <>
       <TabsContent value="overview" className="space-y-6">
         <Card>
-          <CardContent className="grid grid-cols-1 gap-4 p-6 sm:grid-cols-2 lg:grid-cols-4">
+          <CardContent className="grid grid-cols-1 gap-6 p-6 sm:grid-cols-2 lg:grid-cols-4">
             <OverviewField label="Status">
               <span className="capitalize">{workspace.status}</span>
             </OverviewField>
-            <OverviewField label="Vertical">
-              <span className="capitalize">{workspace.vertical}</span>
-            </OverviewField>
+            <div>
+              <WorkspaceVerticalSelect
+                workspaceId={workspace.id}
+                currentVertical={workspace.vertical}
+              />
+            </div>
             <OverviewField label="Plan">
               <span className="capitalize">{workspace.plan}</span>
             </OverviewField>

@@ -92,6 +92,46 @@ async def restore_workspace(workspace_id: str, ctx: AdminContextDep) -> DataResp
     return ok(workspace)
 
 
+class UpdateVerticalRequest(BaseModel):
+    vertical: str
+
+
+@router.patch("/workspaces/{workspace_id}/vertical", response_model=DataResponse[Workspace])
+async def update_workspace_vertical(
+    workspace_id: str,
+    payload: UpdateVerticalRequest,
+    ctx: AdminContextDep,
+) -> DataResponse[Workspace]:
+    """Update workspace vertical (business type). Admin only."""
+    db = get_supabase_admin()
+
+    # Validate vertical
+    valid_verticals = ["restaurant", "dental", "salon", "auto", "law", "other", "default"]
+    if payload.vertical not in valid_verticals:
+        raise ValueError(f"Invalid vertical: {payload.vertical}")
+
+    # Update workspace
+    updated = db.table("workspaces").update(
+        {"vertical": payload.vertical}
+    ).eq("id", workspace_id).execute()
+
+    if not updated.data:
+        from app.core.exceptions import NotFoundError
+        raise NotFoundError("Workspace not found")
+
+    # Log to audit log
+    db.table("audit_logs").insert({
+        "actor_type": "admin",
+        "actor_id": ctx.admin_id,
+        "workspace_id": workspace_id,
+        "action": "workspace.vertical.update",
+        "resource_type": "workspace",
+        "metadata": {"new_vertical": payload.vertical},
+    }).execute()
+
+    return ok(Workspace(**updated.data[0]))
+
+
 @router.delete("/workspaces/{workspace_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_workspace(workspace_id: str, ctx: AdminContextDep) -> None:
     admin_workspace_service.soft_delete(workspace_id, ctx.admin_id)
