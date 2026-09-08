@@ -9,7 +9,7 @@ import { isApiError } from '@/lib/types';
 
 const Schema = z.object({
   workspaceName: z.string().min(2, 'Business name is too short').max(120),
-  vertical: z.enum(['restaurant', 'dental', 'salon', 'auto', 'other']),
+  vertical: z.enum(['default', 'restaurant', 'dental', 'salon', 'law', 'auto', 'other']),
   locationName: z.string().max(200).optional(),
   address: z.string().max(300).optional(),
   city: z.string().max(100).optional(),
