@@ -162,6 +162,7 @@ export function AppointmentsList({
         onClose={() => setNewOpen(false)}
         mode="new"
         services={services}
+        vertical={vertical}
       />
       {rescheduleAppt && (
         <AppointmentDialog
@@ -173,6 +174,7 @@ export function AppointmentsList({
           appointmentId={rescheduleAppt.id}
           fixedServiceId={rescheduleAppt.service_id ?? undefined}
           fixedServiceName={rescheduleAppt.service_name}
+          vertical={vertical}
         />
       )}
     </div>
