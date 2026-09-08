@@ -57,7 +57,7 @@ async def send_email(recipient_email: str, call_data: CallData, workspace_name: 
                     "Content-Type": "application/json",
                 },
                 json={
-                    "from": "calls@voas.ai",
+                    "from": "onboarding@resend.dev",
                     "to": recipient_email,
                     "subject": f"New call from {call_data.caller_name}",
                     "html": html_content,
