@@ -197,6 +197,7 @@ export interface Conversation {
   created_at: string;
   updated_at: string;
   message_count: number;
+  email_status?: string | null;
 }
 
 export interface ConversationDetail extends Conversation {
