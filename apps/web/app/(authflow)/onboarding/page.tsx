@@ -1,11 +1,57 @@
 import type { Metadata } from 'next';
 import { redirect } from 'next/navigation';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
-import { createSupabaseAdminClient } from '@/lib/supabase/admin';
 
 export const metadata: Metadata = {
   title: 'Setting up workspace',
 };
+
+async function createLawWorkspace(userId: string, fullName?: string) {
+  'use server';
+
+  const supabase = createSupabaseServerClient();
+
+  try {
+    const workspaceName = fullName ? `${fullName.split(' ')[0]}'s practice` : 'My practice';
+    const slug = `${workspaceName.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${Date.now()}`.slice(0, 60);
+
+    const { data: workspace, error: wsError } = await supabase
+      .from('workspaces')
+      .insert({
+        name: workspaceName,
+        slug,
+        vertical: 'law',
+        plan: 'trial',
+      })
+      .select()
+      .single();
+
+    if (wsError || !workspace) {
+      console.error('Workspace creation error:', wsError);
+      return false;
+    }
+
+    // Add user as owner
+    const { error: memberError } = await supabase
+      .from('workspace_members')
+      .insert({
+        workspace_id: workspace.id,
+        user_id: userId,
+        role: 'owner',
+        joined_at: new Date().toISOString(),
+      });
+
+    if (memberError) {
+      console.error('Member creation error:', memberError);
+      return false;
+    }
+
+    return true;
+  } catch (error) {
+    console.error('Workspace creation error:', error);
+    return false;
+  }
+}
 
 export default async function OnboardingPage() {
   const supabase = createSupabaseServerClient();
@@ -26,43 +72,12 @@ export default async function OnboardingPage() {
     redirect('/dashboard');
   }
 
-  // Create workspace via admin (server-side)
-  try {
-    const adminClient = createSupabaseAdminClient();
+  // Create workspace
+  const fullName = typeof user.user_metadata?.full_name === 'string'
+    ? user.user_metadata.full_name
+    : undefined;
 
-    const fullName = typeof user.user_metadata?.full_name === 'string'
-      ? user.user_metadata.full_name
-      : '';
-    const workspaceName = fullName ? `${fullName.split(' ')[0]}'s practice` : 'My practice';
-
-    // Create workspace
-    const wsRes = await adminClient
-      .from('workspaces')
-      .insert({
-        name: workspaceName,
-        slug: `${workspaceName.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${Date.now()}`.slice(0, 60),
-        vertical: 'law',
-        plan: 'trial',
-      })
-      .select()
-      .single();
-
-    if (wsRes.data) {
-      const workspaceId = wsRes.data.id;
-
-      // Add user as owner
-      await adminClient
-        .from('workspace_members')
-        .insert({
-          workspace_id: workspaceId,
-          user_id: user.id,
-          role: 'owner',
-          joined_at: new Date().toISOString(),
-        });
-    }
-  } catch (error) {
-    console.error('Workspace creation error:', error);
-  }
+  await createLawWorkspace(user.id, fullName);
 
   redirect('/dashboard');
 }
