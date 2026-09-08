@@ -32,8 +32,47 @@ def _ensure_message_counts(conversation_ids: list[str]) -> dict[str, int]:
     return counts
 
 
-def _hydrate(row: dict, message_count: int) -> Conversation:
-    return Conversation(**{**row, "message_count": message_count})
+def _hydrate(row: dict, message_count: int, email_status: str | None = None) -> Conversation:
+    return Conversation(**{**row, "message_count": message_count, "email_status": email_status})
+
+
+def _get_email_statuses(workspace_id: str, conversation_ids: list[str]) -> dict[str, str]:
+    """Get email status for conversations by looking up vapi_call_id in email logs/queue."""
+    if not conversation_ids:
+        return {}
+
+    db = get_supabase_admin()
+    statuses: dict[str, str] = {}
+
+    # Get conversation metadata to find Vapi call IDs
+    convs = db.table("conversations").select("id, metadata").in_("id", conversation_ids).execute()
+
+    for conv in convs.data or []:
+        conv_id = conv["id"]
+        metadata = conv.get("metadata") or {}
+        vapi_call_id = metadata.get("vapi_call_id")
+
+        if not vapi_call_id:
+            continue
+
+        # Check if email was sent (in email_logs)
+        sent = db.table("email_logs").select("id").eq("workspace_id", workspace_id).limit(1).execute()
+        if sent.data:
+            statuses[conv_id] = "sent"
+            continue
+
+        # Check if email is queued (in email_queue)
+        queued = db.table("email_queue").select("id").eq("workspace_id", workspace_id).eq("status", "pending").limit(1).execute()
+        if queued.data:
+            statuses[conv_id] = "queued"
+            continue
+
+        # Check if email failed (in email_logs with status=failed or email_queue with status=failed)
+        failed = db.table("email_logs").select("id").eq("workspace_id", workspace_id).eq("status", "failed").limit(1).execute()
+        if failed.data:
+            statuses[conv_id] = "failed"
+
+    return statuses
 
 
 def list_conversations(
@@ -60,7 +99,8 @@ def list_conversations(
         return []
 
     counts = _ensure_message_counts([r["id"] for r in res.data])
-    return [_hydrate(row, counts.get(row["id"], 0)) for row in res.data]
+    email_statuses = _get_email_statuses(workspace_id, [r["id"] for r in res.data])
+    return [_hydrate(row, counts.get(row["id"], 0), email_statuses.get(row["id"])) for row in res.data]
 
 
 def get_conversation(workspace_id: str, conversation_id: str) -> ConversationDetail:

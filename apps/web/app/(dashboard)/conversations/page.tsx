@@ -20,6 +20,7 @@ import {
   ConversationStatusBadge,
   SentimentBadge,
 } from '@/components/dashboard/conversation-badges';
+import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 
 export const metadata: Metadata = { title: 'Conversations' };
@@ -142,6 +143,7 @@ export default async function ConversationsPage({
                   <TableHead>Channel</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Sentiment</TableHead>
+                  <TableHead>Email</TableHead>
                   <TableHead>Duration</TableHead>
                   <TableHead>Started</TableHead>
                 </TableRow>
@@ -170,6 +172,19 @@ export default async function ConversationsPage({
                     </TableCell>
                     <TableCell>
                       <SentimentBadge sentiment={c.sentiment} />
+                    </TableCell>
+                    <TableCell>
+                      {c.email_status ? (
+                        <Badge variant={
+                          c.email_status === 'sent' ? 'default' :
+                          c.email_status === 'queued' ? 'secondary' :
+                          'destructive'
+                        }>
+                          {c.email_status}
+                        </Badge>
+                      ) : (
+                        <span className="text-xs text-muted-foreground">—</span>
+                      )}
                     </TableCell>
                     <TableCell className="text-sm text-muted-foreground">
                       {formatDuration(c.duration_seconds)}

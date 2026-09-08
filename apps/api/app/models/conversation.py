@@ -48,6 +48,7 @@ class Conversation(BaseModel):
     created_at: datetime
     updated_at: datetime
     message_count: int
+    email_status: str | None = None  # "sent", "queued", or "failed"
 
 
 class ConversationDetail(Conversation):
