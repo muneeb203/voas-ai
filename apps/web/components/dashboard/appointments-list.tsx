@@ -139,8 +139,8 @@ export function AppointmentsList({
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
-                        {a.service_id && (
-                          <DropdownMenuItem onClick={() => setRescheduleAppt(a)}>
+                        {a.service_id && isSalon && (
+                          <DropdownMenuItem onClick={() => setRescheduleAppt(a as SalonAppointment)}>
                             Reschedule…
                           </DropdownMenuItem>
                         )}
