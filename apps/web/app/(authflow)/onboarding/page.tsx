@@ -31,4 +31,6 @@ export default async function OnboardingPage() {
   const workspaceName = fullName ? `${fullName.split(‘ ‘)[0]}’s practice` : ‘My practice’;
 
   await skipOnboarding(workspaceName, ‘law’);
+
+  return null;
 }
