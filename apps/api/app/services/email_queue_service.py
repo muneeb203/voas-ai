@@ -36,14 +36,33 @@ async def handle_new_call(workspace_id: str, call_data: CallData):
         owner_email = None
         if owner_result.data:
             owner_user_id = owner_result.data[0]["user_id"]
-            # Get email from auth.users
-            from app.core.supabase import get_supabase_client
-            auth_client = get_supabase_client()
-            user_data = auth_client.auth.admin.get_user(owner_user_id)
-            owner_email = user_data.user.email if user_data.user else None
+            # Try to get email from auth.users via Supabase admin API
+            try:
+                # Use REST API to query auth.users
+                import httpx
+                from app.config import get_settings
+                settings = get_settings()
+
+                headers = {
+                    "Authorization": f"Bearer {settings.supabase_service_role_key}",
+                    "apikey": settings.supabase_service_role_key,
+                    "Content-Type": "application/json",
+                }
+
+                async with httpx.AsyncClient() as client:
+                    response = await client.get(
+                        f"{settings.supabase_url}/auth/v1/admin/users/{owner_user_id}",
+                        headers=headers,
+                        timeout=5.0,
+                    )
+                    if response.status_code == 200:
+                        user_data = response.json()
+                        owner_email = user_data.get("email")
+            except Exception as e:
+                log.error(f"Failed to get owner email: {str(e)}")
 
         if not owner_email:
-            log.warning(f"Could not find owner email for workspace {workspace_id}")
+            log.warning(f"Could not find owner email for workspace {workspace_id}, skipping email setup")
             return
 
         db.table("email_notification_settings").insert({
