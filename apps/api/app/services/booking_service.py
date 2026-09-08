@@ -35,8 +35,8 @@ def _check_salon_vertical(workspace_id: str) -> None:
 		.limit(1)
 		.execute()
 	)
-	if not ws.data or ws.data[0].get("vertical") != "salon":
-		raise AppError("Booking is only available for salon workspaces.")
+	if not ws.data or ws.data[0].get("vertical") not in ("salon", "dental", "law"):
+		raise AppError("Appointments are not available for this workspace type.")
 
 
 def _one_month_ahead(d: date) -> date:
