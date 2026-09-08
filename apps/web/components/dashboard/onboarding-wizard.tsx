@@ -63,10 +63,10 @@ const TIMEZONES = [
   { value: 'Australia/Sydney', label: 'Sydney (AEST)' },
 ];
 
-export function OnboardingWizard({ defaultName }: { defaultName?: string }) {
+export function OnboardingWizard({ defaultName, defaultVertical }: { defaultName?: string; defaultVertical?: string }) {
   const [step, setStep] = useState<StepId>('workspace');
   const [workspaceName, setWorkspaceName] = useState(defaultName ?? '');
-  const [vertical, setVertical] = useState<string>('restaurant');
+  const [vertical, setVertical] = useState<string>(defaultVertical || 'restaurant');
   const [locationName, setLocationName] = useState('');
   const [address, setAddress] = useState('');
   const [city, setCity] = useState('');
