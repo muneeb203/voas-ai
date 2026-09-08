@@ -12,6 +12,7 @@ export function RefreshButton() {
   async function handleRefresh() {
     setLoading(true);
     router.refresh();
+    await new Promise(resolve => setTimeout(resolve, 1000));
     setLoading(false);
   }
 
