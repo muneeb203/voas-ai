@@ -1,5 +1,6 @@
 'use server';
 
+import { revalidatePath } from 'next/cache';
 import { requireDashboardSession } from '@/lib/auth/workspace';
 import { apiCall } from '@/lib/api/client';
 import { isApiError } from '@/lib/types';
@@ -57,5 +58,6 @@ export async function bookLawAppointmentAction(body: BookLawAppointmentInput) {
     return { error: res.error.message };
   }
 
+  revalidatePath('/appointments');
   return { error: null };
 }
