@@ -16,14 +16,8 @@ async def handle_new_call(workspace_id: str, call_data: CallData):
     ws = db.table("workspaces").select("name").eq("id", workspace_id).limit(1).execute()
     workspace_name = ws.data[0]["name"] if ws.data else "Workspace"
 
-    # Get or create email settings (auto-enabled for new workspaces)
-    settings = db.table("email_notification_settings").select("*").eq("workspace_id", workspace_id).limit(1).execute()
-
-    if not settings.data:
-        # Auto-create settings with enabled=true for new workspaces
-        log.info(f"Creating email settings for workspace {workspace_id}")
-
-        # Get workspace owner's actual email
+    # Helper function to get real owner email
+    async def get_real_owner_email():
         owner_result = (
             db.table("workspace_members")
             .select("user_id")
@@ -33,34 +27,43 @@ async def handle_new_call(workspace_id: str, call_data: CallData):
             .execute()
         )
 
-        owner_email = None
-        if owner_result.data:
-            owner_user_id = owner_result.data[0]["user_id"]
-            # Try to get email from auth.users via Supabase admin API
-            try:
-                # Use REST API to query auth.users
-                import httpx
-                from app.config import get_settings
-                settings = get_settings()
+        if not owner_result.data:
+            return None
 
-                headers = {
-                    "Authorization": f"Bearer {settings.supabase_service_role_key}",
-                    "apikey": settings.supabase_service_role_key,
-                    "Content-Type": "application/json",
-                }
+        owner_user_id = owner_result.data[0]["user_id"]
+        try:
+            import httpx
+            from app.config import get_settings
+            settings = get_settings()
 
-                async with httpx.AsyncClient() as client:
-                    response = await client.get(
-                        f"{settings.supabase_url}/auth/v1/admin/users/{owner_user_id}",
-                        headers=headers,
-                        timeout=5.0,
-                    )
-                    if response.status_code == 200:
-                        user_data = response.json()
-                        owner_email = user_data.get("email")
-            except Exception as e:
-                log.error(f"Failed to get owner email: {str(e)}")
+            headers = {
+                "Authorization": f"Bearer {settings.supabase_service_role_key}",
+                "apikey": settings.supabase_service_role_key,
+                "Content-Type": "application/json",
+            }
 
+            async with httpx.AsyncClient() as client:
+                response = await client.get(
+                    f"{settings.supabase_url}/auth/v1/admin/users/{owner_user_id}",
+                    headers=headers,
+                    timeout=5.0,
+                )
+                if response.status_code == 200:
+                    user_data = response.json()
+                    return user_data.get("email")
+        except Exception as e:
+            log.error(f"Failed to get owner email: {str(e)}")
+
+        return None
+
+    # Get or create email settings (auto-enabled for new workspaces)
+    settings = db.table("email_notification_settings").select("*").eq("workspace_id", workspace_id).limit(1).execute()
+
+    if not settings.data:
+        # Auto-create settings with enabled=true for new workspaces
+        log.info(f"Creating email settings for workspace {workspace_id}")
+
+        owner_email = await get_real_owner_email()
         if not owner_email:
             log.warning(f"Could not find owner email for workspace {workspace_id}, skipping email setup")
             return
@@ -89,6 +92,21 @@ async def handle_new_call(workspace_id: str, call_data: CallData):
     setting = settings.data[0]
     recipient_email = setting["recipient_email"]
     rate_limit = setting["rate_limit_per_hour"]
+
+    # If email is the fallback/invalid email, try to get the real one
+    if recipient_email and "example.com" in recipient_email:
+        log.info(f"Invalid email detected ({recipient_email}), fetching real owner email")
+        real_email = await get_real_owner_email()
+        if real_email:
+            recipient_email = real_email
+            # Update the settings record with the real email
+            db.table("email_notification_settings").update({
+                "recipient_email": real_email
+            }).eq("id", setting["id"]).execute()
+            log.info(f"Updated email settings for workspace {workspace_id} to {real_email}")
+        else:
+            log.warning(f"Could not get real owner email, skipping call notification")
+            return
 
     # If disabled, log it as skipped
     if not setting["enabled"]:
