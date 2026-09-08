@@ -4,6 +4,7 @@ import { listAppointments, listServices } from '@/lib/api/salon';
 import { isApiError } from '@/lib/types';
 import { PageHeader } from '@/components/dashboard/page-header';
 import { AppointmentsList } from '@/components/dashboard/appointments-list';
+import { RefreshButton } from '@/components/dashboard/refresh-button';
 
 export const metadata: Metadata = { title: 'Appointments' };
 
@@ -25,11 +26,14 @@ export default async function AppointmentsPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader
-        eyebrow={eyebrow}
-        title="Appointments"
-        description={description}
-      />
+      <div className="flex items-center justify-between">
+        <PageHeader
+          eyebrow={eyebrow}
+          title="Appointments"
+          description={description}
+        />
+        <RefreshButton />
+      </div>
       <AppointmentsList initialAppointments={appointments} services={services} vertical={vertical} />
     </div>
   );
