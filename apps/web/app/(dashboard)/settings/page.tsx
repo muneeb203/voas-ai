@@ -5,6 +5,7 @@ import { getBillingUsage, listBillingGrants } from '@/lib/api/billing';
 import { getReminderSettings } from '@/lib/api/salon';
 import { isApiError } from '@/lib/types';
 import { ReminderSettingsForm } from '@/components/dashboard/reminder-settings-form';
+import { AvailabilitySettingsForm } from '@/components/dashboard/availability-settings-form';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { PageHeader } from '@/components/dashboard/page-header';
@@ -127,24 +128,7 @@ export default async function SettingsPage({
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="space-y-4">
-                <div className="rounded-lg border border-amber-200 bg-amber-50 p-4">
-                  <p className="text-sm text-amber-900">
-                    <span className="font-semibold">Coming soon:</span> Set your weekly consultation hours here. For now, use the "Find times" button when scheduling appointments.
-                  </p>
-                </div>
-                <div className="space-y-3">
-                  <div>
-                    <h4 className="text-sm font-medium">How it works:</h4>
-                    <ul className="mt-2 space-y-2 text-sm text-muted-foreground">
-                      <li>• Set your available hours for each day of the week</li>
-                      <li>• When clients call, AI will offer available consultation slots</li>
-                      <li>• Consultations will be booked automatically from your available times</li>
-                      <li>• You can customize duration and buffer time between consultations</li>
-                    </ul>
-                  </div>
-                </div>
-              </div>
+              <AvailabilitySettingsForm />
             </CardContent>
           </Card>
         </TabsContent>
