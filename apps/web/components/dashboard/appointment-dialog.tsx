@@ -170,18 +170,23 @@ export function AppointmentDialog({
                 }}
               />
             </div>
-            {vertical !== 'law' && (
-              <Button variant="outline" onClick={findTimes} disabled={loading}>
-                {loading ? 'Finding…' : 'Find times'}
-              </Button>
-            )}
+            <Button variant="outline" onClick={findTimes} disabled={loading}>
+              {loading ? 'Finding…' : 'Find times'}
+            </Button>
           </div>
 
           {searched &&
             (slots.length === 0 ? (
-              <p className="text-sm text-muted-foreground">
-                No open times that day — try another date.
-              </p>
+              <div className="space-y-2 rounded-lg border border-amber-200 bg-amber-50 p-3">
+                <p className="text-sm font-medium text-amber-900">No available times</p>
+                <p className="text-xs text-amber-800">
+                  No times are available for this date. Try another date, or go to{' '}
+                  <a href="/settings" className="font-semibold underline hover:text-amber-700">
+                    Settings
+                  </a>
+                  {' '}to set up available times.
+                </p>
+              </div>
             ) : (
               <div className="flex flex-wrap gap-2">
                 {slots.map((s, i) => {
