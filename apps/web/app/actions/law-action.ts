@@ -7,6 +7,8 @@ import { isApiError } from '@/lib/types';
 export interface AvailabilitySlot {
   starts_at: string;
   ends_at: string;
+  staff_id: string;
+  staff_name: string;
 }
 
 export interface AvailabilityResult {
