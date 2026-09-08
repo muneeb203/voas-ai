@@ -96,6 +96,8 @@ def get_availability_slots(
             slots.append({
                 "starts_at": current.isoformat(),
                 "ends_at": (current + slot_duration).isoformat(),
+                "staff_id": workspace_id,
+                "staff_name": "Available",
             })
         current += step
 
