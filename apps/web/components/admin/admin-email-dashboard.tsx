@@ -127,7 +127,14 @@ export function AdminEmailDashboard() {
                       {new Date(log.sent_at).toLocaleString()}
                     </td>
                     <td className="px-6 py-3">
-                      <Badge variant={log.status === 'success' ? 'default' : 'destructive'}>
+                      <Badge
+                        variant={
+                          log.status === 'success' ? 'default' :
+                          log.status === 'queued' ? 'secondary' :
+                          log.status === 'skipped' ? 'outline' :
+                          'destructive'
+                        }
+                      >
                         {log.status}
                       </Badge>
                     </td>

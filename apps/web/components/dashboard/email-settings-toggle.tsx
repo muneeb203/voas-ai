@@ -83,7 +83,12 @@ export function EmailSettingsToggle({ workspaceId }: { workspaceId: string }) {
                     </td>
                     <td className="px-6 py-3">
                       <Badge
-                        variant={log.status === 'success' ? 'default' : 'destructive'}
+                        variant={
+                          log.status === 'success' ? 'default' :
+                          log.status === 'queued' ? 'secondary' :
+                          log.status === 'skipped' ? 'outline' :
+                          'destructive'
+                        }
                       >
                         {log.status}
                       </Badge>
