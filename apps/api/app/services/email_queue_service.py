@@ -9,26 +9,56 @@ log = get_logger(__name__)
 
 
 async def handle_new_call(workspace_id: str, call_data: CallData):
-    """Process new call: send email immediately or queue it"""
+    """Process new call: send email immediately or queue it. Log all calls regardless."""
     db = get_supabase_admin()
 
     # Get workspace name
     ws = db.table("workspaces").select("name").eq("id", workspace_id).limit(1).execute()
     workspace_name = ws.data[0]["name"] if ws.data else "Workspace"
 
-    # Get email settings
+    # Get or create email settings (auto-enabled for new workspaces)
     settings = db.table("email_notification_settings").select("*").eq("workspace_id", workspace_id).limit(1).execute()
+
     if not settings.data:
-        log.info(f"No email settings for workspace {workspace_id}")
+        # Auto-create settings with enabled=true for new workspaces
+        log.info(f"Creating email settings for workspace {workspace_id}")
+        owner_email = "owner@example.com"  # Fallback, will be updated via API
+        db.table("email_notification_settings").insert({
+            "workspace_id": workspace_id,
+            "enabled": True,
+            "recipient_email": owner_email,
+            "rate_limit_per_hour": 10,
+        }).execute()
+        # Re-fetch the settings we just created
+        settings = db.table("email_notification_settings").select("*").eq("workspace_id", workspace_id).limit(1).execute()
+
+    if not settings.data:
+        # Still no settings (shouldn't happen), log the call anyway
+        db.table("email_logs").insert({
+            "workspace_id": workspace_id,
+            "recipient_email": "unknown@example.com",
+            "call_data": call_data.model_dump(),
+            "status": "failed",
+            "error_message": "No email settings configured",
+        }).execute()
+        log.error(f"Failed to create email settings for workspace {workspace_id}")
         return
 
     setting = settings.data[0]
-    if not setting["enabled"]:
-        log.info(f"Email notifications disabled for workspace {workspace_id}")
-        return
-
     recipient_email = setting["recipient_email"]
     rate_limit = setting["rate_limit_per_hour"]
+
+    # If disabled, log it as skipped
+    if not setting["enabled"]:
+        log.info(f"Email notifications disabled for workspace {workspace_id}, logging call")
+        db.table("email_logs").insert({
+            "workspace_id": workspace_id,
+            "recipient_email": recipient_email,
+            "call_data": call_data.model_dump(),
+            "status": "skipped",
+            "error_message": "Email notifications disabled",
+        }).execute()
+        return
 
     # Check hourly rate limit
     one_hour_ago = datetime.utcnow() - timedelta(hours=1)
@@ -48,6 +78,7 @@ async def handle_new_call(workspace_id: str, call_data: CallData):
             "status": "success" if success else "failed",
             "error_message": error,
         }).execute()
+        log.info(f"Email {'sent' if success else 'failed'} for call in workspace {workspace_id}")
     else:
         # Queue with 15-30min delay
         delay_minutes = random.randint(15, 30)
@@ -59,6 +90,15 @@ async def handle_new_call(workspace_id: str, call_data: CallData):
             "call_data": call_data.model_dump(),
             "status": "pending",
             "scheduled_time": scheduled_time.isoformat(),
+        }).execute()
+
+        # Also log to email_logs to show in dashboard
+        db.table("email_logs").insert({
+            "workspace_id": workspace_id,
+            "recipient_email": recipient_email,
+            "call_data": call_data.model_dump(),
+            "status": "queued",
+            "error_message": f"Rate limit reached. Scheduled in {delay_minutes} minutes.",
         }).execute()
 
         log.info(f"Call notification queued for {workspace_id} (delay: {delay_minutes}min)")
