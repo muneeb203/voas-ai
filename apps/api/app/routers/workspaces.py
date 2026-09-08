@@ -7,12 +7,13 @@ from app.models.workspace import (
     WorkspaceCreate,
     WorkspaceUpdate,
 )
-from app.services import voice_service, workspace_service, consultation_hours_service, law_availability_service
+from app.services import voice_service, workspace_service, consultation_hours_service, law_availability_service, law_appointment_service
 from app.models.consultation_hours import (
     ConsultationHours,
     ConsultationHoursResponse,
     ConsultationHoursUpdate,
 )
+from app.models.law_appointment import LawAppointmentCreate, LawAppointment
 from app.utils.responses import DataResponse, ok
 
 router = APIRouter(tags=["workspaces"])
@@ -95,3 +96,16 @@ async def get_law_availability(
 ) -> DataResponse[dict]:
     slots = law_availability_service.get_availability_slots(ctx.workspace_id, date)
     return ok({"date": date, "slots": slots})
+
+
+@router.post(
+    "/workspaces/{workspace_id}/law/appointments",
+    response_model=DataResponse[LawAppointment],
+    status_code=status.HTTP_201_CREATED,
+)
+async def book_law_appointment(
+    payload: LawAppointmentCreate,
+    ctx: WorkspaceContextDep,
+) -> DataResponse[LawAppointment]:
+    appointment = law_appointment_service.book_appointment(ctx.workspace_id, payload)
+    return ok(appointment)

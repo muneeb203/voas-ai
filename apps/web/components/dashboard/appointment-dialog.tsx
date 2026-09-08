@@ -20,7 +20,7 @@ import {
   bookAppointmentAction,
   rescheduleAppointmentAction,
 } from '@/app/actions/salon-action';
-import { getLawAvailabilityAction } from '@/app/actions/law-action';
+import { getLawAvailabilityAction, bookLawAppointmentAction } from '@/app/actions/law-action';
 import type { AvailabilitySlot, SalonService } from '@/lib/api/salon';
 
 function fmtDate(d: Date): string {
@@ -108,19 +108,30 @@ export function AppointmentDialog({
     if (!selected) return toast.error('Pick a time');
     if (mode === 'new' && !customerName.trim()) return toast.error('Customer name is required');
     setSaving(true);
-    const res =
-      mode === 'reschedule' && appointmentId
-        ? await rescheduleAppointmentAction(appointmentId, {
-            starts_at: selected.starts_at,
-            staff_id: selected.staff_id,
-          })
-        : await bookAppointmentAction({
-            service_id: activeServiceId,
-            starts_at: selected.starts_at,
-            staff_id: selected.staff_id,
-            customer_name: customerName.trim(),
-            customer_phone: customerPhone.trim() || null,
-          });
+
+    let res;
+    if (vertical === 'law') {
+      res = await bookLawAppointmentAction({
+        starts_at: selected.starts_at,
+        customer_name: customerName.trim(),
+        customer_phone: customerPhone.trim() || null,
+      });
+    } else {
+      res =
+        mode === 'reschedule' && appointmentId
+          ? await rescheduleAppointmentAction(appointmentId, {
+              starts_at: selected.starts_at,
+              staff_id: selected.staff_id,
+            })
+          : await bookAppointmentAction({
+              service_id: activeServiceId,
+              starts_at: selected.starts_at,
+              staff_id: selected.staff_id,
+              customer_name: customerName.trim(),
+              customer_phone: customerPhone.trim() || null,
+            });
+    }
+
     setSaving(false);
     if (res.error) return toast.error(res.error);
     toast.success(mode === 'reschedule' ? 'Appointment rescheduled' : 'Appointment booked');
