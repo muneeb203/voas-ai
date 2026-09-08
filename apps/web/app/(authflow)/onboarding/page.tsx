@@ -1,7 +1,9 @@
 import type { Metadata } from ‘next’;
 import { redirect } from ‘next/navigation’;
+import Link from ‘next/link’;
 import { createSupabaseServerClient } from ‘@/lib/supabase/server’;
-import { skipOnboarding } from ‘@/app/actions/onboarding-action’;
+import { Logo } from ‘@/components/shared/logo’;
+import { OnboardingWizard } from ‘@/components/dashboard/onboarding-wizard’;
 
 export const metadata: Metadata = {
   title: ‘Welcome’,
@@ -28,9 +30,43 @@ export default async function OnboardingPage() {
 
   const fullName: string | undefined =
     typeof user.user_metadata?.full_name === ‘string’ ? user.user_metadata.full_name : undefined;
-  const workspaceName = fullName ? `${fullName.split(‘ ‘)[0]}’s practice` : ‘My practice’;
+  const defaultName = fullName ? `${fullName.split(‘ ‘)[0]}’s practice` : undefined;
 
-  await skipOnboarding(workspaceName, ‘law’);
+  return (
+    <div className="flex min-h-screen flex-col bg-secondary/30">
+      <header className="container flex h-16 items-center justify-between">
+        <Logo />
+        <form action="/auth/signout" method="post">
+          <button type="submit" className="text-xs text-muted-foreground hover:text-foreground">
+            Sign out
+          </button>
+        </form>
+      </header>
 
-  return null;
+      <main className="flex flex-1 items-center justify-center px-6 pb-12">
+        <div className="w-full max-w-xl">
+          <div className="mb-6 text-center">
+            <p className="text-xs font-medium uppercase tracking-widest text-accent-700">
+              Welcome to VOAS AI
+            </p>
+            <h1 className="mt-2 text-3xl font-semibold tracking-tight">
+              Let’s set up your practice
+            </h1>
+            <p className="mt-2 text-sm text-muted-foreground">
+              Two quick steps — under a minute.
+            </p>
+          </div>
+
+          <OnboardingWizard defaultName={defaultName} defaultVertical="law" />
+
+          <p className="mt-4 text-center text-xs text-muted-foreground">
+            Need help?{‘ ‘}
+            <Link href="/contact" className="hover:text-foreground">
+              Contact us
+            </Link>
+          </p>
+        </div>
+      </main>
+    </div>
+  );
 }
