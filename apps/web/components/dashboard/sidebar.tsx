@@ -73,16 +73,16 @@ function buildSections(vertical: string): NavSection[] {
         : { href: '/knowledge-base', labelKey: 'knowledgeBase', icon: BookOpen },
     { href: '/integrations', labelKey: 'integrations', icon: Plug },
     { href: '/analytics', labelKey: 'analytics', icon: BarChart3 },
+    ...(isLawyer ? [{ href: '/cases', labelKey: 'cases', label: 'Cases', icon: FileText }] : []),
+    { href: '/emails', labelKey: 'emails', label: 'Emails', icon: Mail },
   ];
 
   const workspace: NavItem[] = [
     { href: '/locations', labelKey: 'locations', icon: MapPin },
-    ...(isLawyer ? [{ href: '/cases', labelKey: 'cases', label: 'Cases', icon: FileText }] : []),
     ...(isBooking ? [{ href: '/staff', labelKey: 'staff', label: 'Staff', icon: UserCog }] : []),
     { href: '/team', labelKey: 'team', icon: Users },
     { href: '/settings', labelKey: 'settings', icon: Settings },
     { href: '/support', labelKey: 'support', icon: LifeBuoy },
-    { href: '/emails', labelKey: 'emails', label: 'Emails', icon: Mail },
   ];
 
   return [
