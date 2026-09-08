@@ -26,6 +26,9 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { updateAppointmentStatusAction } from '@/app/actions/salon-action';
 import type { AppointmentStatus, SalonAppointment } from '@/lib/api/salon';
+import type { LawAppointment } from '@/lib/api/law';
+
+type Appointment = SalonAppointment | LawAppointment;
 
 const STATUS_META: Record<
   AppointmentStatus,
@@ -58,7 +61,7 @@ export function AppointmentsList({
   services,
   vertical = 'salon',
 }: {
-  initialAppointments: SalonAppointment[];
+  initialAppointments: Appointment[];
   services: SalonService[];
   vertical?: string;
 }) {
@@ -67,7 +70,7 @@ export function AppointmentsList({
   const [newOpen, setNewOpen] = useState(false);
   const [rescheduleAppt, setRescheduleAppt] = useState<SalonAppointment | null>(null);
 
-  async function setStatus(a: SalonAppointment, status: AppointmentStatus) {
+  async function setStatus(a: Appointment, status: AppointmentStatus) {
     setBusyId(a.id);
     const res = await updateAppointmentStatusAction(a.id, status);
     setBusyId(null);
