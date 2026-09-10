@@ -1,9 +1,9 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { Suspense } from 'react';
+import { redirect } from 'next/navigation';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 import { SignupForm } from '@/components/auth/signup-form';
-import { AlreadySignedIn } from '@/components/auth/already-signed-in';
 
 export const metadata: Metadata = {
   title: 'Create account',
@@ -17,7 +17,7 @@ export default async function SignupPage() {
   } = await supabase.auth.getUser();
 
   if (user) {
-    return <AlreadySignedIn email={user.email ?? 'your account'} />;
+    redirect('/dashboard');
   }
 
   return (
