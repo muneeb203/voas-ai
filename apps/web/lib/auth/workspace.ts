@@ -2,7 +2,7 @@ import 'server-only';
 import { cache } from 'react';
 import { redirect } from 'next/navigation';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
-import { getMe } from '@/lib/api/workspaces';
+import { getMe, createWorkspace } from '@/lib/api/workspaces';
 import { isApiError, type CurrentUserProfile, type WorkspaceMembership } from '@/lib/types';
 import { readImpersonation, type ImpersonationState } from './impersonation';
 
@@ -115,7 +115,7 @@ export async function requireDashboardSession(
     case 'unauthorized':
       redirect(`/login?next=${encodeURIComponent(redirectPathIfNoSession)}`);
     case 'no-workspace': {
-      // Auto-create law workspace for new users
+      // Auto-create default workspace for first-time users
       const supabase = createSupabaseServerClient();
       const { data: { user } } = await supabase.auth.getUser();
 
@@ -124,27 +124,20 @@ export async function requireDashboardSession(
           const fullName = typeof user.user_metadata?.full_name === 'string'
             ? user.user_metadata.full_name
             : '';
-          const workspaceName = fullName ? `${fullName.split(' ')[0]}'s practice` : 'My practice';
-          const slug = `${workspaceName.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${Date.now()}`.slice(0, 60);
+          const workspaceName = fullName ? `${fullName.split(' ')[0]}'s business` : 'My Business';
 
-          await supabase
-            .from('workspaces')
-            .insert({
-              name: workspaceName,
-              slug,
-              vertical: 'law',
-              plan: 'trial',
-            })
-            .select()
-            .single();
+          await createWorkspace({
+            name: workspaceName,
+            vertical: 'restaurant',
+          }, user.id, user.email);
 
-          // Retry the session fetch to get the new workspace
+          // Retry session fetch to get the new workspace
           const retryResult = await fetchSession();
           if (retryResult.kind === 'session') {
             return retryResult.session;
           }
         } catch (error) {
-          console.error('Failed to auto-create workspace:', error);
+          console.error('auto_workspace_create_failed', error);
         }
       }
 
