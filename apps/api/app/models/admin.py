@@ -6,7 +6,6 @@ from pydantic import BaseModel
 from app.models.location import Location
 from app.models.member import Member
 from app.models.menu import MenuCategory, MenuItem
-from app.models.salon import SalonService, SalonStaff
 from app.models.workspace import Workspace, WorkspaceStatus
 
 
@@ -15,13 +14,10 @@ class AdminWorkspaceListItem(BaseModel):
     name: str
     slug: str
     plan: str
-    vertical: str
     status: WorkspaceStatus
     member_count: int
     location_count: int
     open_ticket_count: int
-    # Health at a glance, so a broken or dormant business is visible from the
-    # list instead of only after opening it.
     last_activity_at: datetime | None = None
     error_count: int = 0
     voice_enabled: bool = False
@@ -109,19 +105,12 @@ class AdminKbVoice(BaseModel):
 
 class AdminKnowledgeBase(BaseModel):
     """Read-only view of everything a business's AI is working from.
-
-    Vertical decides which half is populated: a restaurant's knowledge is its
-    menu; a salon's is its services, staff and the hours they work.
+    Currently supports restaurant vertical with menu categories and items.
     """
 
-    vertical: str
     voice: AdminKbVoice | None = None
-    # restaurant
     categories: list[MenuCategory] = []
     items: list[MenuItem] = []
-    # salon
-    services: list[SalonService] = []
-    staff: list[SalonStaff] = []
 
 
 class AdminErrorLogEntry(BaseModel):
