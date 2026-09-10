@@ -115,9 +115,13 @@ export async function requireDashboardSession(
     case 'unauthorized':
       redirect(`/login?next=${encodeURIComponent(redirectPathIfNoSession)}`);
     case 'no-workspace': {
-      // User is authenticated but has no workspace.
-      // Redirect to signup to create one (they'll skip auth and go straight to workspace creation).
-      redirect('/signup');
+      // Retry once - backend /v1/me should auto-create workspace on first call
+      const retryResult = await fetchSession();
+      if (retryResult.kind === 'session') {
+        return retryResult.session;
+      }
+      // Still no workspace after retry - fall back to login
+      redirect('/login?next=/dashboard');
     }
     case 'backend-down': {
       const apiUrl = (process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000').replace(

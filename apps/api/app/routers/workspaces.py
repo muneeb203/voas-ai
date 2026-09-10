@@ -27,6 +27,23 @@ router = APIRouter(tags=["workspaces"])
 @router.get("/me", response_model=DataResponse[CurrentUserProfile])
 async def get_me(user: CurrentUserDep) -> DataResponse[CurrentUserProfile]:
     profile = workspace_service.get_current_user_profile(user.id, user.email)
+
+    # Auto-create workspace for first-time users
+    if not profile.memberships:
+        try:
+            full_name = user.full_name or ''
+            workspace_name = f"{full_name.split()[0]}'s workspace" if full_name else 'My Workspace'
+            workspace_service.create_workspace(
+                WorkspaceCreate(name=workspace_name, vertical='restaurant'),
+                user.id,
+                user.email
+            )
+            # Refresh profile after workspace creation
+            profile = workspace_service.get_current_user_profile(user.id, user.email)
+        except Exception as exc:
+            log.error('auto_create_workspace_failed', user_id=user.id, error=str(exc))
+            # Continue anyway - let user configure workspace from settings
+
     return ok(profile)
 
 
