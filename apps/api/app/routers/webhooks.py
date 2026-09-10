@@ -22,15 +22,12 @@ from app.core.supabase import get_supabase_admin
 from app.integrations import twilio_whatsapp, vapi
 from app.models.customer import CustomerUpsert
 from app.models.email_notification import CallData
-from app.models.salon import BookAppointmentInput
 from app.services import (
     billing_service,
-    booking_service,
     customer_service,
     email_queue_service,
     email_service,
     error_log_service,
-    salon_service,
     voice_order_service,
     voice_service,
     whatsapp_ai_service,
@@ -394,203 +391,18 @@ async def vapi_webhook(
                 results.append({"toolCallId": tc_id, "result": order_result["message"]})
 
             elif name == "check_availability":
-                svc = _resolve_service(
-                    workspace_id, (args or {}).get("service") or (args or {}).get("service_id")
-                )
-                raw_date = (args or {}).get("date")
-                if not svc:
-                    results.append(
-                        {"toolCallId": tc_id, "result": "Which service would you like? Offer the ones on the list."}
-                    )
-                    continue
-                if not raw_date:
-                    results.append({"toolCallId": tc_id, "result": "What day works for the customer?"})
-                    continue
-                date_str = _resolve_date(raw_date, workspace_id, location_id)
-                if not date_str:
-                    results.append(
-                        {
-                            "toolCallId": tc_id,
-                            "result": "I didn't catch the date — ask for a day like 'tomorrow' or 'Friday'.",
-                        }
-                    )
-                    continue
-                if booking_service.beyond_booking_window(workspace_id, date_str, location_id):
-                    results.append(
-                        {
-                            "toolCallId": tc_id,
-                            "result": "We can only book up to a month ahead — ask the customer for an earlier day.",
-                        }
-                    )
-                    continue
-                try:
-                    avail = booking_service.get_availability(
-                        workspace_id,
-                        service_id=svc.id,
-                        date_str=date_str,
-                        location_id=location_id,
-                        max_slots=8,
-                    )
-                except Exception as exc:
-                    log.error("vapi_check_availability_failed", error=str(exc))
-                    error_log_service.record(
-                        workspace_id=workspace_id,
-                        kind="integration",
-                        source="vapi_check_availability_failed",
-                        message=str(exc),
-                        context={"service": svc.name, "date": date_str},
-                    )
-                    results.append(
-                        {"toolCallId": tc_id, "result": "Sorry, I couldn't pull up open times just now."}
-                    )
-                    continue
-                if not avail.slots:
-                    results.append(
-                        {
-                            "toolCallId": tc_id,
-                            "result": f"No open times on {date_str}. Offer the customer another day.",
-                        }
-                    )
-                    continue
-                slot_lines = [
-                    f"{_spoken_time(s.starts_at, workspace_id, location_id)} with {s.staff_name}"
-                    for s in avail.slots
-                ]
                 results.append(
-                    {
-                        "toolCallId": tc_id,
-                        "result": (
-                            f"Open times for {svc.name}: "
-                            + "; ".join(slot_lines)
-                            + ". Read these to the customer. When they pick one, you MUST call "
-                            "book_appointment with the service, the day, that time, and their name "
-                            "and phone — do not tell them it's booked until book_appointment succeeds."
-                        ),
-                    }
+                    {"toolCallId": tc_id, "result": "Appointment booking is not available. Please ask the customer to contact the business directly."}
                 )
 
             elif name == "book_appointment":
-                if not billing_service.check_allowed(workspace_id, "voice_minutes", channel="voice"):
-                    results.append(
-                        {
-                            "toolCallId": tc_id,
-                            "result": billing_service.limit_reached_message("voice_minutes"),
-                        }
-                    )
-                    continue
-                a = args if isinstance(args, dict) else {}
-                svc = _resolve_service(workspace_id, a.get("service") or a.get("service_id"))
-                date_str = _resolve_date(a.get("date"), workspace_id, location_id)
-                parsed = _parse_spoken_time(a.get("time") or a.get("starts_at"))
-                if not svc or not date_str or not parsed:
-                    results.append(
-                        {"toolCallId": tc_id, "result": "I need the service, day, and time to book — could you confirm them?"}
-                    )
-                    continue
-                if booking_service.beyond_booking_window(workspace_id, date_str, location_id):
-                    results.append(
-                        {
-                            "toolCallId": tc_id,
-                            "result": "We can only book up to a month ahead — ask the customer for an earlier day.",
-                        }
-                    )
-                    continue
-                try:
-                    avail = booking_service.get_availability(
-                        workspace_id,
-                        service_id=svc.id,
-                        date_str=date_str,
-                        location_id=location_id,
-                        max_slots=40,
-                    )
-                except Exception as exc:
-                    log.error("vapi_book_failed", workspace_id=workspace_id, error=str(exc))
-                    error_log_service.record(
-                        workspace_id=workspace_id,
-                        kind="integration",
-                        source="vapi_book_failed",
-                        message=str(exc),
-                    )
-                    results.append(
-                        {"toolCallId": tc_id, "result": "Sorry, I couldn't book that right now — please try again."}
-                    )
-                    continue
-                tz = booking_service._location_tz(workspace_id, location_id)
-                slot = _find_matching_slot(avail.slots, parsed, tz, a.get("staff_name"))
-                if not slot:
-                    alt = "; ".join(
-                        f"{_spoken_time(s.starts_at, workspace_id, location_id)} with {s.staff_name}"
-                        for s in avail.slots[:5]
-                    )
-                    results.append(
-                        {
-                            "toolCallId": tc_id,
-                            "result": (
-                                "That exact time isn't open. "
-                                + (f"Closest options: {alt}. Ask which they'd like." if alt else "Offer another day.")
-                            ),
-                        }
-                    )
-                    continue
-                try:
-                    appt = booking_service.create_appointment(
-                        workspace_id,
-                        BookAppointmentInput(
-                            service_id=svc.id,
-                            starts_at=slot.starts_at,
-                            staff_id=slot.staff_id,
-                            customer_name=a.get("customer_name") or (conv or {}).get("customer_name"),
-                            customer_phone=a.get("customer_phone") or (conv or {}).get("customer_phone"),
-                            location_id=location_id,
-                            conversation_id=conv["id"] if conv else None,
-                        ),
-                    )
-                except AppError as exc:
-                    results.append({"toolCallId": tc_id, "result": exc.message})
-                    continue
-                except Exception as exc:
-                    log.error("vapi_book_failed", workspace_id=workspace_id, error=str(exc))
-                    error_log_service.record(
-                        workspace_id=workspace_id,
-                        kind="integration",
-                        source="vapi_book_failed",
-                        message=str(exc),
-                    )
-                    results.append(
-                        {
-                            "toolCallId": tc_id,
-                            "result": "Sorry, I couldn't book that — please try another time.",
-                        }
-                    )
-                    continue
-                when = _spoken_time(appt.starts_at, workspace_id, location_id)
-                staff = f" with {appt.staff_name}" if hasattr(appt, 'staff_name') and appt.staff_name else ""
-                log.info("vapi_book_ok", workspace_id=workspace_id, appointment_id=appt.id)
                 results.append(
-                    {
-                        "toolCallId": tc_id,
-                        "result": (
-                            f"BOOKED and saved: {appt.service_name}{staff} on {when}. "
-                            "Now confirm to the customer that it's booked."
-                        ),
-                    }
+                    {"toolCallId": tc_id, "result": "Appointment booking is not available. Please ask the customer to contact the business directly."}
                 )
 
             elif name == "check_in":
-                appt = salon_service.check_in_by_name(workspace_id, (args or {}).get("customer_name", ""))
-                if not appt:
-                    results.append(
-                        {
-                            "toolCallId": tc_id,
-                            "result": "I couldn't find that appointment — confirm the name or send them to the front desk.",
-                        }
-                    )
-                    continue
                 results.append(
-                    {
-                        "toolCallId": tc_id,
-                        "result": f"Checked in {appt.customer_name or 'the customer'} for {appt.service_name}.",
-                    }
+                    {"toolCallId": tc_id, "result": "Check-in is not available. Please ask the customer to check in at the front desk."}
                 )
 
             else:
