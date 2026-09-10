@@ -129,7 +129,7 @@ export async function requireDashboardSession(
           await createWorkspace({
             name: workspaceName,
             vertical: 'restaurant',
-          }, user.id, user.email);
+          });
 
           // Retry session fetch to get the new workspace
           const retryResult = await fetchSession();
