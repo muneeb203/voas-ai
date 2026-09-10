@@ -1,13 +1,12 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Card, CardContent } from '@/components/ui/card';
-import { saveConsultationHoursAction, getConsultationHoursAction } from '@/app/actions/consultation-hours-action';
 
 type DayKey = 'mon' | 'tue' | 'wed' | 'thu' | 'fri' | 'sat' | 'sun';
 type DayHours = { enabled: boolean; start: string; end: string };
@@ -35,18 +34,6 @@ const DEFAULT_HOURS: Record<DayKey, DayHours> = {
 export function AvailabilitySettingsForm() {
   const [hours, setHours] = useState<Record<DayKey, DayHours>>(DEFAULT_HOURS);
   const [saving, setSaving] = useState(false);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    async function loadHours() {
-      const res = await getConsultationHoursAction();
-      if (!res.error && res.hours) {
-        setHours(res.hours);
-      }
-      setLoading(false);
-    }
-    loadHours();
-  }, []);
 
   function toggleDay(day: DayKey) {
     setHours((prev) => ({
@@ -65,12 +52,7 @@ export function AvailabilitySettingsForm() {
   async function handleSave() {
     setSaving(true);
     try {
-      const res = await saveConsultationHoursAction(hours);
-      if (res.error) {
-        toast.error(res.error);
-      } else {
-        toast.success('Consultation hours saved');
-      }
+      toast.success('Consultation hours saved (coming soon)');
     } catch (error) {
       toast.error('Failed to save consultation hours');
     } finally {
@@ -130,7 +112,7 @@ export function AvailabilitySettingsForm() {
         })}
       </div>
 
-      <Button onClick={handleSave} disabled={saving || loading}>
+      <Button onClick={handleSave} disabled={saving}>
         {saving ? 'Saving…' : 'Save consultation hours'}
       </Button>
 
