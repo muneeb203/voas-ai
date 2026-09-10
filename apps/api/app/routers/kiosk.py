@@ -19,11 +19,8 @@ from app.core.exceptions import (
 from app.core.logging import get_logger
 from app.core.supabase import get_supabase_admin
 from app.deps import OwnerContextDep, WorkspaceContextDep
-from app.models.salon import BookAppointmentInput
 from app.services import (
-    booking_service,
     notification_service,
-    salon_service,
     voice_order_service,
 )
 from app.services.voice_service import _menu_context_for_workspace

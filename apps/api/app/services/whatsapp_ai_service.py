@@ -23,16 +23,10 @@ from app.config import get_settings
 from app.core.exceptions import AppError
 from app.core.logging import get_logger
 from app.core.supabase import get_supabase_admin
-from app.models.salon import BookAppointmentInput
 from app.models.whatsapp import (
     WHATSAPP_PROMPT_SUFFIX,
-    WHATSAPP_SALON_PROMPT_SUFFIX,
-    WHATSAPP_SALON_SYSTEM_PROMPT,
 )
 from app.services import (
-    booking_service,
-    dental_service,
-    salon_service,
     voice_order_service,
     voice_service,
     whatsapp_service,

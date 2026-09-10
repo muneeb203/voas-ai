@@ -22,7 +22,6 @@ from app.config import get_settings
 from app.core.logging import get_logger
 from app.core.supabase import get_supabase_admin
 from app.integrations import twilio_whatsapp
-from app.models.salon import SalonAppointment
 
 log = get_logger(__name__)
 
