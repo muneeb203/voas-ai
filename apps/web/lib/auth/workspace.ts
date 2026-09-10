@@ -116,8 +116,8 @@ export async function requireDashboardSession(
       redirect(`/login?next=${encodeURIComponent(redirectPathIfNoSession)}`);
     case 'no-workspace': {
       // User is authenticated but has no workspace.
-      // Redirect to workspace creation page.
-      redirect('/workspace-setup');
+      // Redirect to signup to create one (they'll skip auth and go straight to workspace creation).
+      redirect('/signup');
     }
     case 'backend-down': {
       const apiUrl = (process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000').replace(
