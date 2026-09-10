@@ -24,7 +24,6 @@ from app.routers import (
     contact,
     conversations,
     customers,
-    dental,
     email_notifications,
     google,
     health,
@@ -36,7 +35,6 @@ from app.routers import (
     notifications,
     orders,
     push,
-    salon,
     tickets,
     voice,
     webhooks,
@@ -137,8 +135,6 @@ def create_app() -> FastAPI:
     app.include_router(customers.router, prefix="/v1")
     app.include_router(orders.router, prefix="/v1")
     app.include_router(menu.router, prefix="/v1")
-    app.include_router(salon.router, prefix="/v1")
-    app.include_router(dental.router, prefix="/v1")
     app.include_router(google.router, prefix="/v1")
     app.include_router(google.public_router, prefix="/v1")
     app.include_router(analytics.router, prefix="/v1")
