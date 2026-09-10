@@ -2,20 +2,17 @@ import { redirect } from 'next/navigation';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { getMe } from '@/lib/api/workspaces';
+import { isApiError } from '@/lib/types';
 
 interface AlreadySignedInProps {
   email: string;
 }
 
 export async function AlreadySignedIn({ email }: AlreadySignedInProps) {
-  try {
-    const profile = await getMe();
-    if (profile.data?.memberships && profile.data.memberships.length > 0) {
-      // Has workspace — redirect to dashboard
-      redirect('/dashboard');
-    }
-  } catch {
-    // No workspace or error — show create prompt
+  const profile = await getMe();
+  if (!isApiError(profile) && profile.data?.memberships && profile.data.memberships.length > 0) {
+    // Has workspace — redirect to dashboard
+    redirect('/dashboard');
   }
 
   return (
