@@ -29,7 +29,7 @@ export default async function WorkspaceSetupPage() {
 
       <div className="mt-8">
         <Suspense fallback={<p className="text-sm text-muted-foreground">Loading…</p>}>
-          <SignupForm initialEmail={user.email} />
+          <SignupForm />
         </Suspense>
       </div>
 
