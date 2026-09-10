@@ -13,10 +13,6 @@ from app.models.voice import (
     DEFAULT_GREETING_BY_LANG,
     DEFAULT_SYSTEM_PROMPT,
     DEFAULT_SYSTEM_PROMPT_BY_LANG,
-    LAW_DEFAULT_GREETING,
-    LAW_DEFAULT_SYSTEM_PROMPT,
-    SALON_DEFAULT_GREETING,
-    SALON_DEFAULT_SYSTEM_PROMPT,
     LocationVoiceConfigSafe,
     LocationVoiceConfigUpsert,
     VoiceCapabilities,
@@ -100,37 +96,19 @@ def _hydrate_settings(row: dict, workspace_id: str) -> VoiceSettings:
     return settings
 
 
-def _vertical(workspace_id: str) -> str:
-    db = get_supabase_admin()
-    res = db.table("workspaces").select("vertical").eq("id", workspace_id).limit(1).execute()
-    return (res.data[0].get("vertical") if res.data else None) or "restaurant"
-
-
 def get_or_create_settings(workspace_id: str) -> VoiceSettings:
     db = get_supabase_admin()
     res = db.table("voice_settings").select("*").eq("workspace_id", workspace_id).limit(1).execute()
     if res.data:
         return _hydrate_settings(res.data[0], workspace_id)
 
-    vertical = _vertical(workspace_id)
-    is_salon = vertical == "salon"
-    is_law = vertical == "law"
-    is_booking = vertical in ("salon", "dental")
     res = (
         db.table("voice_settings")
         .insert(
             {
                 "workspace_id": workspace_id,
-                "system_prompt": (
-                    SALON_DEFAULT_SYSTEM_PROMPT if is_salon
-                    else LAW_DEFAULT_SYSTEM_PROMPT if is_law
-                    else DEFAULT_SYSTEM_PROMPT
-                ),
-                "greeting": (
-                    SALON_DEFAULT_GREETING if is_salon
-                    else LAW_DEFAULT_GREETING if is_law
-                    else DEFAULT_GREETING
-                ),
+                "system_prompt": DEFAULT_SYSTEM_PROMPT,
+                "greeting": DEFAULT_GREETING,
                 "voice": "rachel",
                 "model": "gpt-4o-mini",
                 "enabled": False,
@@ -148,8 +126,6 @@ def _menu_context_for_workspace(workspace_id: str) -> str:
 
     Lightweight: category → items with prices. Modifiers omitted at this
     layer (Sprint 4 POS sync handles deeper menu reasoning)."""
-    if _vertical(workspace_id) != "restaurant":
-        return ""
     from app.core import currency as currency_mod
 
     db = get_supabase_admin()
@@ -185,62 +161,12 @@ def _menu_context_for_workspace(workspace_id: str) -> str:
     return "\n".join(lines)
 
 
-def _services_context_for_workspace(workspace_id: str) -> str:
-    """Render active salon services (with ids) to feed the voice assistant.
-
-    The voice agent needs each service_id so it can call check_availability and
-    book_appointment. Open times themselves come from the live tool, not here."""
-    if _vertical(workspace_id) != "salon":
-        return ""
-    from app.core import currency as currency_mod
-    from app.services import salon_service
-
-    db = get_supabase_admin()
-    ws = db.table("workspaces").select("currency").eq("id", workspace_id).limit(1).execute()
-    code = (ws.data[0].get("currency") if ws.data else None)
-
-    services = salon_service.list_services(workspace_id, active_only=True)
-    if not services:
-        return ""
-    lines = ["", "--- SERVICES (use service_id when calling tools) ---"]
-    for svc in services:
-        price = currency_mod.format_cents(svc.price_cents, code)
-        lines.append(
-            f"- {svc.name} ({svc.duration_minutes} min, {price}) [service_id: {svc.id}]"
-        )
-    return "\n".join(lines)
-
-
-def _dental_services_context_for_workspace(workspace_id: str) -> str:
-    """Render active dental services (with ids) to feed the voice assistant.
-
-    Same as salon — the agent needs each service_id to call tools."""
-    if _vertical(workspace_id) != "dental":
-        return ""
-    from app.core import currency as currency_mod
-    from app.services import dental_service
-
-    db = get_supabase_admin()
-    ws = db.table("workspaces").select("currency").eq("id", workspace_id).limit(1).execute()
-    code = (ws.data[0].get("currency") if ws.data else None)
-
-    services = dental_service.list_services(workspace_id, active_only=True)
-    if not services:
-        return ""
-    lines = ["", "--- DENTAL PROCEDURES (use service_id when calling tools) ---"]
-    for svc in services:
-        price = currency_mod.format_cents(svc.price_cents, code)
-        lines.append(
-            f"- {svc.name} ({svc.duration_minutes} min, {price}) [service_id: {svc.id}]"
-        )
-    return "\n".join(lines)
 
 
 def _sync_assistant(workspace_id: str, settings: VoiceSettings) -> str | None:
-    """Push the current settings (plus vertical context) to Vapi.
+    """Push the current settings to Vapi.
     Returns the assistant id (creates if missing)."""
     cfg = get_settings()
-    vertical = _vertical(workspace_id)
 
     # Agent switched off: push a minimal "closed" assistant so incoming calls get
     # a short message and hang up, instead of a live AI. No menu/services context
@@ -253,7 +179,7 @@ def _sync_assistant(workspace_id: str, settings: VoiceSettings) -> str | None:
             model=settings.model,
             server_url=cfg.vapi_server_url,
             language=settings.language,
-            vertical=vertical,
+            vertical="restaurant",
             enabled=False,
         )
         if settings.vapi_assistant_id:
@@ -261,12 +187,7 @@ def _sync_assistant(workspace_id: str, settings: VoiceSettings) -> str | None:
             return settings.vapi_assistant_id
         return vapi.create_assistant(payload)
 
-    if vertical == "salon":
-        context_md = _services_context_for_workspace(workspace_id)
-    elif vertical == "dental":
-        context_md = _dental_services_context_for_workspace(workspace_id)
-    else:
-        context_md = _menu_context_for_workspace(workspace_id)
+    context_md = _menu_context_for_workspace(workspace_id)
     full_prompt = f"{settings.system_prompt}\n\n{context_md}".strip()
 
     # The owner's prompt doesn't know about the transfer tool, so state the rule
@@ -289,7 +210,7 @@ def _sync_assistant(workspace_id: str, settings: VoiceSettings) -> str | None:
         server_url=cfg.vapi_server_url,
         end_call_phrases=settings.end_call_phrases,
         language=settings.language,
-        vertical=vertical,
+        vertical="restaurant",
         fallback_number=fallback or None,
     )
 
@@ -408,33 +329,7 @@ def _is_canned_prompt(text: str) -> bool:
 def _is_canned_greeting(text: str) -> bool:
     t = (text or "").strip()
     known = {g.strip() for g in DEFAULT_GREETING_BY_LANG.values()}
-    known.add(SALON_DEFAULT_GREETING.strip())
     return t in known
-
-
-def apply_vertical_to_voice(workspace_id: str, vertical: str) -> None:
-    """Called when a workspace's vertical changes. Swaps the voice prompt +
-    greeting to the new vertical's defaults IFF they're still canned defaults
-    (never clobbers a customized prompt), and marks the assistant for re-sync so
-    the correct tools (booking vs ordering) get pushed to Vapi."""
-    db = get_supabase_admin()
-    row = (
-        db.table("voice_settings")
-        .select("system_prompt, greeting")
-        .eq("workspace_id", workspace_id)
-        .limit(1)
-        .execute()
-    )
-    if not row.data:
-        return  # no settings yet → seeded correctly on first read
-    cur = row.data[0]
-    is_booking = vertical in ("salon", "dental")
-    updates: dict = {"sync_status": "pending", "sync_error": None}
-    if _is_canned_prompt(cur.get("system_prompt", "")):
-        updates["system_prompt"] = SALON_DEFAULT_SYSTEM_PROMPT if is_booking else DEFAULT_SYSTEM_PROMPT
-    if _is_canned_greeting(cur.get("greeting", "")):
-        updates["greeting"] = SALON_DEFAULT_GREETING if is_booking else DEFAULT_GREETING
-    db.table("voice_settings").update(updates).eq("workspace_id", workspace_id).execute()
 
 
 def set_model_admin(workspace_id: str, model: str, admin_actor_id: str) -> VoiceSettings:
