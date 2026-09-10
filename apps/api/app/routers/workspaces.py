@@ -34,7 +34,7 @@ async def get_me(user: CurrentUserDep) -> DataResponse[CurrentUserProfile]:
             full_name = user.full_name or ''
             workspace_name = f"{full_name.split()[0]}'s workspace" if full_name else 'My Workspace'
             workspace_service.create_workspace(
-                WorkspaceCreate(name=workspace_name, vertical='restaurant'),
+                WorkspaceCreate(name=workspace_name),
                 user.id,
                 user.email
             )

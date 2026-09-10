@@ -60,7 +60,6 @@ def create_workspace(payload: WorkspaceCreate, user_id: str, user_email: str | N
             {
                 "name": payload.name,
                 "slug": slug,
-                "vertical": payload.vertical,
                 "plan": "trial",
             }
         )
@@ -103,7 +102,6 @@ def create_workspace(payload: WorkspaceCreate, user_id: str, user_email: str | N
         resource_type="workspace",
         resource_id=workspace_id,
         metadata={
-            "vertical": payload.vertical,
             "slug": slug,
             "actor_email": user_email,
         },

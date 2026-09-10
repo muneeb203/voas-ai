@@ -12,13 +12,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { VERTICALS } from '@/lib/constants';
 import { CURRENCY_OPTIONS, DEFAULT_CURRENCY } from '@/lib/currency';
 import { updateWorkspaceAction, type FormState } from '@/app/actions/settings-action';
 
 interface WorkspaceFormProps {
   defaultName: string;
-  defaultVertical: string;
   defaultCurrency?: string;
   slug: string;
   disabled?: boolean;
@@ -28,7 +26,6 @@ const IDLE: FormState = { status: 'idle' };
 
 export function WorkspaceForm({
   defaultName,
-  defaultVertical,
   defaultCurrency = DEFAULT_CURRENCY,
   slug,
   disabled,
@@ -71,28 +68,6 @@ export function WorkspaceForm({
         hint="Auto-generated from name. We don't change it after creation in V1."
       >
         <Input id="slug" value={slug} disabled readOnly />
-      </Field>
-
-      <Field
-        label="Business type"
-        htmlFor="vertical"
-        required
-        error={fieldErrors?.vertical}
-        hint="Switching changes your whole dashboard — e.g. a salon gets Appointments, Services, and Staff instead of Orders and Menu. Restaurant and Salon are fully supported today; more are coming."
-      >
-        <Select name="vertical" defaultValue={defaultVertical} disabled={disabled || pending}>
-          <SelectTrigger id="vertical">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {VERTICALS.map((v) => (
-              <SelectItem key={v.value} value={v.value} disabled={!v.available}>
-                {v.label}
-                {!v.available ? ' (coming soon)' : ''}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
       </Field>
 
       <Field
