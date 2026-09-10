@@ -1,5 +1,7 @@
 from fastapi import APIRouter, BackgroundTasks, status
 
+from app.core.exceptions import AppError
+from app.core.logging import get_logger
 from app.core.supabase import get_supabase_admin
 from app.deps import CurrentUserDep, OwnerContextDep, WorkspaceContextDep
 from app.models.workspace import (
@@ -9,6 +11,8 @@ from app.models.workspace import (
     WorkspaceUpdate,
 )
 from app.services import voice_service, workspace_service, consultation_hours_service, law_availability_service, law_appointment_service
+
+log = get_logger(__name__)
 from app.models.consultation_hours import (
     ConsultationHours,
     ConsultationHoursResponse,
@@ -34,8 +38,12 @@ async def get_me(user: CurrentUserDep) -> DataResponse[CurrentUserProfile]:
 async def bootstrap_workspace(
     payload: WorkspaceCreate, user: CurrentUserDep
 ) -> DataResponse[Workspace]:
-    workspace = workspace_service.create_workspace(payload, user.id, user.email)
-    return ok(workspace)
+    try:
+        workspace = workspace_service.create_workspace(payload, user.id, user.email)
+        return ok(workspace)
+    except Exception as exc:
+        log.error("bootstrap_workspace_failed", user_id=user.id, error=str(exc))
+        raise AppError("Could not create workspace. Please try again later.")
 
 
 @router.get("/workspaces/{workspace_id}", response_model=DataResponse[Workspace])

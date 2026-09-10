@@ -115,33 +115,9 @@ export async function requireDashboardSession(
     case 'unauthorized':
       redirect(`/login?next=${encodeURIComponent(redirectPathIfNoSession)}`);
     case 'no-workspace': {
-      // Auto-create default workspace for first-time users
-      const supabase = createSupabaseServerClient();
-      const { data: { user } } = await supabase.auth.getUser();
-
-      if (user) {
-        try {
-          const fullName = typeof user.user_metadata?.full_name === 'string'
-            ? user.user_metadata.full_name
-            : '';
-          const workspaceName = fullName ? `${fullName.split(' ')[0]}'s business` : 'My Business';
-
-          await createWorkspace({
-            name: workspaceName,
-            vertical: 'restaurant',
-          });
-
-          // Retry session fetch to get the new workspace
-          const retryResult = await fetchSession();
-          if (retryResult.kind === 'session') {
-            return retryResult.session;
-          }
-        } catch (error) {
-          console.error('auto_workspace_create_failed', error);
-        }
-      }
-
-      redirect('/login?next=/dashboard');
+      // User is authenticated but has no workspace.
+      // Redirect to workspace creation page.
+      redirect('/workspace-setup');
     }
     case 'backend-down': {
       const apiUrl = (process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000').replace(
