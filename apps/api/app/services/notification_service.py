@@ -23,26 +23,30 @@ def list_for_user(user_id: str, *, limit: int = 30) -> NotificationList:
     db = get_supabase_admin()
     cap = min(max(limit, 1), 50)
 
-    items_res = (
-        db.table("notifications")
-        .select("*")
-        .eq("user_id", user_id)
-        .order("created_at", desc=True)
-        .limit(cap)
-        .execute()
-    )
-    items = [_row_to_notification(r) for r in items_res.data or []]
+    try:
+        items_res = (
+            db.table("notifications")
+            .select("*")
+            .eq("user_id", user_id)
+            .order("created_at", desc=True)
+            .limit(cap)
+            .execute()
+        )
+        items = [_row_to_notification(r) for r in items_res.data or []]
 
-    unread_res = (
-        db.table("notifications")
-        .select("id", count="exact")
-        .eq("user_id", user_id)
-        .is_("read_at", "null")
-        .execute()
-    )
-    unread = unread_res.count if unread_res.count is not None else 0
+        unread_res = (
+            db.table("notifications")
+            .select("id", count="exact")
+            .eq("user_id", user_id)
+            .is_("read_at", "null")
+            .execute()
+        )
+        unread = unread_res.count if unread_res.count is not None else 0
 
-    return NotificationList(items=items, unread_count=unread)
+        return NotificationList(items=items, unread_count=unread)
+    except Exception as exc:
+        log.error("list_notifications_failed", user_id=user_id, error=str(exc))
+        return NotificationList(items=[], unread_count=0)
 
 
 def mark_read(notification_id: str, user_id: str) -> Notification:
